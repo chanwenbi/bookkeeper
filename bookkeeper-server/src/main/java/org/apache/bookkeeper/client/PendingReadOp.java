@@ -265,6 +265,8 @@ class PendingReadOp implements Enumeration<LedgerEntry>, ReadEntryCallback {
                     public void run() {
                         for (LedgerEntryRequest r : seq) {
                             if (!r.isComplete()) {
+                                LOG.info("Send speculative read for {}. Hosts heard are {}.",
+                                         r, heardFromHosts);
                                 r.maybeSendSpeculativeRead(heardFromHosts);
                             }
                         }
@@ -318,11 +320,12 @@ class PendingReadOp implements Enumeration<LedgerEntry>, ReadEntryCallback {
 
         heardFromHosts.add(rctx.to);
 
-        if (entry.complete(rctx.to, buffer)) {
+        boolean isNewCompletedRequest;
+        if ((isNewCompletedRequest = entry.complete(rctx.to, buffer))) {
             numPendingEntries--;
         }
 
-        if (numPendingEntries == 0) {
+        if (isNewCompletedRequest && numPendingEntries == 0) {
             submitCallback(BKException.Code.OK);
         }
 
@@ -333,6 +336,7 @@ class PendingReadOp implements Enumeration<LedgerEntry>, ReadEntryCallback {
     private void submitCallback(int code) {
         if (speculativeTask != null) {
             speculativeTask.cancel(true);
+            speculativeTask = null;
         }
         cb.readComplete(code, lh, PendingReadOp.this, PendingReadOp.this.ctx);
     }
