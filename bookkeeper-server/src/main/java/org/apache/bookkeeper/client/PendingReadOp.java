@@ -328,7 +328,8 @@ class PendingReadOp implements Enumeration<LedgerEntry>, ReadEntryCallback {
 
         heardFromHosts.add(rctx.to);
 
-        if (entry.complete(rctx.to, buffer)) {
+        boolean isNewCompletedRequest;
+        if ((isNewCompletedRequest = entry.complete(rctx.to, buffer))) {
             numPendingEntries--;
             if (numPendingEntries == 0) {
                 submitCallback(BKException.Code.OK);
