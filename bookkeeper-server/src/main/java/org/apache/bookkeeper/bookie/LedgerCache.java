@@ -29,12 +29,13 @@ import java.io.IOException;
  * an entry log file. It does user level caching to more efficiently manage disk
  * head scheduling.
  */
-interface LedgerCache extends Closeable {
+interface LedgerCache extends Closeable, JournalListener {
     void setMasterKey(long ledgerId, byte[] masterKey) throws IOException;
     byte[] readMasterKey(long ledgerId) throws IOException, BookieException;
     boolean ledgerExists(long ledgerId) throws IOException;
 
-    void putEntryOffset(long ledger, long entry, long offset) throws IOException;
+    void putEntryOffset(long ledger, long entry, long offset,
+                        boolean waitForSync) throws IOException;
     long getEntryOffset(long ledger, long entry) throws IOException;
 
     void flushLedger(boolean doAll) throws IOException;

@@ -37,7 +37,7 @@ import org.slf4j.LoggerFactory;
  * This ledger storage implementation stores all entries in a single
  * file and maintains an index file for each ledger.
  */
-class InterleavedLedgerStorage implements LedgerStorage {
+class InterleavedLedgerStorage implements LedgerStorage, JournalListener {
     final static Logger LOG = LoggerFactory.getLogger(InterleavedLedgerStorage.class);
 
     EntryLogger entryLogger;
@@ -78,6 +78,11 @@ class InterleavedLedgerStorage implements LedgerStorage {
     }
 
     @Override
+    public void entrySynced(long ledgerId, long entryId) {
+        ledgerCache.entrySynced(ledgerId, entryId);
+    }
+
+    @Override
     public void setMasterKey(long ledgerId, byte[] masterKey) throws IOException {
         ledgerCache.setMasterKey(ledgerId, masterKey);
     }
@@ -93,7 +98,16 @@ class InterleavedLedgerStorage implements LedgerStorage {
     }
 
     @Override
-    synchronized public long addEntry(ByteBuffer entry) throws IOException {
+    public long addEntry(ByteBuffer entry) throws IOException {
+        return doAddEntry(entry, true);
+    }
+
+    @Override
+    public long addSyncedEntry(ByteBuffer entry) throws IOException {
+        return doAddEntry(entry, false);
+    }
+
+    synchronized private long doAddEntry(ByteBuffer entry, boolean waitForSync) throws IOException {
         long ledgerId = entry.getLong();
         long entryId = entry.getLong();
         entry.rewind();
@@ -107,7 +121,7 @@ class InterleavedLedgerStorage implements LedgerStorage {
         /*
          * Set offset of entry id to be the current ledger position
          */
-        ledgerCache.putEntryOffset(ledgerId, entryId, pos);
+        ledgerCache.putEntryOffset(ledgerId, entryId, pos, waitForSync);
 
         somethingWritten = true;
 
@@ -181,7 +195,7 @@ class InterleavedLedgerStorage implements LedgerStorage {
         @Override
         public void process(long ledgerId, long offset, ByteBuffer buffer)
             throws IOException {
-            addEntry(buffer);
+            addSyncedEntry(buffer);
         }
     }
 

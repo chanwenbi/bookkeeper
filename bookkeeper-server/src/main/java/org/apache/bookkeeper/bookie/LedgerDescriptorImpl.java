@@ -69,16 +69,25 @@ public class LedgerDescriptorImpl extends LedgerDescriptor {
         return fenced;
     }
 
-    @Override
-    long addEntry(ByteBuffer entry) throws IOException {
+    private void sanityCheck(ByteBuffer entry) throws IOException {
         long ledgerId = entry.getLong();
 
         if (ledgerId != this.ledgerId) {
             throw new IOException("Entry for ledger " + ledgerId + " was sent to " + this.ledgerId);
         }
         entry.rewind();
+    }
 
+    @Override
+    long addEntry(ByteBuffer entry) throws IOException {
+        sanityCheck(entry);
         return ledgerStorage.addEntry(entry);
+    }
+
+    @Override
+    long addSyncedEntry(ByteBuffer entry) throws IOException {
+        sanityCheck(entry);
+        return ledgerStorage.addSyncedEntry(entry);
     }
 
     @Override

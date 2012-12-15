@@ -23,6 +23,7 @@ package org.apache.bookkeeper.bookie;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.BitSet;
 
 import org.apache.bookkeeper.proto.BookieProtocol;
 
@@ -41,9 +42,14 @@ public class LedgerEntryPage {
     private int useCount;
     private int version;
 
+    // BitSet to indicate the status waiting its entry is synced
+    // to a journal
+    private BitSet unsyncBits;
+
     public LedgerEntryPage(int pageSize, int entriesPerPage) {
         this.pageSize = pageSize;
         this.entriesPerPage = entriesPerPage;
+        this.unsyncBits = new BitSet(entriesPerPage);
         page = ByteBuffer.allocateDirect(pageSize);
     }
 
@@ -54,9 +60,24 @@ public class LedgerEntryPage {
         sb.append('@');
         sb.append(getFirstEntry());
         sb.append(clean ? " clean " : " dirty ");
+        sb.append(" unsync entries bitmap : ");
+        sb.append(unsyncBits);
         sb.append(useCount);
         return sb.toString();
     }
+
+    synchronized boolean isFlushable() {
+        return unsyncBits.isEmpty();     
+    }
+
+    synchronized void entrySynced(int idx) {
+        unsyncBits.clear(idx);
+    }
+
+    synchronized void waitEntrySynced(int idx) {
+        unsyncBits.set(idx, true);
+    }
+
     synchronized public void usePage() {
         useCount++;
     }
@@ -93,30 +114,31 @@ public class LedgerEntryPage {
     public int hashCode() {
         return (int)getLedger() ^ (int)(getFirstEntry());
     }
-    void setClean(int versionOfCleaning) {
+    synchronized void setClean(int versionOfCleaning) {
         this.clean = (versionOfCleaning == version);
     }
-    boolean isClean() {
+    synchronized boolean isClean() {
         return clean;
     }
-    public void setOffset(long offset, int position) {
+    synchronized public void setOffset(long offset, int position) {
         checkPage();
         version++;
         this.clean = false;
         page.putLong(position, offset);
     }
-    public long getOffset(int position) {
+    synchronized public long getOffset(int position) {
         checkPage();
         return page.getLong(position);
     }
     static final byte zeroPage[] = new byte[64*1024];
-    public void zeroPage() {
+    synchronized public void zeroPage() {
         checkPage();
         page.clear();
         page.put(zeroPage, 0, page.remaining());
         clean = true;
+        unsyncBits.clear();
     }
-    public void readPage(FileInfo fi) throws IOException {
+    synchronized public void readPage(FileInfo fi) throws IOException {
         checkPage();
         page.clear();
         while(page.remaining() != 0) {
@@ -125,34 +147,35 @@ public class LedgerEntryPage {
             }
         }
         clean = true;
+        unsyncBits.clear();
     }
-    public ByteBuffer getPageToWrite() {
+    synchronized public ByteBuffer getPageToWrite() {
         checkPage();
         page.clear();
         return page;
     }
-    void setLedger(long ledger) {
+    synchronized void setLedger(long ledger) {
         this.ledger = ledger;
     }
-    long getLedger() {
+    synchronized long getLedger() {
         return ledger;
     }
-    int getVersion() {
+    synchronized int getVersion() {
         return version;
     }
-    void setFirstEntry(long firstEntry) {
+    synchronized void setFirstEntry(long firstEntry) {
         if (firstEntry % entriesPerPage != 0) {
             throw new IllegalArgumentException(firstEntry + " is not a multiple of " + entriesPerPage);
         }
         this.firstEntry = firstEntry;
     }
-    long getFirstEntry() {
+    synchronized long getFirstEntry() {
         return firstEntry;
     }
-    public boolean inUse() {
+    public synchronized boolean inUse() {
         return useCount > 0;
     }
-    public long getLastEntry() {
+    public synchronized long getLastEntry() {
         for(int i = entriesPerPage - 1; i >= 0; i--) {
             if (getOffset(i*8) > 0) {
                 return i + firstEntry;

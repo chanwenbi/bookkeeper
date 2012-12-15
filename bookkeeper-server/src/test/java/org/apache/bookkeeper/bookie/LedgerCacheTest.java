@@ -110,7 +110,7 @@ public class LedgerCacheTest extends TestCase {
             byte[] masterKey = "blah".getBytes();
             for( int i = 0; i < 100; i++) {
                 ledgerCache.setMasterKey((long)i, masterKey);
-                ledgerCache.putEntryOffset(i, 0, i*8);
+                ledgerCache.putEntryOffset(i, 0, i*8, false);
             }
         } catch (IOException e) {
             LOG.error("Got IOException.", e);
@@ -132,7 +132,7 @@ public class LedgerCacheTest extends TestCase {
             for (int i=1; i<=numLedgers; i++) {
                 ledgerCache.setMasterKey((long)i, masterKey);
                 for (int j=0; j<numEntries; j++) {
-                    ledgerCache.putEntryOffset(i, j, i * numEntries + j);
+                    ledgerCache.putEntryOffset(i, j, i * numEntries + j, false);
                 }
             }
         } catch (Exception e) {
@@ -155,7 +155,7 @@ public class LedgerCacheTest extends TestCase {
             for (int i=1; i<=numLedgers; i++) {
                 ledgerCache.setMasterKey((long)i, masterKey);
                 for (int j=0; j<numEntries; j++) {
-                    ledgerCache.putEntryOffset(i, j, i*numEntries + j);
+                    ledgerCache.putEntryOffset(i, j, i*numEntries + j, false);
                 }
             }
             // ledger cache is exhausted
@@ -167,7 +167,7 @@ public class LedgerCacheTest extends TestCase {
             for (int i=numLedgers+1; i<=2*numLedgers; i++) {
                 ledgerCache.setMasterKey((long)i, masterKey);
                 for (int j=0; j<numEntries; j++) {
-                    ledgerCache.putEntryOffset(i, j, i*numEntries + j);
+                    ledgerCache.putEntryOffset(i, j, i*numEntries + j, false);
                 }
             }
         } catch (Exception e) {
@@ -188,8 +188,8 @@ public class LedgerCacheTest extends TestCase {
             // create serveral ledgers
             for (int i=1; i<=numLedgers; i++) {
                 ledgerCache.setMasterKey((long)i, masterKey);
-                ledgerCache.putEntryOffset(i, 0, i*8);
-                ledgerCache.putEntryOffset(i, 1, i*8);
+                ledgerCache.putEntryOffset(i, 0, i*8, false);
+                ledgerCache.putEntryOffset(i, 1, i*8, false);
             }
 
             // flush all first to clean previous dirty ledgers
@@ -208,7 +208,7 @@ public class LedgerCacheTest extends TestCase {
             // simulate replaying journals to add entries again
             for (int i=1; i<=numLedgers; i++) {
                 try {
-                    ledgerCache.putEntryOffset(i, 1, i*8);
+                    ledgerCache.putEntryOffset(i, 1, i*8, false);
                 } catch (NoLedgerException nsle) {
                     if (i<=numLedgers/2) {
                         // it is ok
@@ -247,11 +247,11 @@ public class LedgerCacheTest extends TestCase {
         FileInfo newFileInfo = new FileInfo(fileInfo.getLf(), fileInfo.getMasterKey());
         ledgerCache.fileInfoCache.put(Long.valueOf(1), newFileInfo);
         // Add entries
-        ledgerStorage.addEntry(generateEntry(1, 1));
-        ledgerStorage.addEntry(generateEntry(1, 2));
+        ledgerStorage.addSyncedEntry(generateEntry(1, 1));
+        ledgerStorage.addSyncedEntry(generateEntry(1, 2));
         ledgerStorage.flush();
 
-        ledgerStorage.addEntry(generateEntry(1, 3));
+        ledgerStorage.addSyncedEntry(generateEntry(1, 3));
         // add the dir to failed dirs
         bookie.getLedgerDirsManager().addToFilledDirs(
                 newFileInfo.getLf().getParentFile().getParentFile().getParentFile());

@@ -30,6 +30,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import org.apache.bookkeeper.bookie.LedgerDirsManager.NoWritableLedgerDirException;
@@ -259,6 +262,9 @@ class Journal extends Thread {
 
     // journal entry queue to commit
     LinkedBlockingQueue<QueueEntry> queue = new LinkedBlockingQueue<QueueEntry>();
+    // journal listeners
+    private final CopyOnWriteArraySet<JournalListener> listeners;
+    private final ExecutorService listenerExecutor;
 
     volatile boolean running = true;
     private LedgerDirsManager ledgerDirsManager;
@@ -270,10 +276,20 @@ class Journal extends Thread {
         this.journalDirectory = Bookie.getCurrentDirectory(conf.getJournalDir());
         this.maxJournalSize = conf.getMaxJournalSize() * MB;
         this.maxBackupJournals = conf.getMaxBackupJournals();
+        this.listeners = new CopyOnWriteArraySet<JournalListener>();
+        this.listenerExecutor = Executors.newSingleThreadExecutor();
 
         // read last log mark
         lastLogMark.readLog();
         LOG.debug("Last Log Mark : {}", lastLogMark);
+    }
+
+    public void addJournalListener(JournalListener listener) {
+        listeners.add(listener);
+    }
+
+    public void removeJournalListener(JournalListener listener) {
+        listeners.remove(listener);
     }
 
     LastLogMark getLastLogMark() {
@@ -504,6 +520,17 @@ class Journal extends Thread {
                             lastLogMark.setLastLogMark(logId, lastFlushPosition);
                             for (QueueEntry e : toFlush) {
                                 e.cb.writeComplete(0, e.ledgerId, e.entryId, null, e.ctx);
+                                // notified listeners, using executor to not block journal
+                                final long lid = e.ledgerId;
+                                final long eid = e.entryId;
+                                listenerExecutor.submit(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        for (JournalListener listener : listeners) {
+                                            listener.entrySynced(lid, eid);
+                                        }
+                                    }
+                                });
                             }
                             toFlush.clear();
 
@@ -562,6 +589,7 @@ class Journal extends Thread {
             running = false;
             this.interrupt();
             this.join();
+            listenerExecutor.shutdown();
         } catch (InterruptedException ie) {
             LOG.warn("Interrupted during shutting down journal : ", ie);
         }

@@ -63,9 +63,13 @@ interface LedgerStorage {
 
     /**
      * Add an entry to the storage.
+     *
+     * @param entry
+     *          Entry to store
      * @return the entry id of the entry added
      */
     long addEntry(ByteBuffer entry) throws IOException;
+    long addSyncedEntry(ByteBuffer entry) throws IOException;
 
     /**
      * Read an entry from storage

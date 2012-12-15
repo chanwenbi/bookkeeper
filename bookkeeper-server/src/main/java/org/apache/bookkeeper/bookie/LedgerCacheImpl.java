@@ -196,19 +196,51 @@ public class LedgerCacheImpl implements LedgerCache {
     }
 
     @Override
-    public void putEntryOffset(long ledger, long entry, long offset) throws IOException {
+    public void entrySynced(long lid, long eid) {
+        int offsetInPage = (int) (eid % entriesPerPage);
+        // find the id of the first entry of the page that has the entry
+        // we are looking for
+        long pageEntry = eid - offsetInPage;
+        LedgerEntryPage lep = getLedgerEntryPage(lid, pageEntry, false);
+        try {
+            if (lep == null) {
+                lep = grabLedgerEntryPage(lid, pageEntry); 
+            }
+            if (lep != null) {
+                lep.entrySynced(offsetInPage);
+            }
+        } catch (IOException ie) {
+            LOG.warn("Failed to grab ledger page for (lid:" + lid + ", eid:"
+                     + eid + ") when notified its entry is synced :", ie);
+        } finally {
+            if (lep != null) {
+                lep.releasePage();
+            }
+        }
+    }
+
+    @Override
+    public void putEntryOffset(long ledger, long entry, long offset,
+                               boolean waitForSync) throws IOException {
         int offsetInPage = (int) (entry % entriesPerPage);
         // find the id of the first entry of the page that has the entry
         // we are looking for
         long pageEntry = entry-offsetInPage;
         LedgerEntryPage lep = getLedgerEntryPage(ledger, pageEntry, false);
-        if (lep == null) {
-            lep = grabLedgerEntryPage(ledger, pageEntry); 
-        }
-        if (lep != null) {
-            lep.setOffset(offset, offsetInPage*8);
-            lep.releasePage();
-            return;
+        try {
+            if (lep == null) {
+                lep = grabLedgerEntryPage(ledger, pageEntry); 
+            }
+            if (lep != null) {
+                lep.setOffset(offset, offsetInPage*8);
+                if (waitForSync) {
+                    lep.waitEntrySynced(offsetInPage);
+                }
+            }
+        } finally {
+            if (lep != null) {
+                lep.releasePage();
+            }
         }
     }
 
@@ -423,6 +455,10 @@ public class LedgerCacheImpl implements LedgerCache {
                     LOG.trace("Page is clean {}", lep);
                     continue;
                 }
+                if (!lep.isFlushable()) {
+                    LOG.trace("Page isn't flushable {}", lep);
+                    continue;
+                }
                 firstEntryList.add(lep.getFirstEntry());
             }
         }
@@ -495,25 +531,35 @@ public class LedgerCacheImpl implements LedgerCache {
         if (count == 0) {
             return;
         }
-        ByteBuffer buffs[] = new ByteBuffer[count];
+        long totalWritten = 0;
+        int totalPages = 0;
         for(int j = 0; j < count; j++) {
-            buffs[j] = entries.get(start+j).getPageToWrite();
-            if (entries.get(start+j).getLedger() != ledger) {
+            LedgerEntryPage page = entries.get(start+j);
+            if (page.getLedger() != ledger) {
                 throw new IOException("Writing to " + ledger + " but page belongs to "
                                       + entries.get(start+j).getLedger());
             }
-        }
-        long totalWritten = 0;
-        while(buffs[buffs.length-1].remaining() > 0) {
-            long rc = fi.write(buffs, entries.get(start+0).getFirstEntry()*8);
-            if (rc <= 0) {
-                throw new IOException("Short write to ledger " + ledger + " rc = " + rc);
+            // grap the lock during flush to avoid someone putting an entry
+            // during flushing the ledger entry page, which would flush
+            // index entries for those ledger entries are not synced to journal
+            synchronized (page) {
+                // if the page is not flushable just skip this page.
+                if (!page.isFlushable()) {
+                    continue;
+                }
+                ByteBuffer buf = page.getPageToWrite();
+                long rc = fi.write(buf, page.getFirstEntry()*8);
+                if (rc <= 0) {
+                    throw new IOException("Short write to ledger " + ledger + " rc = " + rc);
+                }
+                totalWritten += rc;
+                ++totalPages;
             }
-            totalWritten += rc;
         }
-        if (totalWritten != (long)count * (long)pageSize) {
+
+        if (totalWritten != (long)totalPages * (long)pageSize) {
             throw new IOException("Short write to ledger " + ledger + " wrote " + totalWritten
-                                  + " expected " + count * pageSize);
+                                  + " expected " + totalPages * pageSize);
         }
     }
     private LedgerEntryPage grabCleanPage(long ledger, long entry) throws IOException {

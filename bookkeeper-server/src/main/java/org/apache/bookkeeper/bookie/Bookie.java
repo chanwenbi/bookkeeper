@@ -416,11 +416,15 @@ public class Bookie extends Thread {
         activeLedgerManager = activeLedgerManagerFactory.newActiveLedgerManager();
 
         syncThread = new SyncThread(conf);
-        ledgerStorage = new InterleavedLedgerStorage(conf, activeLedgerManager,
-                ledgerDirsManager);
+        InterleavedLedgerStorage storageImpl =
+            new InterleavedLedgerStorage(conf, activeLedgerManager,
+                                         ledgerDirsManager);
+        ledgerStorage = storageImpl;
         handles = new HandleFactoryImpl(ledgerStorage);
         // instantiate the journal
         journal = new Journal(conf, ledgerDirsManager);
+        // register journal listener
+        journal.addJournalListener(storageImpl);
 
         // ZK ephemeral node for this Bookie.
         zkBookieRegPath = this.bookieRegistrationPath + getMyId();
@@ -459,7 +463,7 @@ public class Bookie extends Thread {
                         LedgerDescriptor handle = handles.getHandle(ledgerId, key);
 
                         recBuff.rewind();
-                        handle.addEntry(recBuff);
+                        handle.addSyncedEntry(recBuff);
                     }
                 } catch (NoLedgerException nsle) {
                     LOG.debug("Skip replaying entries of ledger {} since it was deleted.", ledgerId);

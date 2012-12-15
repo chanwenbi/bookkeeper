@@ -211,6 +211,29 @@ class FileInfo {
         }
     }
 
+    synchronized public long write(ByteBuffer buf, long position) throws IOException {
+        checkOpen(true);
+        long total = 0;
+        try {
+            fc.position(position+START_OF_DATA);
+            while(buf.remaining() > 0) {
+                long rc = fc.write(buf);
+                if (rc <= 0) {
+                    throw new IOException("Short write");
+                }
+                total += rc;
+            }
+        } finally {
+            fc.force(true);
+            long newsize = position+START_OF_DATA+total;
+            if (newsize > size) {
+                size = newsize;
+            }
+        }
+        sizeSinceLastwrite = fc.size();
+        return total;
+    }
+
     synchronized public long write(ByteBuffer[] buffs, long position) throws IOException {
         checkOpen(true);
         long total = 0;
