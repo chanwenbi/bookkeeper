@@ -26,13 +26,13 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.bookkeeper.conf.ClientConfiguration;
 import org.apache.bookkeeper.client.BookKeeper;
 import org.apache.bookkeeper.client.BKException;
+import org.apache.bookkeeper.util.OrderedSafeExecutor;
 import org.apache.commons.configuration.ConfigurationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -113,7 +113,7 @@ public class PubSubServer {
     BookKeeper bk; // null if we are in standalone mode
 
     // we use this to prevent long stack chains from building up in callbacks
-    ScheduledExecutorService scheduler;
+    OrderedSafeExecutor scheduler;
 
     // JMX Beans
     NettyHandlerBean jmxNettyBean;
@@ -161,7 +161,7 @@ public class PubSubServer {
 
     }
 
-    protected RegionManager instantiateRegionManager(PersistenceManager pm, ScheduledExecutorService scheduler) {
+    protected RegionManager instantiateRegionManager(PersistenceManager pm, OrderedSafeExecutor scheduler) {
         return new RegionManager(pm, conf, zk, scheduler, new HedwigHubClientFactory(conf, clientConfiguration,
                 clientChannelFactory));
     }
@@ -399,7 +399,7 @@ public class PubSubServer {
                 try {
                     // Since zk is needed by almost everyone,try to see if we
                     // need that first
-                    scheduler = Executors.newSingleThreadScheduledExecutor();
+                    scheduler = new OrderedSafeExecutor(conf.getNumTopicQueuerThreads());
                     serverChannelFactory = new NioServerSocketChannelFactory(Executors.newCachedThreadPool(), Executors
                             .newCachedThreadPool());
                     clientChannelFactory = new NioClientSocketChannelFactory(Executors.newCachedThreadPool(), Executors
