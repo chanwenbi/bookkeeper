@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.SynchronousQueue;
 
+import org.apache.bookkeeper.util.OrderedSafeExecutor;
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.Watcher;
@@ -132,7 +133,8 @@ public class TestPubSubServer extends PubSubServerStandAloneTestBase {
 
             @Override
             public TopicManager instantiateTopicManager() throws IOException {
-                return new AbstractTopicManager(new ServerConfiguration(), Executors.newSingleThreadScheduledExecutor()) {
+                ServerConfiguration cfg = new ServerConfiguration();
+                return new AbstractTopicManager(cfg, new OrderedSafeExecutor(cfg.getNumTopicQueuerThreads())) {
                     @Override
                     protected void realGetOwner(ByteString topic, boolean shouldClaim,
                     Callback<HedwigSocketAddress> cb, Object ctx) {
@@ -163,7 +165,8 @@ public class TestPubSubServer extends PubSubServerStandAloneTestBase {
 
             @Override
             public TopicManager instantiateTopicManager() throws IOException {
-                return new AbstractTopicManager(new ServerConfiguration(), Executors.newSingleThreadScheduledExecutor()) {
+                ServerConfiguration cfg = new ServerConfiguration();
+                return new AbstractTopicManager(cfg, new OrderedSafeExecutor(cfg.getNumTopicQueuerThreads())) {
 
                     @Override
                     protected void realGetOwner(ByteString topic, boolean shouldClaim,

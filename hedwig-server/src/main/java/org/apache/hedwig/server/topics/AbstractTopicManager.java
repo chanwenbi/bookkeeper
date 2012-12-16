@@ -23,13 +23,15 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Queue;
 import java.util.Set;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ScheduledExecutorService;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.ByteString;
+import org.apache.bookkeeper.util.OrderedSafeExecutor;
 import org.apache.hedwig.exceptions.PubSubException;
 import org.apache.hedwig.server.common.ServerConfiguration;
 import org.apache.hedwig.server.common.TopicOpQueuer;
@@ -55,12 +57,12 @@ public abstract class AbstractTopicManager implements TopicManager {
 
     protected ChainedTopicOpQueuer queuer;
     protected ServerConfiguration cfg;
-    protected ScheduledExecutorService scheduler;
+    protected ScheduledExecutorService retentionScheduler;
 
     private static final Logger logger = LoggerFactory.getLogger(AbstractTopicManager.class);
 
     private class ChainedTopicOpQueuer extends TopicOpQueuer {
-        public ChainedTopicOpQueuer(ScheduledExecutorService scheduler) {
+        public ChainedTopicOpQueuer(OrderedSafeExecutor scheduler) {
             super(scheduler);
         }
 
@@ -84,7 +86,7 @@ public abstract class AbstractTopicManager implements TopicManager {
                                 ((GetOwnerOp)r).failOriginalCallback(exception);
                                 ops.remove();
                             } else if (r instanceof ReleaseOp) {
-                                scheduler.submit(r);
+                                scheduler.unsafeSubmitOrdered(topic, r);
                                 break;
                             }
                         }
@@ -92,7 +94,7 @@ public abstract class AbstractTopicManager implements TopicManager {
                         // for release op, it failed which means the ownership doesn't release
                         // we have to execute following request.
                         if (!ops.isEmpty()) {
-                            scheduler.submit(ops.peek());
+                            scheduler.unsafeSubmitOrdered(topic, ops.peek());
                         }
                     }
                 }
@@ -122,11 +124,11 @@ public abstract class AbstractTopicManager implements TopicManager {
                                     ((GetOwnerOp)r).succeedOriginalCallback(owner);
                                     ops.remove();
                                 } else {
-                                    scheduler.submit(r);
+                                    scheduler.unsafeSubmitOrdered(topic, r);
                                     break;
                                 }
                             } else if (r instanceof ReleaseOp) {
-                                scheduler.submit(r);
+                                scheduler.unsafeSubmitOrdered(topic, r);
                                 break;
                             }
                         }
@@ -134,7 +136,7 @@ public abstract class AbstractTopicManager implements TopicManager {
                         // for release op, it succeed which means the ownership isn't itself
                         // we have to execute following request.
                         if (!ops.isEmpty()) {
-                            scheduler.submit(ops.peek());
+                            scheduler.unsafeSubmitOrdered(topic, ops.peek());
                         }
                     }
                 }
@@ -203,11 +205,16 @@ public abstract class AbstractTopicManager implements TopicManager {
         }
     }
 
-    public AbstractTopicManager(ServerConfiguration cfg, ScheduledExecutorService scheduler)
+    public AbstractTopicManager(ServerConfiguration cfg, OrderedSafeExecutor scheduler)
             throws UnknownHostException {
         this.cfg = cfg;
         this.queuer = new ChainedTopicOpQueuer(scheduler);
-        this.scheduler = scheduler;
+        // retention scheduler only used for topic retention, so for simple
+        // use a scheduled thread pool directly. we don't need to partition topics
+        // since it would just run an asynchronous op (releaseTopic) to enqueue to the
+        // real worker
+        this.retentionScheduler =
+            Executors.newScheduledThreadPool(Runtime.getRuntime().availableProcessors());
         addr = cfg.getServerAddr();
     }
 
@@ -225,7 +232,7 @@ public abstract class AbstractTopicManager implements TopicManager {
             public void operationFinished(Object ctx, Void resultOfOperation) {
                 topics.add(topic);
                 if (cfg.getRetentionSecs() > 0) {
-                    scheduler.schedule(new Runnable() {
+                    retentionScheduler.schedule(new Runnable() {
                         @Override
                         public void run() {
                             // Enqueue a release operation. (Recall that release
