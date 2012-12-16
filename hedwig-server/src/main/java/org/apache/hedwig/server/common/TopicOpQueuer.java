@@ -42,9 +42,9 @@ public class TopicOpQueuer {
     }
 
     public abstract class AsynchronousOp<T> implements Op {
-        final public ByteString topic;
-        final public Callback<T> cb;
-        final public Object ctx;
+        public ByteString topic;
+        public Callback<T> cb;
+        public Object ctx;
 
         public AsynchronousOp(final ByteString topic, final Callback<T> cb, Object ctx) {
             this.topic = topic;
@@ -82,22 +82,30 @@ public class TopicOpQueuer {
 
     }
 
-    protected synchronized void popAndRunNext(ByteString topic) {
-        Queue<Runnable> ops = topic2ops.get(topic);
-        if (!ops.isEmpty())
-            ops.remove();
-        if (!ops.isEmpty())
-            scheduler.submit(ops.peek());
+    public void popAndRunNext(ByteString topic) {
+        Queue<Runnable> ops;
+        synchronized (this) {
+            ops = topic2ops.get(topic);
+        }
+        synchronized (ops) {
+            if (!ops.isEmpty())
+                ops.remove();
+            if (!ops.isEmpty())
+                scheduler.submit(ops.peek());
+        }
     }
 
     public void pushAndMaybeRun(ByteString topic, Op op) {
         int size;
+        Queue<Runnable> ops;
         synchronized (this) {
-            Queue<Runnable> ops = topic2ops.get(topic);
+            ops = topic2ops.get(topic);
             if (ops == null) {
                 ops = new LinkedList<Runnable>();
                 topic2ops.put(topic, ops);
             }
+        }
+        synchronized (ops) {
             ops.add(op);
             size = ops.size();
         }

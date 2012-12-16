@@ -21,6 +21,7 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -52,13 +53,127 @@ public abstract class AbstractTopicManager implements TopicManager {
      */
     protected Set<ByteString> topics = Collections.synchronizedSet(new HashSet<ByteString>());
 
-    protected TopicOpQueuer queuer;
+    protected ChainedTopicOpQueuer queuer;
     protected ServerConfiguration cfg;
     protected ScheduledExecutorService scheduler;
 
     private static final Logger logger = LoggerFactory.getLogger(AbstractTopicManager.class);
 
-    private class GetOwnerOp extends TopicOpQueuer.AsynchronousOp<HedwigSocketAddress> {
+    private class ChainedTopicOpQueuer extends TopicOpQueuer {
+        public ChainedTopicOpQueuer(ScheduledExecutorService scheduler) {
+            super(scheduler);
+        }
+
+        public void popAndRunNextsWithException(ByteString topic, PubSubException exception) {
+            Queue<Runnable> ops;
+            synchronized (this) {
+                ops = topic2ops.get(topic);
+                if (null == ops) {
+                    return;
+                }
+            }
+            synchronized (ops) {
+                if (!ops.isEmpty()) {
+                    Runnable op = ops.remove();
+                    // if get owner op is failed
+                    if (op instanceof GetOwnerOp) {
+                        // failed the following get owner ops
+                        while (!ops.isEmpty()) {
+                            Runnable r = ops.peek();    
+                            if (r instanceof GetOwnerOp) {
+                                ((GetOwnerOp)r).failOriginalCallback(exception);
+                                ops.remove();
+                            } else if (r instanceof ReleaseOp) {
+                                scheduler.submit(r);
+                                break;
+                            }
+                        }
+                    } else {
+                        // for release op, it failed which means the ownership doesn't release
+                        // we have to execute following request.
+                        if (!ops.isEmpty()) {
+                            scheduler.submit(ops.peek());
+                        }
+                    }
+                }
+            }
+        }
+
+        public void popAndRunNextsWithResult(ByteString topic, Object result) {
+            Queue<Runnable> ops;
+            synchronized (this) {
+                ops = topic2ops.get(topic);
+                if (null == ops) {
+                    return;
+                }
+            }
+            synchronized (ops) {
+                if (!ops.isEmpty()) {
+                    Runnable op = ops.remove();
+                    // if get owner op is failed
+                    if (op instanceof GetOwnerOp) {
+                        // failed the following get owner ops
+                        while (!ops.isEmpty()) {
+                            Runnable r = ops.peek();    
+                            if (r instanceof GetOwnerOp) {
+                                HedwigSocketAddress owner = (HedwigSocketAddress)result;
+                                // if topic ownership is not itself, redirects all pending requests
+                                if (!owner.equals(addr)) {
+                                    ((GetOwnerOp)r).succeedOriginalCallback(owner);
+                                    ops.remove();
+                                } else {
+                                    scheduler.submit(r);
+                                    break;
+                                }
+                            } else if (r instanceof ReleaseOp) {
+                                scheduler.submit(r);
+                                break;
+                            }
+                        }
+                    } else {
+                        // for release op, it succeed which means the ownership isn't itself
+                        // we have to execute following request.
+                        if (!ops.isEmpty()) {
+                            scheduler.submit(ops.peek());
+                        }
+                    }
+                }
+            }
+        }
+
+        public abstract class TopicOp<T> extends TopicOpQueuer.AsynchronousOp<T> {
+
+            public Callback<T> originalCb;
+
+            public TopicOp(final ByteString topic, final Callback<T> cb, Object ctx) {
+                super(topic, cb, ctx);
+                this.originalCb = cb;
+                // overwrite the default callback
+                this.cb = new Callback<T>() {
+                    @Override
+                    public void operationFailed(Object ctx, PubSubException exception) {
+                        originalCb.operationFailed(ctx, exception);
+                        popAndRunNextsWithException(topic, exception);
+                    }
+                    @Override
+                    public void operationFinished(Object ctx, T resultOfOperation) {
+                        originalCb.operationFinished(ctx, resultOfOperation);
+                        popAndRunNextsWithResult(topic, resultOfOperation);
+                    }
+                };
+            }
+
+            public void failOriginalCallback(PubSubException ex) {
+                this.originalCb.operationFailed(this.ctx, ex);
+            }
+
+            public void succeedOriginalCallback(T resultOfOperation) {
+                this.originalCb.operationFinished(this.ctx, resultOfOperation);
+            }
+        }
+    }
+
+    private class GetOwnerOp extends ChainedTopicOpQueuer.TopicOp<HedwigSocketAddress> {
         public boolean shouldClaim;
 
         public GetOwnerOp(final ByteString topic, boolean shouldClaim,
@@ -73,7 +188,7 @@ public abstract class AbstractTopicManager implements TopicManager {
         }
     }
 
-    private class ReleaseOp extends TopicOpQueuer.AsynchronousOp<Void> {
+    private class ReleaseOp extends ChainedTopicOpQueuer.TopicOp<Void> {
         public ReleaseOp(ByteString topic, Callback<Void> cb, Object ctx) {
             queuer.super(topic, cb, ctx);
         }
@@ -91,7 +206,7 @@ public abstract class AbstractTopicManager implements TopicManager {
     public AbstractTopicManager(ServerConfiguration cfg, ScheduledExecutorService scheduler)
             throws UnknownHostException {
         this.cfg = cfg;
-        this.queuer = new TopicOpQueuer(scheduler);
+        this.queuer = new ChainedTopicOpQueuer(scheduler);
         this.scheduler = scheduler;
         addr = cfg.getServerAddr();
     }
