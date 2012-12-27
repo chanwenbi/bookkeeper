@@ -18,18 +18,17 @@
  * under the License.
  *
  */
-package org.apache.bookkeeper.test;
+package org.apache.bookkeeper.bookie;
 
 import java.io.File;
 import java.util.Enumeration;
 
-import org.apache.bookkeeper.bookie.Bookie;
-import org.apache.bookkeeper.bookie.LedgerDirsManager;
 import org.apache.bookkeeper.client.BKException;
 import org.apache.bookkeeper.client.BookKeeper.DigestType;
 import org.apache.bookkeeper.client.LedgerEntry;
 import org.apache.bookkeeper.client.LedgerHandle;
 import org.apache.bookkeeper.conf.ServerConfiguration;
+import org.apache.bookkeeper.test.BookKeeperClusterTestCase;
 
 /**
  * Test to verify the readonly feature of bookies
@@ -175,7 +174,7 @@ public class ReadOnlyBookieTest extends BookKeeperClusterTestCase {
         killBookie(1);
         baseConf.setReadOnlyModeEnabled(true);
         startNewBookie();
-        bs.get(1).getBookie().transitionToReadOnlyMode();
+        bs.get(1).getBookie().doTransitionToReadOnlyMode();
         try {
             bkc.readBookiesBlocking();
             bkc.createLedger(2, 2, DigestType.CRC32, "".getBytes());

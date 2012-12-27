@@ -34,8 +34,7 @@ import org.apache.bookkeeper.meta.LedgerManager;
 import org.apache.bookkeeper.meta.LedgerManagerFactory;
 import org.apache.bookkeeper.proto.BookieClient;
 import org.apache.bookkeeper.util.OrderedSafeExecutor;
-import org.apache.bookkeeper.util.ZkUtils;
-import org.apache.bookkeeper.zookeeper.ZooKeeperWatcherBase;
+import org.apache.bookkeeper.zookeeper.ZooKeeperClient;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.ZooKeeper;
 import org.jboss.netty.channel.socket.ClientSocketChannelFactory;
@@ -121,9 +120,8 @@ public class BookKeeper {
     public BookKeeper(final ClientConfiguration conf)
             throws IOException, InterruptedException, KeeperException {
         this.conf = conf;
-        ZooKeeperWatcherBase w = new ZooKeeperWatcherBase(conf.getZkTimeout());
-        this.zk = ZkUtils
-                .createConnectedZookeeperClient(conf.getZkServers(), w);
+        this.zk = ZooKeeperClient.createConnectedZooKeeperClient(
+                conf.getZkServers(), conf.getZkTimeout());
 
         this.channelFactory = new NioClientSocketChannelFactory(Executors.newCachedThreadPool(),
                                                                 Executors.newCachedThreadPool());

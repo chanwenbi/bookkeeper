@@ -28,9 +28,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.zookeeper.ZooKeeper;
-import org.apache.bookkeeper.meta.LedgerManagerFactory;
-import org.apache.bookkeeper.meta.LedgerUnderreplicationManager;
-import org.apache.bookkeeper.zookeeper.ZooKeeperWatcherBase;
 
 import org.apache.bookkeeper.bookie.EntryLogger.EntryLogScanner;
 import org.apache.bookkeeper.bookie.Journal.JournalScanner;
@@ -39,9 +36,11 @@ import org.apache.bookkeeper.client.BKException;
 import org.apache.bookkeeper.client.BookKeeperAdmin;
 import org.apache.bookkeeper.conf.ClientConfiguration;
 import org.apache.bookkeeper.conf.ServerConfiguration;
+import org.apache.bookkeeper.meta.LedgerManagerFactory;
+import org.apache.bookkeeper.meta.LedgerUnderreplicationManager;
 import org.apache.bookkeeper.util.EntryFormatter;
 import org.apache.bookkeeper.util.Tool;
-import org.apache.bookkeeper.util.ZkUtils;
+import org.apache.bookkeeper.zookeeper.ZooKeeperClient;
 
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.configuration.CompositeConfiguration;
@@ -543,8 +542,7 @@ public class BookieShell implements Tool {
             }
             ZooKeeper zk = null;
             try {
-                ZooKeeperWatcherBase w = new ZooKeeperWatcherBase(bkConf.getZkTimeout());
-                zk = ZkUtils.createConnectedZookeeperClient(bkConf.getZkServers(), w);
+                zk = ZooKeeperClient.createConnectedZooKeeperClient(bkConf.getZkServers(), bkConf.getZkTimeout());
                 LedgerManagerFactory mFactory = LedgerManagerFactory.newLedgerManagerFactory(bkConf, zk);
                 LedgerUnderreplicationManager underreplicationManager = mFactory.newLedgerUnderreplicationManager();
                 if (enable) {

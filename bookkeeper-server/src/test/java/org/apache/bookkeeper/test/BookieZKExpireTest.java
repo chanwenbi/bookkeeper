@@ -21,17 +21,19 @@
 
 package org.apache.bookkeeper.test;
 
+import java.net.InetAddress;
 import java.io.File;
+import java.util.HashSet;
+
+import junit.framework.TestCase;
 import org.junit.Test;
 import org.junit.Before;
 import org.junit.After;
 import static org.junit.Assert.*;
 
-import org.apache.bookkeeper.conf.ServerConfiguration;
-import java.util.HashSet;
-import junit.framework.TestCase;
-import org.apache.bookkeeper.proto.BookieServer;
 import org.apache.bookkeeper.bookie.Bookie;
+import org.apache.bookkeeper.conf.ServerConfiguration;
+import org.apache.bookkeeper.proto.BookieServer;
 
 public class BookieZKExpireTest extends BookKeeperClusterTestCase {
 
@@ -90,7 +92,7 @@ public class BookieZKExpireTest extends BookKeeperClusterTestCase {
             sendthread.resume();
 
             // allow watcher thread to run
-            secondsToWait = 20;
+            secondsToWait = 3;
             while (server.isBookieRunning()
                    || server.isNioServerRunning()
                    || server.isRunning()) {
@@ -99,9 +101,12 @@ public class BookieZKExpireTest extends BookKeeperClusterTestCase {
                     break;
                 }
             }
-            assertFalse("Bookie should have shutdown on losing zk session", server.isBookieRunning());
-            assertFalse("Nio Server should have shutdown on losing zk session", server.isNioServerRunning());
-            assertFalse("Bookie Server should have shutdown on losing zk session", server.isRunning());
+            assertTrue("Bookie should not shutdown on losing zk session", server.isBookieRunning());
+            assertTrue("Nio Server should not shutdown on losing zk session", server.isNioServerRunning());
+            assertTrue("Bookie Server should not shutdown on losing zk session", server.isRunning());
+            // check the existence of znode
+            assertNotNull(zkUtil.getZooKeeperClient()
+                .exists("/ledgers/available/" + InetAddress.getLocalHost().getHostAddress() + ":" + conf.getBookiePort(), false));
         } finally {
             server.shutdown();
         }
