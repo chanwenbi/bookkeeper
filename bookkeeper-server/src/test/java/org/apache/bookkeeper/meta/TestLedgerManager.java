@@ -22,6 +22,7 @@ package org.apache.bookkeeper.meta;
 
 import org.apache.bookkeeper.client.BookKeeper.DigestType;
 import org.apache.bookkeeper.conf.ClientConfiguration;
+import org.apache.bookkeeper.zookeeper.ZooKeeperClient;
 import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.Watcher;
 import org.apache.zookeeper.ZooKeeper;
@@ -205,13 +206,8 @@ public class TestLedgerManager extends BookKeeperClusterTestCase {
             this.factoryCls = factoryCls;
             this.barrier = barrier;
             this.root = root;
-            final CountDownLatch latch = new CountDownLatch(1);
-            zkc = new ZooKeeper(zkConnectString, 10000, new Watcher() {
-                    public void process(WatchedEvent event) {
-                        latch.countDown();
-                    }
-                });
-            latch.await();
+            zkc = ZooKeeperClient.createConnectedZooKeeperClient(
+                    zkConnectString, 10000);
         }
 
         public void run() {

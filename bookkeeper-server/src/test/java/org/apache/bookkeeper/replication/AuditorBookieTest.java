@@ -28,11 +28,9 @@ import junit.framework.Assert;
 
 import org.apache.bookkeeper.conf.ServerConfiguration;
 import org.apache.bookkeeper.proto.BookieServer;
-import org.apache.bookkeeper.util.ZkUtils;
-import org.apache.bookkeeper.zookeeper.ZooKeeperWatcherBase;
-
 import org.apache.bookkeeper.test.BookKeeperClusterTestCase;
 import org.apache.bookkeeper.util.StringUtils;
+import org.apache.bookkeeper.zookeeper.ZooKeeperClient;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.ZooKeeper;
 import org.junit.Test;
@@ -227,9 +225,8 @@ public class AuditorBookieTest extends BookKeeperClusterTestCase {
     }
 
     private void startAuditorElector(String addr) throws Exception {
-        ZooKeeperWatcherBase w = new ZooKeeperWatcherBase(10000);
-        ZooKeeper zk = ZkUtils.createConnectedZookeeperClient(
-                zkUtil.getZooKeeperConnectString(), w);
+        ZooKeeper zk = ZooKeeperClient.createConnectedZooKeeperClient(
+                zkUtil.getZooKeeperConnectString(), 10000);
         zkClients.add(zk);
 
         AuditorElector auditorElector = new AuditorElector(addr,
