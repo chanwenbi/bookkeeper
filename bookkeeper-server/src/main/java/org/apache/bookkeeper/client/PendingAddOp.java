@@ -88,20 +88,18 @@ class PendingAddOp implements WriteCallback {
             // now
             return;
         }
-        // Suppose that unset doesn't happen on the write set of an entry. In this
-        // case we don't need to resend the write request upon an ensemble change.
-        // We do need to invoke #sendAddSuccessCallbacks() for such entries because
-        // they may have already completed, but they are just waiting for the ensemble
-        // to change.
+        // the unset doesn't happen on the write set, so we don't need to resend
+        // the write request. but we had to try to send success add callbacks.
+        // because there might be entries already completed but wait for ensemble
+        // change completed.
         // E.g.
         // ensemble (A, B, C, D), entry k is written to (A, B, D). An ensemble change
-        // happens to replace C with E. Entry k does not complete until C is
-        // replaced with E successfully. When the ensemble change completes, it tries
-        // to unset entry k. C however is not in k's write set, so no entry is written
-        // again, and no one triggers #sendAddSuccessCallbacks. Consequently, k never
-        // completes.
+        // happened to replace C with E. so entry k could not complete until C is
+        // replaced by E successfully. when ensemble change finished, it tried to
+        // unset entry k. but C is not in k's write set, so no entry is written again,
+        // no one trigger #sendAddSuccessCallbacks. so k would never complete.
         //
-        // We call sendAddSuccessCallback when unsetting t cover this case.
+        // So sendAddSuccessCallback when unset an entry as below.
         if (!writeSet.contains(bookieIndex)) {
             lh.sendAddSuccessCallbacks();
             return;
@@ -168,6 +166,15 @@ class PendingAddOp implements WriteCallback {
 
     void submitCallback(final int rc) {
         cb.addComplete(rc, lh, entryId, ctx);
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("PendingAddOp(lid:").append(lh.ledgerId)
+          .append(", eid:").append(entryId).append(", completed:")
+          .append(completed).append(")");
+        return sb.toString();
     }
 
     @Override
