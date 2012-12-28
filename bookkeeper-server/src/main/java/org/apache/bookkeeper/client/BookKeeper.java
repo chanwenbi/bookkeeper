@@ -83,10 +83,8 @@ public class BookKeeper {
 
     final ClientConfiguration conf;
 
-    interface ZKConnectCallback {
-        public void connected();
-        public void connectionFailed(int code);
-    }
+    // Flag indicating whether the client disabled ensemble change or not.
+    volatile boolean ensembleChangeDisabled = false;
 
     /**
      * Create a bookkeeper client. A zookeeper client and a client socket factory
@@ -230,6 +228,23 @@ public class BookKeeper {
      */
     BookieClient getBookieClient() {
         return bookieClient;
+    }
+
+    /**
+     * Enable ensemble change. After ensemble change is enabled,
+     * a write failure will cause changing ensemble.
+     */
+    public void enableEnsembleChange() {
+        this.ensembleChangeDisabled = false;
+    }
+
+    /**
+     * Disable ensemble change. Those write failures after ensemble change
+     * disabled, will not cause changing ensemble. This operation doesn't
+     * take any effection on those ensemble changes undergoing.
+     */
+    public void disableEnsembleChange() {
+        this.ensembleChangeDisabled = true;
     }
 
     /**

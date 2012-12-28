@@ -668,8 +668,16 @@ public class LedgerHandle {
         LOG.debug("Handling failure of bookie: {} index: {}", addr, bookieIndex);
         final ArrayList<InetSocketAddress> newEnsemble = new ArrayList<InetSocketAddress>();
         blockAddCompletions.incrementAndGet();
-        final long newEnsembleStartEntry = lastAddConfirmed + 1;
 
+        if (bk.ensembleChangeDisabled) {
+            blockAddCompletions.decrementAndGet();
+            LOG.info("Ensemble change is disabled, retry sending to {}, bookieIndex {} again.",
+                     addr, bookieIndex);
+            unsetSuccessAndSendWriteRequest(bookieIndex);
+            return;
+        }
+
+        final long newEnsembleStartEntry = lastAddConfirmed + 1;
         // avoid parallel ensemble changes to same ensemble.
         synchronized (metadata) {
             if (!metadata.currentEnsemble.get(bookieIndex).equals(addr)) {
