@@ -26,7 +26,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -34,6 +33,7 @@ import com.google.common.annotations.VisibleForTesting;
 import org.apache.bookkeeper.conf.ClientConfiguration;
 import org.apache.bookkeeper.client.BookKeeper;
 import org.apache.bookkeeper.client.BKException;
+import org.apache.bookkeeper.util.OrderedSafeExecutor;
 import org.apache.commons.configuration.ConfigurationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -115,7 +115,10 @@ public class PubSubServer {
     BookKeeper bk; // null if we are in standalone mode
 
     // we use this to prevent long stack chains from building up in callbacks
-    ScheduledExecutorService scheduler;
+    OrderedSafeExecutor tmScheduler;
+    OrderedSafeExecutor smScheduler;
+    OrderedSafeExecutor pmScheduler;
+    OrderedSafeExecutor rmScheduler;
 
     // JMX Beans
     NettyHandlerBean jmxNettyBean;
@@ -140,7 +143,8 @@ public class PubSubServer {
                 logger.error("Could not instantiate bookkeeper client", e);
                 throw new IOException(e);
             }
-            underlyingPM = new BookkeeperPersistenceManager(bk, mm, topicMgr, conf, scheduler);
+            pmScheduler = new OrderedSafeExecutor(conf.getNumTopicQueuerThreads());
+            underlyingPM = new BookkeeperPersistenceManager(bk, mm, topicMgr, conf, pmScheduler);
 
         }
 
@@ -155,16 +159,18 @@ public class PubSubServer {
 
     protected SubscriptionManager instantiateSubscriptionManager(TopicManager tm, PersistenceManager pm,
                                                                  DeliveryManager dm) {
+        smScheduler = new OrderedSafeExecutor(conf.getNumTopicQueuerThreads());
         if (conf.isStandalone()) {
-            return new InMemorySubscriptionManager(conf, tm, pm, dm, scheduler);
+            return new InMemorySubscriptionManager(conf, tm, pm, dm, smScheduler);
         } else {
-            return new MMSubscriptionManager(conf, mm, tm, pm, dm, scheduler);
+            return new MMSubscriptionManager(conf, mm, tm, pm, dm, smScheduler);
         }
 
     }
 
-    protected RegionManager instantiateRegionManager(PersistenceManager pm, ScheduledExecutorService scheduler) {
-        return new RegionManager(pm, conf, zk, scheduler, new HedwigHubClientFactory(conf, clientConfiguration,
+    protected RegionManager instantiateRegionManager(PersistenceManager pm) {
+        rmScheduler = new OrderedSafeExecutor(conf.getNumTopicQueuerThreads());
+        return new RegionManager(pm, conf, zk, rmScheduler, new HedwigHubClientFactory(conf, clientConfiguration,
                 clientChannelFactory));
     }
 
@@ -200,19 +206,21 @@ public class PubSubServer {
     protected TopicManager instantiateTopicManager() throws IOException {
         TopicManager tm;
 
+        OrderedSafeExecutor tmScheduler = new OrderedSafeExecutor(conf.getNumTopicQueuerThreads());
+
         if (conf.isStandalone()) {
-            tm = new TrivialOwnAllTopicManager(conf, scheduler);
+            tm = new TrivialOwnAllTopicManager(conf, tmScheduler);
         } else {
             try {
                 if (conf.isMetadataManagerBasedTopicManagerEnabled()) {
-                    tm = new MMTopicManager(conf, zk, mm, scheduler);
+                    tm = new MMTopicManager(conf, zk, mm, tmScheduler);
                 } else {
                     if (!(mm instanceof ZkMetadataManagerFactory)) {
                         throw new IOException("Uses " + mm.getClass().getName() + " to store hedwig metadata, "
                                             + "but uses zookeeper ephemeral znodes to store topic ownership. "
                                             + "Check your configuration as this could lead to scalability issues.");
                     }
-                    tm = new ZkTopicManager(zk, conf, scheduler);
+                    tm = new ZkTopicManager(zk, conf, tmScheduler);
                 }
             } catch (PubSubException e) {
                 logger.error("Could not instantiate TopicOwnershipManager based topic manager", e);
@@ -267,17 +275,21 @@ public class PubSubServer {
 
         // Stop topic manager first since it is core of Hub server
         tm.stop();
+        shutdownScheduler(tmScheduler);
 
         // Stop the RegionManager.
         rm.stop();
+        shutdownScheduler(rmScheduler);
 
         // Stop the DeliveryManager and ReadAheadCache threads (if
         // applicable).
         dm.stop();
         pm.stop();
+        shutdownScheduler(pmScheduler);
 
         // Stop the SubscriptionManager if needed.
         sm.stop();
+        shutdownScheduler(smScheduler);
 
         // Shutdown metadata manager if needed
         if (null != mm) {
@@ -305,10 +317,15 @@ public class PubSubServer {
         allChannels.close().awaitUninterruptibly();
         serverChannelFactory.releaseExternalResources();
         clientChannelFactory.releaseExternalResources();
-        scheduler.shutdown();
 
         // unregister jmx
         unregisterJMX();
+    }
+
+    private void shutdownScheduler(OrderedSafeExecutor scheduler) {
+        if (null != scheduler) {
+            scheduler.shutdown();
+        }
     }
 
     protected void registerJMX(SubscriptionChannelManager subChannelMgr) {
@@ -401,7 +418,6 @@ public class PubSubServer {
                 try {
                     // Since zk is needed by almost everyone,try to see if we
                     // need that first
-                    scheduler = Executors.newSingleThreadScheduledExecutor();
                     serverChannelFactory = new NioServerSocketChannelFactory(Executors.newCachedThreadPool(), Executors
                             .newCachedThreadPool());
                     clientChannelFactory = new NioClientSocketChannelFactory(Executors.newCachedThreadPool(), Executors
@@ -415,7 +431,7 @@ public class PubSubServer {
                     dm.start();
 
                     sm = instantiateSubscriptionManager(tm, pm, dm);
-                    rm = instantiateRegionManager(pm, scheduler);
+                    rm = instantiateRegionManager(pm);
                     sm.addListener(rm);
 
                     allChannels = new DefaultChannelGroup("hedwig");
