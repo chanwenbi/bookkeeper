@@ -27,12 +27,12 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 import junit.framework.TestCase;
 
+import org.apache.bookkeeper.util.OrderedSafeExecutor;
 import org.apache.bookkeeper.versioning.Version;
 import org.apache.bookkeeper.versioning.Versioned;
 
@@ -80,7 +80,7 @@ public class TestBookKeeperPersistenceManager extends TestCase {
     private final int maxEntriesPerLedger = 10;
 
     ServerConfiguration conf;
-    ScheduledExecutorService scheduler;
+    OrderedSafeExecutor scheduler;
 
     TopicManager tm;
     BookkeeperPersistenceManager manager;
@@ -282,7 +282,7 @@ public class TestBookKeeperPersistenceManager extends TestCase {
         metadataManagerFactory = new TestMetadataManagerFactory(conf, bktb.getZooKeeperClient());
         tpManager = metadataManagerFactory.newTopicPersistenceManager();
 
-        scheduler = Executors.newScheduledThreadPool(1);
+        scheduler = new OrderedSafeExecutor(conf.getNumTopicQueuerThreads());
         tm = new TrivialOwnAllTopicManager(conf, scheduler);
         manager = new BookkeeperPersistenceManager(bktb.bk, metadataManagerFactory,
                                                    tm, conf, scheduler);

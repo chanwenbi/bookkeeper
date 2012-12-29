@@ -24,7 +24,6 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
@@ -35,6 +34,7 @@ import com.google.protobuf.ByteString;
 import org.apache.bookkeeper.client.BKException;
 import org.apache.bookkeeper.versioning.Version;
 import org.apache.bookkeeper.versioning.Versioned;
+import org.apache.bookkeeper.util.OrderedSafeExecutor;
 import org.apache.hedwig.exceptions.PubSubException;
 import org.apache.hedwig.protocol.PubSubProtocol.MessageSeqId;
 import org.apache.hedwig.protocol.PubSubProtocol.SubscribeRequest;
@@ -94,7 +94,7 @@ public abstract class AbstractSubscriptionManager implements SubscriptionManager
 
     public AbstractSubscriptionManager(ServerConfiguration cfg, TopicManager tm,
                                        PersistenceManager pm, DeliveryManager dm,
-                                       ScheduledExecutorService scheduler) {
+                                       OrderedSafeExecutor scheduler) {
         this.cfg = cfg;
         queuer = new TopicOpQueuer(scheduler);
         tm.addTopicOwnershipChangeListener(this);
