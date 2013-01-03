@@ -29,6 +29,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,9 +51,11 @@ import org.apache.hedwig.protoextensions.PubSubResponseUtils;
 import org.apache.hedwig.server.common.ServerConfiguration;
 import org.apache.hedwig.server.common.UnexpectedError;
 import org.apache.hedwig.server.netty.ServerStats;
+import org.apache.hedwig.server.persistence.CancelScanRequest;
 import org.apache.hedwig.server.persistence.Factory;
 import org.apache.hedwig.server.persistence.MapMethods;
 import org.apache.hedwig.server.persistence.PersistenceManager;
+import org.apache.hedwig.server.persistence.ReadAheadCache;
 import org.apache.hedwig.server.persistence.ScanCallback;
 import org.apache.hedwig.server.persistence.ScanRequest;
 import org.apache.hedwig.util.Callback;
@@ -107,7 +110,8 @@ public class FIFODeliveryManager implements Runnable, DeliveryManager {
      */
     Map<TopicSubscriber, ActiveSubscriberState> subscriberStates;
 
-    private PersistenceManager persistenceMgr;
+    private final ReadAheadCache cache;
+    private final PersistenceManager persistenceMgr;
 
     private ServerConfiguration cfg;
 
@@ -118,6 +122,11 @@ public class FIFODeliveryManager implements Runnable, DeliveryManager {
 
     public FIFODeliveryManager(PersistenceManager persistenceMgr, ServerConfiguration cfg) {
         this.persistenceMgr = persistenceMgr;
+        if (persistenceMgr instanceof ReadAheadCache) {
+            this.cache = (ReadAheadCache) persistenceMgr;
+        } else {
+            this.cache = null;
+        }
         perTopicDeliveryPtrs = new HashMap<ByteString, SortedMap<Long, Set<ActiveSubscriberState>>>();
         subscriberStates = new HashMap<TopicSubscriber, ActiveSubscriberState>();
         workerThread = new Thread(this, "DeliveryManagerThread");
@@ -360,7 +369,8 @@ public class FIFODeliveryManager implements Runnable, DeliveryManager {
         MapMethods.addToMultiMap(deliveryPtrs, seqId, subscriber, HashMapSubscriberFactory.instance);
     }
 
-    public class ActiveSubscriberState implements ScanCallback, DeliveryCallback, DeliveryManagerRequest {
+    public class ActiveSubscriberState
+        implements ScanCallback, DeliveryCallback, DeliveryManagerRequest, CancelScanRequest {
 
         static final int UNLIMITED = 0;
 
@@ -368,6 +378,7 @@ public class FIFODeliveryManager implements Runnable, DeliveryManager {
         ByteString subscriberId;
         long lastLocalSeqIdDelivered;
         boolean connected = true;
+        ReentrantReadWriteLock connectedLock = new ReentrantReadWriteLock();
         DeliveryEndPoint deliveryEndPoint;
         long lastScanErrorTime = -1;
         long localSeqIdDeliveringNow;
@@ -377,6 +388,10 @@ public class FIFODeliveryManager implements Runnable, DeliveryManager {
         final int messageWindowSize;
         ServerMessageFilter filter;
         // TODO make use of these variables
+
+        // track the outstanding scan request
+        // so we could cancel it
+        ScanRequest outstandingScanRequest;
 
         final static int SEQ_ID_SLACK = 10;
 
@@ -404,11 +419,23 @@ public class FIFODeliveryManager implements Runnable, DeliveryManager {
         }
 
         public void setNotConnected(SubscriptionEvent event) {
-            // have closed it.
-            if (!isConnected()) {
-                return;
+            this.connectedLock.writeLock().lock();
+            try {
+                // have closed it.
+                if (!isConnected()) {
+                    return;
+                }
+                this.connected = false;
+            } finally {
+                this.connectedLock.writeLock().unlock();
             }
-            this.connected = false;
+            // put itself in ReadAhead queue to cancel outstanding scan request
+            // if outstanding scan request callback before cancel op executed,
+            // nothing it would cancel.
+            if (null != cache && null != outstandingScanRequest) {
+                cache.cancelScanRequest(topic, this);
+            }
+
             if (null != event &&
                 (SubscriptionEvent.TOPIC_MOVED == event ||
                  SubscriptionEvent.SUBSCRIPTION_FORCED_CLOSED == event)) {
@@ -460,7 +487,12 @@ public class FIFODeliveryManager implements Runnable, DeliveryManager {
         }
 
         protected boolean isConnected() {
-            return connected;
+            connectedLock.readLock().lock();
+            try {
+                return connected;
+            } finally {
+                connectedLock.readLock().unlock();
+            }
         }
 
         protected void messageConsumed(long newSeqIdConsumed) {
@@ -502,7 +534,15 @@ public class FIFODeliveryManager implements Runnable, DeliveryManager {
         }
 
         public void deliverNextMessage() {
+            connectedLock.readLock().lock();
+            try {
+                doDeliverNextMessage();
+            } finally {
+                connectedLock.readLock().unlock();
+            }
+        }
 
+        private void doDeliverNextMessage() {
             if (!isConnected()) {
                 return;
             }
@@ -519,10 +559,29 @@ public class FIFODeliveryManager implements Runnable, DeliveryManager {
 
             localSeqIdDeliveringNow = persistenceMgr.getSeqIdAfterSkipping(topic, lastLocalSeqIdDelivered, 1);
 
-            ScanRequest scanRequest = new ScanRequest(topic, localSeqIdDeliveringNow,
+            outstandingScanRequest = new ScanRequest(topic, localSeqIdDeliveringNow,
                     /* callback= */this, /* ctx= */null);
 
-            persistenceMgr.scanSingleMessage(scanRequest);
+            persistenceMgr.scanSingleMessage(outstandingScanRequest);
+        }
+
+        /**
+         * ===============================================================
+         * {@link CancelScanRequest} methods
+         *
+         * This method runs ins same threads with ScanCallback. When it runs,
+         * it checked whether it is outstanding scan request. if there is one,
+         * cancel it.
+         */
+        @Override
+        public ScanRequest getScanRequest() {
+            // no race between cancel request and scan callback
+            // the only race is between stopServing and deliverNextMessage
+            // deliverNextMessage would be executed in netty callback which is in netty thread
+            // stopServing is run in delivery thread. if stopServing runs before deliverNextMessage
+            // deliverNextMessage would have chance to put a stub in ReadAheadCache
+            // then we don't have any chance to cancel it.
+            return outstandingScanRequest;
         }
 
         /**
@@ -531,7 +590,10 @@ public class FIFODeliveryManager implements Runnable, DeliveryManager {
          */
 
         public void messageScanned(Object ctx, Message message) {
-            if (!connected) {
+            // message scanned means the outstanding request is executed
+            outstandingScanRequest = null;
+
+            if (!isConnected()) {
                 return;
             }
 
@@ -557,7 +619,10 @@ public class FIFODeliveryManager implements Runnable, DeliveryManager {
         }
 
         public void scanFailed(Object ctx, Exception exception) {
-            if (!connected) {
+            // scan failed means the outstanding request is executed
+            outstandingScanRequest = null;
+
+            if (!isConnected()) {
                 return;
             }
 
@@ -567,6 +632,8 @@ public class FIFODeliveryManager implements Runnable, DeliveryManager {
 
         public void scanFinished(Object ctx, ReasonForFinish reason) {
             // no-op
+            // scan finished means the outstanding request is executed
+            outstandingScanRequest = null;
         }
 
         /**
@@ -623,8 +690,10 @@ public class FIFODeliveryManager implements Runnable, DeliveryManager {
                 subscriberStates.put(new TopicSubscriber(topic, subscriberId), this);
 
             if (prevSubscriber != null) {
-                stopServingSubscriber(prevSubscriber, SubscriptionEvent.SUBSCRIPTION_FORCED_CLOSED,
-                                      NOP_CALLBACK, null);
+                // we already in the delivery thread, we don't need to equeue a stop request
+                // just stop it now, since stop is not blocking operation.
+                // and also it cleans the old state of the active subscriber immediately.
+                doStopServingSubscriber(prevSubscriber, SubscriptionEvent.SUBSCRIPTION_FORCED_CLOSED);
             }
 
             lastSeqIdCommunicatedExternally = lastLocalSeqIdDelivered;
@@ -662,22 +731,34 @@ public class FIFODeliveryManager implements Runnable, DeliveryManager {
 
         @Override
         public void performRequest() {
-
-            // This will automatically stop delivery, and disconnect the channel
-            subscriber.setNotConnected(event);
-
-            // if the subscriber has moved on, a move request for its delivery
-            // pointer must be pending in the request queue. Note that the
-            // subscriber first changes its delivery pointer and then submits a
-            // request to move so this works.
-            removeDeliveryPtr(subscriber, subscriber.getLastSeqIdCommunicatedExternally(), //
-                              // isAbsenceOk=
-                              true,
-                              // pruneTopic=
-                              true);
+            doStopServingSubscriber(subscriber, event);
             cb.operationFinished(ctx, null);
         }
 
+    }
+
+    /**
+     * Stop serving a subscriber. This method should be called in a
+     * {@link DeliveryManagerRequest}.
+     *
+     * @param subscriber
+     *          Active Subscriber to stop
+     * @param event
+     *          Subscription Event for the stop reason
+     */
+    private void doStopServingSubscriber(ActiveSubscriberState subscriber, SubscriptionEvent event) {
+        // This will automatically stop delivery, and disconnect the channel
+        subscriber.setNotConnected(event);
+
+        // if the subscriber has moved on, a move request for its delivery
+        // pointer must be pending in the request queue. Note that the
+        // subscriber first changes its delivery pointer and then submits a
+        // request to move so this works.
+        removeDeliveryPtr(subscriber, subscriber.getLastSeqIdCommunicatedExternally(), //
+                          // isAbsenceOk=
+                          true,
+                          // pruneTopic=
+                          true);
     }
 
     protected class DeliveryPtrMove implements DeliveryManagerRequest {
