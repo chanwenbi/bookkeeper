@@ -30,6 +30,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import junit.framework.TestCase;
 
@@ -365,6 +366,26 @@ public class TestBookKeeperPersistenceManager extends TestCase {
             result.add(msgs.get(i));
         }
         return result;
+    }
+
+    @Test(timeout=60000)
+    public void testDisableLedgerChange() throws Exception {
+        List<Message> msgs = new ArrayList<Message>();
+
+        ByteString topic = ByteString.copyFromUtf8("TestDisableLedgerChange");
+
+        acquireTopic(topic);
+
+        msgs.addAll(publishMessages(topic, maxEntriesPerLedger + 1));
+        assertTopicLedgers(topic, 2);
+
+        manager.disableLedgerChange();
+        msgs.addAll(publishMessages(topic, maxEntriesPerLedger));
+        assertTopicLedgers(topic, 2);
+
+        manager.enableLedgerChange();
+        msgs.addAll(publishMessages(topic, maxEntriesPerLedger + 2));
+        assertTopicLedgers(topic, 4);
     }
 
     @Test(timeout=60000)
@@ -716,6 +737,37 @@ public class TestBookKeeperPersistenceManager extends TestCase {
             }
         }
         return msgs;
+    }
+
+    protected void assertTopicLedgers(final ByteString topic, int numLedgersExpected) throws Exception {
+        Semaphore latch = new Semaphore(1);
+        latch.acquire();
+        final AtomicInteger numLedgersCreated = new AtomicInteger(-1);
+        tpManager.readTopicPersistenceInfo(topic, new Callback<Versioned<LedgerRanges>>() {
+            @Override
+            public void operationFinished(Object ctx, Versioned<LedgerRanges> ranges) {
+                if (null == ranges) {
+                    failureException =
+                        new PubSubException.NoTopicPersistenceInfoException("No persistence info found for topic "
+                                                                            + topic.toStringUtf8());
+                    ((Semaphore)ctx).release();
+                    return;
+                }
+                numLedgersCreated.set(ranges.getValue().getRangesCount());
+                ((Semaphore)ctx).release();
+            }
+            @Override
+            public void operationFailed(Object ctx, PubSubException exception) {
+                failureException = exception;
+                ((Semaphore)ctx).release();
+            }
+        }, latch);
+        latch.acquire();
+        latch.release();
+        if (null != failureException) {
+            throw failureException;
+        }
+        assertEquals(numLedgersExpected, numLedgersCreated.get());
     }
 
     protected void acquireTopic(ByteString topic) throws Exception {

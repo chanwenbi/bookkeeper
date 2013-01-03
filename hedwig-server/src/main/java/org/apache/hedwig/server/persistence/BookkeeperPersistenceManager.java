@@ -89,6 +89,9 @@ public class BookkeeperPersistenceManager implements PersistenceManagerWithRange
     private static final long UNLIMITED_ENTRIES = 0L;
     private final long maxEntriesPerLedger;
 
+    // Flag indicating enable/disable ledger change
+    private volatile boolean ledgerChangeDisabled = false;
+
     static class InMemoryLedgerRange {
         LedgerRange range;
         LedgerHandle handle;
@@ -188,6 +191,23 @@ public class BookkeeperPersistenceManager implements PersistenceManagerWithRange
         this.maxEntriesPerLedger = cfg.getMaxEntriesPerLedger();
         queuer = new TopicOpQueuer(executor);
         tm.addTopicOwnershipChangeListener(this);
+    }
+
+    /**
+     * Enable ledger change. After ledger change is enabled,
+     * a new ledger would be created if there are enough entries written
+     * to the previous one.
+     */
+    protected void enableLedgerChange() {
+        this.ledgerChangeDisabled = false;
+    }
+
+    /**
+     * Disable ledger change. This operation doesn't take any affection on
+     * those undergoing ledger changes.
+     */
+    protected void disableLedgerChange() {
+        this.ledgerChangeDisabled = true;
     }
 
     private static LedgerRange buildLedgerRange(long ledgerId, long startOfLedger,
@@ -1131,6 +1151,11 @@ public class BookkeeperPersistenceManager implements PersistenceManagerWithRange
                 logger.error("Weired! hub server doesn't own topic " + topic.toStringUtf8()
                            + " when changing ledger to write.");
                 cb.operationFailed(ctx, new PubSubException.ServerNotResponsibleForTopicException(""));
+                return;
+            }
+            // if ledger change is disabled, we don't change ledger just trigger callback directly
+            if (ledgerChangeDisabled) {
+                cb.operationFinished(ctx, null);
                 return;
             }
             closeLastTopicLedgerAndOpenNewOne(topicInfo);
