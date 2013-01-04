@@ -18,6 +18,7 @@
 package org.apache.hedwig.server.topics;
 
 import java.io.IOException;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
 
@@ -35,6 +36,7 @@ import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.KeeperException.Code;
 import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.Watcher;
+import org.apache.zookeeper.Watcher.Event.EventType;
 import org.apache.zookeeper.ZooDefs.Ids;
 import org.apache.zookeeper.ZooKeeper;
 import org.apache.zookeeper.data.Stat;
@@ -58,9 +60,9 @@ class ZkHubServerManager implements HubServerManager {
     private final String hubNodesPath;
 
     // hub info structure represent itself
-    protected HubInfo myHubInfo;
+    protected volatile HubInfo myHubInfo;
     protected volatile boolean isSuspended = false;
-    protected ManagerListener listener = null;
+    protected final LinkedList<ManagerListener> listeners;
 
     // upload hub server load to zookeeper
     StatCallback loadReportingStatCallback = new StatCallback() {
@@ -78,30 +80,22 @@ class ZkHubServerManager implements HubServerManager {
     class ZkHubsWatcher implements Watcher {
         @Override
         public void process(WatchedEvent event) {
-            if (event.getType().equals(Watcher.Event.EventType.None)) {
-                if (event.getState().equals(
-                        Watcher.Event.KeeperState.Disconnected)) {
-                    logger.warn("ZK client has been disconnected to the ZK server!");
-                    isSuspended = true;
-                    if (null != listener) {
-                        listener.onSuspend();
-                    }
-                } else if (event.getState().equals(
-                        Watcher.Event.KeeperState.SyncConnected)) {
-                    if (isSuspended) {
-                        logger.info("ZK client has been reconnected to the ZK server!");
-                    }
-                    isSuspended = false;
-                    if (null != listener) {
-                        listener.onResume();
-                    }
-                }
+            // only consider connection status change event
+            if (event.getType() != EventType.None) {
+                return;
             }
-            if (event.getState().equals(Watcher.Event.KeeperState.Expired)) {
-                logger.error("ZK client connection to the ZK server has expired.!");
-                if (null != listener) {
-                    listener.onShutdown();
-                }
+            switch (event.getState()) {
+            case Disconnected:
+                onZooKeeperDisconnected();
+                break;
+            case SyncConnected:
+                onZooKeeperSyncConnectedAfterExpired();
+                break;
+            case Expired:
+                onZooKeeprExpired();
+                break;
+            default:
+                break;
             }
         }
     }
@@ -112,6 +106,7 @@ class ZkHubServerManager implements HubServerManager {
         this.conf = conf;
         this.zk = zk;
         this.addr = addr;
+        this.listeners = new LinkedList<ManagerListener>();
 
         // znode path to store all available hub servers
         this.hubNodesPath = this.conf.getZkHostsPrefix(new StringBuilder()).toString();
@@ -123,7 +118,46 @@ class ZkHubServerManager implements HubServerManager {
 
     @Override
     public void registerListener(ManagerListener listener) {
-        this.listener = listener;
+        // Added the listener at the beginning of the listeners list
+        // We let the later added listener executed first.
+        this.listeners.addFirst(listener);
+    }
+
+    /**
+     * zookeeper is connected again after expired.
+     */
+    private void onZooKeeperSyncConnectedAfterExpired() {
+        logger.info("ZK client has been reconnected to the ZK server!");
+        if (!isSuspended) {
+            return;
+        }
+        isSuspended = false;
+        for (ManagerListener listener : listeners) {
+            listener.onResume();
+        }
+    }
+
+    /**
+     * zookeeper channel is expired.
+     */
+    private void onZooKeeprExpired() {
+        logger.error("ZK client connection to the ZK server has expired.!");
+        if (isSuspended) {
+            return;
+        }
+        isSuspended = true;
+        for (ManagerListener listener : listeners) {
+            listener.onSuspend();
+        }
+    }
+
+    /**
+     * ZooKeeper channel is disconnected for a period.
+     */
+    private void onZooKeeperDisconnected() {
+        // for disconnected event, we don't care about it.
+        // zookeeper client would try to connect to zookeeper server again.
+        logger.warn("ZK client has been disconnected to the ZK server!");
     }
 
     /**
@@ -173,22 +207,47 @@ class ZkHubServerManager implements HubServerManager {
                     return;
                 }
 
-                logger.info("Found stale ephemeral node while registering hub with ZK, deleting it");
-
-                // Node exists, lets try to delete it and retry
-                zk.delete(ephemeralNodePath, -1, new SafeAsyncZKCallback.VoidCallback() {
+                // now we are here, found an already existed znode.
+                zk.exists(ephemeralNodePath, false, new SafeAsyncZKCallback.StatCallback() {
                     @Override
-                    public void safeProcessResult(int rc, String path, Object ctx) {
-                        if (rc == Code.OK.intValue() || rc == Code.NONODE.intValue()) {
-                            registerSelf(selfData, callback, ctx);
+                    public void safeProcessResult(int rc, String path, Object ctx, Stat stat) {
+                        if (rc == Code.OK.intValue()) {
+                            HubInfo newHubInfo = new HubInfo(addr, stat.getCzxid());
+                            if (null != myHubInfo && myHubInfo.equals(newHubInfo)) {
+                                // do nothing, just return null
+                                callback.operationFinished(ctx, myHubInfo);
+                                return;
+                            }
+                            unregisterStaleSelf(selfData, callback, ctx);
+                            return;
+                        } else {
+                            callback.operationFailed(ctx,
+                                new PubSubException.ServiceDownException(
+                                    "I can't state my hub node after I created it : "
+                                    + ephemeralNodePath));
                             return;
                         }
-                        KeeperException ke = ZkUtils.logErrorAndCreateZKException(
-                                "Could not delete stale ephemeral node to register hub", ephemeralNodePath, rc);
-                        callback.operationFailed(ctx, new PubSubException.ServiceDownException(ke));
-                        return;
                     }
                 }, ctx);
+            }
+        }, ctx);
+    }
+
+    private void unregisterStaleSelf(final HubLoad selfData, final Callback<HubInfo> callback, Object ctx) {
+        logger.info("Found stale ephemeral node while registering hub with ZK, deleting it");
+
+        // Node exists, lets try to delete it and retry
+        zk.delete(ephemeralNodePath, -1, new SafeAsyncZKCallback.VoidCallback() {
+            @Override
+            public void safeProcessResult(int rc, String path, Object ctx) {
+                if (rc == Code.OK.intValue() || rc == Code.NONODE.intValue()) {
+                    registerSelf(selfData, callback, ctx);
+                    return;
+                }
+                KeeperException ke = ZkUtils.logErrorAndCreateZKException(
+                        "Could not delete stale ephemeral node to register hub", ephemeralNodePath, rc);
+                callback.operationFailed(ctx, new PubSubException.ServiceDownException(ke));
+                return;
             }
         }, ctx);
     }

@@ -20,6 +20,7 @@ package org.apache.hedwig.server.topics;
 import com.google.protobuf.ByteString;
 import org.apache.hedwig.exceptions.PubSubException.ServiceDownException;
 import org.apache.hedwig.server.persistence.PersistenceManager;
+import org.apache.hedwig.server.topics.HubServerManager;
 import org.apache.hedwig.util.Callback;
 import org.apache.hedwig.util.HedwigSocketAddress;
 
@@ -34,6 +35,15 @@ import org.apache.hedwig.util.HedwigSocketAddress;
  */
 
 public interface TopicManager {
+
+    /**
+     * Return the {@link org.apache.hedwig.server.topics.HubServerManager} used by
+     * the topic manager.
+     *
+     * @return hub server manager instance.
+     */
+    public HubServerManager getHubServerManager();
+
     /**
      * Get the name of the host responsible for the given topic.
      *

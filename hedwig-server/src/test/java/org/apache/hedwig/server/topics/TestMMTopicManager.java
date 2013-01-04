@@ -246,13 +246,13 @@ public class TestMMTopicManager extends MetadataManagerFactoryTestCase {
         Assert.assertEquals(topic, pair.first());
         Assert.assertTrue(pair.second());
         Assert.assertEquals(me, check(addrCbq.take()));
-        assertOwnershipNodeExists();
+        assertOwnershipNodeExists(topic);
 
         // topic that I already own
         tm.getOwner(topic, true, addrCbq, null);
         Assert.assertEquals(me, check(addrCbq.take()));
         Assert.assertTrue(bsQueue.isEmpty());
-        assertOwnershipNodeExists();
+        assertOwnershipNodeExists(topic);
 
         // regular release
         tm.releaseTopic(topic, cb, null);
@@ -260,7 +260,7 @@ public class TestMMTopicManager extends MetadataManagerFactoryTestCase {
         Assert.assertEquals(topic, pair.first());
         Assert.assertFalse(pair.second());
         Assert.assertTrue(queue.take());
-        assertOwnershipNodeDoesntExist();
+        assertOwnershipNodeDoesntExist(topic);
 
         // releasing topic that I don't own
         tm.releaseTopic(mkTopic(0), cb, null);
@@ -278,18 +278,18 @@ public class TestMMTopicManager extends MetadataManagerFactoryTestCase {
                             .getExceptions().iterator().next().getClass());
         Assert.assertFalse(tm.topics.contains(topic));
         Thread.sleep(100);
-        assertOwnershipNodeDoesntExist();
+        assertOwnershipNodeDoesntExist(topic);
 
     }
 
-    public void assertOwnershipNodeExists() throws Exception {
+    public void assertOwnershipNodeExists(ByteString topic) throws Exception {
         StubCallback<Versioned<HubInfo>> callback = new StubCallback<Versioned<HubInfo>>();
         tom.readOwnerInfo(topic, callback, null);
         Versioned<HubInfo> hubInfo = callback.queue.take().left();
         Assert.assertEquals(tm.addr, hubInfo.getValue().getAddress());
     }
 
-    public void assertOwnershipNodeDoesntExist() throws Exception {
+    public void assertOwnershipNodeDoesntExist(ByteString topic) throws Exception {
         StubCallback<Versioned<HubInfo>> callback = new StubCallback<Versioned<HubInfo>>();
         tom.readOwnerInfo(topic, callback, null);
         Versioned<HubInfo> hubInfo = callback.queue.take().left();
@@ -298,24 +298,32 @@ public class TestMMTopicManager extends MetadataManagerFactoryTestCase {
 
     @Test(timeout=60000)
     public void testZKClientDisconnected() throws Exception {
+        ByteString topic2 = ByteString.copyFromUtf8("topic2");
+
         // First assert ownership of the topic
         tm.getOwner(topic, true, addrCbq, null);
         Assert.assertEquals(me, check(addrCbq.take()));
 
-        // Suspend the ZKTopicManager and make sure calls to getOwner error out
+        // Suspend the MMTopicManager
         tm.isSuspended = true;
         tm.getOwner(topic, true, addrCbq, null);
-        Assert.assertEquals(PubSubException.ServiceDownException.class, addrCbq.take().right().getClass());
+        Assert.assertEquals("Should get the owner for already owned topics even the topic maanger is suspended.",
+                            me, check(addrCbq.take()));
+
+        tm.getOwner(topic2, true, addrCbq, null);
+        Assert.assertEquals("Should fail to get the owner for those un-owned topics if topic manager is suspended.",
+                            PubSubException.ServerNotResponsibleForTopicException.class,
+                            addrCbq.take().right().getClass());
         // Release the topic. This should not error out even if suspended.
         tm.releaseTopic(topic, cb, null);
         Assert.assertTrue(queue.take());
-        assertOwnershipNodeDoesntExist();
+        assertOwnershipNodeDoesntExist(topic);
 
-        // Restart the ZKTopicManager and make sure calls to getOwner are okay
+        // Restart the MMTopicManager and make sure calls to getOwner are okay
         tm.isSuspended = false;
-        tm.getOwner(topic, true, addrCbq, null);
+        tm.getOwner(topic2, true, addrCbq, null);
         Assert.assertEquals(me, check(addrCbq.take()));
-        assertOwnershipNodeExists();
+        assertOwnershipNodeExists(topic2);
     }
 
 }

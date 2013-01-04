@@ -18,6 +18,7 @@
 package org.apache.hedwig.server.topics;
 
 import java.net.UnknownHostException;
+import java.io.IOException;
 import java.util.concurrent.ScheduledExecutorService;
 
 import com.google.protobuf.ByteString;

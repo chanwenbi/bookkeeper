@@ -53,8 +53,12 @@ public class ClientConfiguration extends AbstractConfiguration {
     // encapsulates both the regular and SSL port connection to the server host.
     protected HedwigSocketAddress getDefaultServerHedwigSocketAddress() {
         if (myDefaultServerAddress == null)
-            myDefaultServerAddress = new HedwigSocketAddress(conf.getString(DEFAULT_SERVER_HOST, "localhost:4080:9876"));
+            myDefaultServerAddress = new HedwigSocketAddress(getDefaultServerHostStr());
         return myDefaultServerAddress;
+    }
+
+    public String getDefaultServerHostStr() {
+        return conf.getString(DEFAULT_SERVER_HOST, "localhost:4080:9876");
     }
 
     // This will get the default server InetSocketAddress based on if SSL is

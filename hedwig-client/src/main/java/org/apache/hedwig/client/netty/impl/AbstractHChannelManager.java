@@ -133,7 +133,7 @@ public abstract class AbstractHChannelManager implements HChannelManager {
 
         // create a default server channel
         defaultServerChannel =
-            new DefaultServerChannel(cfg.getDefaultServerHost(), this);
+            new DefaultServerChannel(cfg, this);
 
         if (cfg.isSSLEnabled()) {
             sslFactory = new SslClientContextFactory(cfg);

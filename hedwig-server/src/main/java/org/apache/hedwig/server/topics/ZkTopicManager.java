@@ -18,9 +18,7 @@
 package org.apache.hedwig.server.topics;
 
 import java.net.UnknownHostException;
-import java.io.IOException;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.SynchronousQueue;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,36 +34,16 @@ import com.google.protobuf.ByteString;
 import org.apache.hedwig.exceptions.PubSubException;
 import org.apache.hedwig.server.common.ServerConfiguration;
 import org.apache.hedwig.util.Callback;
-import org.apache.hedwig.util.ConcurrencyUtils;
-import org.apache.hedwig.util.Either;
 import org.apache.hedwig.util.HedwigSocketAddress;
 import org.apache.hedwig.zookeeper.SafeAsyncZKCallback;
 import org.apache.hedwig.zookeeper.ZkUtils;
-import org.apache.hedwig.zookeeper.SafeAsyncZKCallback.DataCallback;
-import org.apache.hedwig.zookeeper.SafeAsyncZKCallback.StatCallback;
 
 /**
- * Topics are operated on in parallel as they are independent.
- *
+ * ZooKeeper Topic Managers leverage ZooKeeper ephemeral znode as topic ownership election.
  */
-public class ZkTopicManager extends AbstractTopicManager implements TopicManager {
+public class ZkTopicManager extends ZooKeeperBasedTopicManager implements TopicManager {
 
     static Logger logger = LoggerFactory.getLogger(ZkTopicManager.class);
-
-    /**
-     * Persistent storage for topic metadata.
-     */
-    private ZooKeeper zk;
-
-    // hub server manager
-    private final HubServerManager hubManager;
-
-    private final HubInfo myHubInfo;
-    private final HubLoad myHubLoad;
-
-    // Boolean flag indicating if we should suspend activity. If this is true,
-    // all of the Ops put into the queuer will fail automatically.
-    protected volatile boolean isSuspended = false;
 
     /**
      * Create a new topic manager. Pass in an active ZooKeeper client object.
@@ -74,49 +52,7 @@ public class ZkTopicManager extends AbstractTopicManager implements TopicManager
      */
     public ZkTopicManager(final ZooKeeper zk, final ServerConfiguration cfg, ScheduledExecutorService scheduler)
             throws UnknownHostException, PubSubException {
-
-        super(cfg, scheduler);
-        this.zk = zk;
-        this.hubManager = new ZkHubServerManager(cfg, zk, addr);
-
-        myHubLoad = new HubLoad(topics.size());
-        this.hubManager.registerListener(new HubServerManager.ManagerListener() {
-            @Override
-            public void onSuspend() {
-                isSuspended = true;
-            }
-            @Override
-            public void onResume() {
-                isSuspended = false;
-            }
-            @Override
-            public void onShutdown() {
-                // if hub server manager can't work, we had to quit
-                Runtime.getRuntime().exit(1);
-            }
-        });
-
-        final SynchronousQueue<Either<HubInfo, PubSubException>> queue =
-            new SynchronousQueue<Either<HubInfo, PubSubException>>();
-        this.hubManager.registerSelf(myHubLoad, new Callback<HubInfo>() {
-            @Override
-            public void operationFinished(final Object ctx, final HubInfo resultOfOperation) {
-                logger.info("Successfully registered hub {} with zookeeper", resultOfOperation);
-                ConcurrencyUtils.put(queue, Either.of(resultOfOperation, (PubSubException) null));
-            }
-            @Override
-            public void operationFailed(Object ctx, PubSubException exception) {
-                logger.error("Failed to register hub with zookeeper", exception);
-                ConcurrencyUtils.put(queue, Either.of((HubInfo)null, exception));
-            }
-        }, null);
-
-        Either<HubInfo, PubSubException> result = ConcurrencyUtils.take(queue);
-        PubSubException pse = result.right();
-        if (pse != null) {
-            throw pse;
-        }
-        myHubInfo = result.left();
+        super(zk, cfg, scheduler);
     }
 
     String hubPath(ByteString topic) {
@@ -124,21 +60,13 @@ public class ZkTopicManager extends AbstractTopicManager implements TopicManager
     }
 
     @Override
-    protected void realGetOwner(final ByteString topic, final boolean shouldClaim,
-                                final Callback<HedwigSocketAddress> cb, final Object ctx) {
-        // If operations are suspended due to a ZK client disconnect, just error
-        // out this call and return.
-        if (isSuspended) {
-            cb.operationFailed(ctx, new PubSubException.ServiceDownException(
-                                   "ZKTopicManager service is temporarily suspended!"));
-            return;
-        }
+    protected void reclaimOwnership(ByteString topic, Callback<HedwigSocketAddress> cb, Object ctx) {
+        new ZkGetOwnerOp(topic, true, cb, ctx).read();
+    }
 
-        if (topics.contains(topic)) {
-            cb.operationFinished(ctx, addr);
-            return;
-        }
-
+    @Override
+    protected void doGetOwner(final ByteString topic, final boolean shouldClaim,
+                              final Callback<HedwigSocketAddress> cb, final Object ctx) {
         new ZkGetOwnerOp(topic, shouldClaim, cb, ctx).read();
     }
 
@@ -215,9 +143,20 @@ public class ZkTopicManager extends AbstractTopicManager implements TopicManager
                             cb.operationFinished(ctx, owner);
                             return;
                         }
-                        logger.info("Discovered stale self-node for topic: " + topic.toStringUtf8() + ", will delete it");
+                        if (myHubInfo.equals(ownerHubInfo)) {
+                            logger.info("Discovered same session znode for topic: " + topic.toStringUtf8()
+                                        + ", claimed ownership w/o creating it again.");
+                            // the hub server is in same session, we don't need to delete it
+                            // claim it without create the znode.
+                            notifyListenersAndAddToOwnedTopics(topic, cb, ctx);
+                            hubManager.uploadSelfLoadData(myHubLoad.setNumTopics(topics.size()));
+                            return;
+                        }
+                        logger.info("Discovered stale self-node for topic: " + topic.toStringUtf8()
+                                    + ", will delete it");
                     } catch (HubInfo.InvalidHubInfoException ihie) {
-                        logger.info("Discovered invalid hub info for topic: " + topic.toStringUtf8() + ", will delete it : ", ihie);
+                        logger.info("Discovered invalid hub info for topic: " + topic.toStringUtf8()
+                                    + ", will delete it : ", ihie);
                     }
 
                     // we must have previously failed and left a
@@ -326,17 +265,6 @@ public class ZkTopicManager extends AbstractTopicManager implements TopicManager
                 }, ctx);
             }
         }, ctx);
-    }
-
-    @Override
-    public void stop() {
-        // we just unregister it with zookeeper to make it unavailable from hub servers list
-        try {
-            hubManager.unregisterSelf();
-        } catch (IOException e) {
-            logger.error("Error unregistering hub server :", e);
-        }
-        super.stop();
     }
 
 }

@@ -188,7 +188,7 @@ public class ZooKeeperClient extends ZooKeeper implements Watcher {
         return client;
     }
 
-    ZooKeeperClient(String connectString, int sessionTimeoutMs, ZooKeeperWatcherBase watcherManager,
+    protected ZooKeeperClient(String connectString, int sessionTimeoutMs, ZooKeeperWatcherBase watcherManager,
             RetryPolicy operationRetryPolicy) throws IOException {
         this(connectString, sessionTimeoutMs, watcherManager,
                 new BoundExponentialBackoffRetryPolicy(6000, 60000, Integer.MAX_VALUE),
@@ -244,7 +244,7 @@ public class ZooKeeperClient extends ZooKeeper implements Watcher {
         }
     }
 
-    private void onExpired() {
+    protected void onExpired() {
         if (logger.isDebugEnabled()) {
             logger.debug("ZooKeeper session {} is expired from {}.",
                     Long.toHexString(getSessionId()), connectString);

@@ -57,6 +57,7 @@ import org.apache.hedwig.server.common.UnexpectedError;
 import org.apache.hedwig.server.meta.MetadataManagerFactory;
 import org.apache.hedwig.server.meta.TopicPersistenceManager;
 import org.apache.hedwig.server.persistence.ScanCallback.ReasonForFinish;
+import org.apache.hedwig.server.topics.HubServerManager;
 import org.apache.hedwig.server.topics.TopicManager;
 import org.apache.hedwig.server.topics.TopicOwnershipChangeListener;
 import org.apache.hedwig.util.Callback;
@@ -191,6 +192,27 @@ public class BookkeeperPersistenceManager implements PersistenceManagerWithRange
         this.maxEntriesPerLedger = cfg.getMaxEntriesPerLedger();
         queuer = new TopicOpQueuer(executor);
         tm.addTopicOwnershipChangeListener(this);
+        if (null != tm.getHubServerManager()) {
+            tm.getHubServerManager().registerListener(new HubServerManager.ManagerListener() {
+                @Override
+                public void onSuspend() {
+                    // disable ledger change when hub server suspended.
+                    disableLedgerChange();
+                }
+
+                @Override
+                public void onResume() {
+                    // enable ledger change when hub server resumed.
+                    enableLedgerChange();
+                }
+
+                @Override
+                public void onShutdown() {
+                    // do nothing
+                    // since topic manager would handle shutdown.
+                }
+            });
+        }
     }
 
     /**

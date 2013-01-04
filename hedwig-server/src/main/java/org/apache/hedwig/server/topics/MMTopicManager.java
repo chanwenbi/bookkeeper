@@ -22,6 +22,8 @@ package org.apache.hedwig.server.topics;
 
 import java.net.UnknownHostException;
 import java.io.IOException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.SynchronousQueue;
 
@@ -44,88 +46,31 @@ import com.google.protobuf.ByteString;
 /**
  * TopicOwnershipManager based topic manager
  */
-public class MMTopicManager extends AbstractTopicManager implements TopicManager {
+public class MMTopicManager extends ZooKeeperBasedTopicManager implements TopicManager {
 
     static Logger logger = LoggerFactory.getLogger(MMTopicManager.class);
 
     // topic ownership manager
     private final TopicOwnershipManager mm;
-    // hub server manager
-    private final HubServerManager hubManager;
-
-    private final HubInfo myHubInfo;
-    private final HubLoad myHubLoad;
-
-    // Boolean flag indicating if we should suspend activity. If this is true,
-    // all of the Ops put into the queuer will fail automatically.
-    protected volatile boolean isSuspended = false;
 
     public MMTopicManager(ServerConfiguration cfg, ZooKeeper zk, 
                           MetadataManagerFactory mmFactory,
                           ScheduledExecutorService scheduler)
             throws UnknownHostException, PubSubException {
-        super(cfg, scheduler);
+        super(zk, cfg, scheduler);
         // initialize topic ownership manager
         this.mm = mmFactory.newTopicOwnershipManager();
-        this.hubManager = new ZkHubServerManager(cfg, zk, addr);
-
-        final SynchronousQueue<Either<HubInfo, PubSubException>> queue =
-            new SynchronousQueue<Either<HubInfo, PubSubException>>();
-
-        myHubLoad = new HubLoad(topics.size());
-        this.hubManager.registerListener(new HubServerManager.ManagerListener() {
-            @Override
-            public void onSuspend() {
-                isSuspended = true;
-            }
-            @Override
-            public void onResume() {
-                isSuspended = false;
-            }
-            @Override
-            public void onShutdown() {
-                // if hub server manager can't work, we had to quit
-                Runtime.getRuntime().exit(1);
-            }
-        });
-        this.hubManager.registerSelf(myHubLoad, new Callback<HubInfo>() {
-            @Override
-            public void operationFinished(final Object ctx, final HubInfo resultOfOperation) {
-                logger.info("Successfully registered hub {} with zookeeper", resultOfOperation);
-                ConcurrencyUtils.put(queue, Either.of(resultOfOperation, (PubSubException) null));
-            }
-            @Override
-            public void operationFailed(Object ctx, PubSubException exception) {
-                logger.error("Failed to register hub with zookeeper", exception);
-                ConcurrencyUtils.put(queue, Either.of((HubInfo)null, exception));
-            }
-        }, null);
-        Either<HubInfo, PubSubException> result = ConcurrencyUtils.take(queue);
-        PubSubException pse = result.right();
-        if (pse != null) {
-            throw pse;
-        }
-        myHubInfo = result.left();
-        logger.info("Start metadata manager based topic manager with hub id : " + myHubInfo);
     }
 
     @Override
-    protected void realGetOwner(final ByteString topic, final boolean shouldClaim,
-                                final Callback<HedwigSocketAddress> cb, final Object ctx) {
-        // If operations are suspended due to a ZK client disconnect, just error
-        // out this call and return.
-        if (isSuspended) {
-            cb.operationFailed(ctx, new PubSubException.ServiceDownException(
-                                    "MMTopicManager service is temporarily suspended!"));
-            return;
-        }
+    protected void reclaimOwnership(ByteString topic, Callback<HedwigSocketAddress> cb, Object ctx) {
+        new MMGetOwnerOp(topic, true, cb, ctx).read();
+    }
 
-        if (topics.contains(topic)) {
-            cb.operationFinished(ctx, addr);
-            return;
-        }
-
-        new MMGetOwnerOp(topic, cb, ctx).read();
+    @Override
+    protected void doGetOwner(final ByteString topic, final boolean shouldClaim,
+                              final Callback<HedwigSocketAddress> cb, final Object ctx) {
+        new MMGetOwnerOp(topic, false, cb, ctx).read();
     }
 
     /**
@@ -135,12 +80,14 @@ public class MMTopicManager extends AbstractTopicManager implements TopicManager
         ByteString topic;
         Callback<HedwigSocketAddress> cb;
         Object ctx;
+        boolean reclaim;
 
-        public MMGetOwnerOp(ByteString topic,
+        public MMGetOwnerOp(ByteString topic, boolean reclaim,
                             Callback<HedwigSocketAddress> cb, Object ctx) {
             this.topic = topic;
             this.cb = cb;
             this.ctx = ctx;
+            this.reclaim = reclaim;
         }
 
         protected void read() {
@@ -172,9 +119,19 @@ public class MMTopicManager extends AbstractTopicManager implements TopicManager
                             claimTopic(ctx);
                             return;
                         } else {
-                            choose(ownerVersion);
+                            // a reclaim operation, claim the ownership directly.
+                            if (reclaim) {
+                                claim(ownerVersion);
+                            } else {
+                                choose(ownerVersion);
+                            }
                             return;
                         }
+                    } else if (reclaim) {
+                        // a reclaim operation found someone already claim the ownerhsip before
+                        // respond directly here and the topic ownership will be released.
+                        cb.operationFinished(ctx, hub.getAddress());
+                        return;
                     }
 
                     logger.info("{} : Check whether owner {} for topic {} is still alive.",
@@ -337,17 +294,6 @@ public class MMTopicManager extends AbstractTopicManager implements TopicManager
                 cb.operationFailed(ctx, new PubSubException.ServiceDownException(exception));
             }
         }, ctx);
-    }
-
-    @Override
-    public void stop() {
-        // we just unregister it with zookeeper to make it unavailable from hub servers list
-        try {
-            hubManager.unregisterSelf();
-        } catch (IOException e) {
-            logger.error("Error unregistering hub server " + myHubInfo + " : ", e);
-        }
-        super.stop();
     }
 
 }

@@ -24,9 +24,9 @@ import org.apache.hedwig.util.Callback;
 /**
  * The HubServerManager class manages info about hub servers.
  */
-interface HubServerManager {
+public interface HubServerManager {
 
-    static interface ManagerListener {
+    public static interface ManagerListener {
 
         /**
          * Server manager is suspended if encountering some transient errors.

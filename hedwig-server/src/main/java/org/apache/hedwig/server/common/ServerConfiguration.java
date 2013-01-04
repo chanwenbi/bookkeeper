@@ -49,6 +49,7 @@ public class ServerConfiguration extends AbstractConfiguration {
     protected final static String ZK_PREFIX = "zk_prefix";
     protected final static String ZK_HOST = "zk_host";
     protected final static String ZK_TIMEOUT = "zk_timeout";
+    protected final static String ZK_MAX_RETRIES = "zk_max_retries";
     protected final static String READAHEAD_ENABLED = "readahead_enabled";
     protected final static String STANDALONE = "standalone";
     protected final static String REGIONS = "regions";
@@ -278,6 +279,16 @@ public class ServerConfiguration extends AbstractConfiguration {
      */
     public int getZkTimeout() {
         return conf.getInt(ZK_TIMEOUT, 2000);
+    }
+
+    /**
+     * Return max retries of operations when encountering zookeeper session loss.
+     * Default is 0. We don't retry the operation encountering zookeeper session loss.
+     *
+     * @return max retries of zookeeper operations
+     */
+    public int getZkMaxRetries() {
+        return conf.getInt(ZK_MAX_RETRIES, 0);
     }
 
     /** 

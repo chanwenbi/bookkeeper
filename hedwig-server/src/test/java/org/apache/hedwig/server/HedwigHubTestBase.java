@@ -151,6 +151,10 @@ public abstract class HedwigHubTestBase extends TestCase {
         return new HubServerConfiguration(serverPort, sslServerPort);
     }
 
+    protected PubSubServer createPubSubServer(ServerConfiguration conf) throws Exception {
+        return new PubSubServer(conf, new ClientConfiguration(), new LoggingExceptionHandler());
+    }
+
     protected void startHubServers() throws Exception {
         // Now create the PubSubServer Hubs
         serversList = new LinkedList<PubSubServer>();
@@ -158,10 +162,20 @@ public abstract class HedwigHubTestBase extends TestCase {
         for (int i = 0; i < numServers; i++) {
             ServerConfiguration conf = getServerConfiguration(serverAddresses.get(i).getPort(),
                                                               sslEnabled ? serverAddresses.get(i).getSSLPort() : -1);
-            PubSubServer s = new PubSubServer(conf, new ClientConfiguration(), new LoggingExceptionHandler());
+            PubSubServer s = createPubSubServer(conf);
             serversList.add(s);
             s.start();
         }
+    }
+
+    protected void startNewHubServer() throws Exception {
+        HedwigSocketAddress addr = new HedwigSocketAddress("localhost",
+                PortManager.nextFreePort(), PortManager.nextFreePort());
+        serverAddresses.add(addr);
+        ServerConfiguration conf = getServerConfiguration(addr.getPort(), addr.getSSLPort());
+        PubSubServer s = createPubSubServer(conf);
+        serversList.add(s);
+        s.start();
     }
 
     protected void stopHubServers() throws Exception {
