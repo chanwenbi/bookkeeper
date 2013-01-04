@@ -253,13 +253,13 @@ public class TestZkTopicManager extends ZooKeeperTestBase {
         Assert.assertEquals(topic, pair.first());
         Assert.assertTrue(pair.second());
         Assert.assertEquals(me, check(addrCbq.take()));
-        assertOwnershipNodeExists();
+        assertOwnershipNodeExists(topic);
 
         // topic that I already own
         tm.getOwner(topic, true, addrCbq, null);
         Assert.assertEquals(me, check(addrCbq.take()));
         Assert.assertTrue(bsQueue.isEmpty());
-        assertOwnershipNodeExists();
+        assertOwnershipNodeExists(topic);
 
         // regular release
         tm.releaseTopic(topic, cb, null);
@@ -267,7 +267,7 @@ public class TestZkTopicManager extends ZooKeeperTestBase {
         Assert.assertEquals(topic, pair.first());
         Assert.assertFalse(pair.second());
         Assert.assertTrue(queue.take());
-        assertOwnershipNodeDoesntExist();
+        assertOwnershipNodeDoesntExist(topic);
 
         // releasing topic that I don't own
         tm.releaseTopic(mkTopic(0), cb, null);
@@ -285,17 +285,17 @@ public class TestZkTopicManager extends ZooKeeperTestBase {
                             .getExceptions().iterator().next().getClass());
         Assert.assertFalse(tm.topics.contains(topic));
         Thread.sleep(100);
-        assertOwnershipNodeDoesntExist();
+        assertOwnershipNodeDoesntExist(topic);
 
     }
 
-    public void assertOwnershipNodeExists() throws Exception {
+    public void assertOwnershipNodeExists(ByteString topic) throws Exception {
         byte[] data = zk.getData(tm.hubPath(topic), false, null);
         Assert.assertEquals(HubInfo.parse(new String(data)).getAddress(),
                             tm.addr);
     }
 
-    public void assertOwnershipNodeDoesntExist() throws Exception {
+    public void assertOwnershipNodeDoesntExist(ByteString topic) throws Exception {
         try {
             zk.getData(tm.hubPath(topic), false, null);
             Assert.assertTrue(false);
@@ -306,24 +306,32 @@ public class TestZkTopicManager extends ZooKeeperTestBase {
 
     @Test
     public void testZKClientDisconnected() throws Exception {
+        ByteString topic2 = ByteString.copyFromUtf8("topic2");
+
         // First assert ownership of the topic
         tm.getOwner(topic, true, addrCbq, null);
         Assert.assertEquals(me, check(addrCbq.take()));
 
-        // Suspend the ZKTopicManager and make sure calls to getOwner error out
+        // Suspend the ZKTopicManager
         tm.isSuspended = true;
         tm.getOwner(topic, true, addrCbq, null);
-        Assert.assertEquals(PubSubException.ServiceDownException.class, addrCbq.take().right().getClass());
+        Assert.assertEquals("Should get the owner for already owned topics even the topic manager is suspended.",
+                            me, check(addrCbq.take()));
+
+        tm.getOwner(topic2, true, addrCbq, null);
+        Assert.assertEquals("Should fail to get the owner for those un-owned topics if topic manager is suspended.",
+                            PubSubException.ServerNotResponsibleForTopicException.class,
+                            addrCbq.take().right().getClass());
         // Release the topic. This should not error out even if suspended.
         tm.releaseTopic(topic, cb, null);
         Assert.assertTrue(queue.take());
-        assertOwnershipNodeDoesntExist();
+        assertOwnershipNodeDoesntExist(topic);
 
         // Restart the ZKTopicManager and make sure calls to getOwner are okay
         tm.isSuspended = false;
-        tm.getOwner(topic, true, addrCbq, null);
+        tm.getOwner(topic2, true, addrCbq, null);
         Assert.assertEquals(me, check(addrCbq.take()));
-        assertOwnershipNodeExists();
+        assertOwnershipNodeExists(topic2);
     }
 
 }

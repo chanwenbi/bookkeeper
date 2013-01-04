@@ -25,8 +25,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 import org.apache.bookkeeper.conf.ClientConfiguration;
 import org.apache.bookkeeper.client.BKException;
@@ -34,10 +32,10 @@ import org.apache.bookkeeper.client.BookKeeper;
 import org.apache.bookkeeper.client.BookKeeper.DigestType;
 import org.apache.bookkeeper.client.LedgerHandle;
 import org.apache.bookkeeper.versioning.Versioned;
+import org.apache.bookkeeper.zookeeper.ZooKeeperClient;
 import org.apache.hedwig.exceptions.PubSubException;
 import org.apache.hedwig.protocol.PubSubProtocol.LedgerRange;
 import org.apache.hedwig.protocol.PubSubProtocol.LedgerRanges;
-import org.apache.hedwig.protocol.PubSubProtocol.Message;
 import org.apache.hedwig.protocol.PubSubProtocol.MessageSeqId;
 import org.apache.hedwig.protocol.PubSubProtocol.SubscriptionData;
 import org.apache.hedwig.server.common.ServerConfiguration;
@@ -46,7 +44,6 @@ import org.apache.hedwig.server.meta.FactoryLayout;
 import org.apache.hedwig.server.meta.SubscriptionDataManager;
 import org.apache.hedwig.server.meta.TopicOwnershipManager;
 import org.apache.hedwig.server.meta.TopicPersistenceManager;
-import org.apache.hedwig.server.subscriptions.InMemorySubscriptionState;
 import org.apache.hedwig.server.topics.HubInfo;
 import org.apache.hedwig.server.topics.HubLoad;
 import org.apache.hedwig.util.Callback;
@@ -54,13 +51,10 @@ import org.apache.hedwig.util.HedwigSocketAddress;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.zookeeper.KeeperException;
-import org.apache.zookeeper.WatchedEvent;
-import org.apache.zookeeper.Watcher;
 import org.apache.zookeeper.ZooKeeper;
 import org.apache.zookeeper.data.Stat;
 
 import com.google.protobuf.ByteString;
-import com.google.protobuf.InvalidProtocolBufferException;
 
 /**
  * Hedwig Admin
@@ -82,17 +76,6 @@ public class HedwigAdmin {
     protected final ServerConfiguration serverConf;
     // bookkeeper configurations
     protected final ClientConfiguration bkClientConf;
-
-    protected final CountDownLatch zkReadyLatch = new CountDownLatch(1);
-
-    // Empty watcher
-    private class MyWatcher implements Watcher {
-        public void process(WatchedEvent event) {
-            if (Event.KeeperState.SyncConnected.equals(event.getState())) {
-                zkReadyLatch.countDown();
-            }
-        }
-    }
 
     static class SyncObj<T> {
         boolean finished = false;
@@ -164,13 +147,9 @@ public class HedwigAdmin {
         this.bkClientConf = bkConf;
 
         // connect to zookeeper
-        zk = new ZooKeeper(hubConf.getZkHost(), hubConf.getZkTimeout(), new MyWatcher());
-        LOG.debug("Connecting to zookeeper {}, timeout = {}",
-                hubConf.getZkHost(), hubConf.getZkTimeout());
-        // wait until connection is ready
-        if (!zkReadyLatch.await(hubConf.getZkTimeout() * 2, TimeUnit.MILLISECONDS)) {
-            throw new Exception("Count not establish connection with ZooKeeper after " + hubConf.getZkTimeout() * 2 + " ms.");
-        }
+        zk = ZooKeeperClient.createConnectedZooKeeperClient(hubConf.getZkHost(), hubConf.getZkTimeout());
+        LOG.debug("Connected to zookeeper {}, timeout = {}",
+                  hubConf.getZkHost(), hubConf.getZkTimeout());
 
         // construct the metadata manager factory
         mmFactory = MetadataManagerFactory.newMetadataManagerFactory(hubConf, zk);

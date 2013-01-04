@@ -24,21 +24,19 @@ import java.net.MalformedURLException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.SynchronousQueue;
-import java.util.concurrent.TimeUnit;
 
 import org.apache.bookkeeper.conf.ClientConfiguration;
 import org.apache.bookkeeper.client.BookKeeper;
 import org.apache.bookkeeper.client.BKException;
+import org.apache.bookkeeper.zookeeper.BoundExponentialBackoffRetryPolicy;
+import org.apache.bookkeeper.zookeeper.ZooKeeperClient;
 import org.apache.commons.configuration.ConfigurationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.zookeeper.KeeperException;
-import org.apache.zookeeper.WatchedEvent;
-import org.apache.zookeeper.Watcher;
 import org.apache.zookeeper.ZooKeeper;
 import org.jboss.netty.bootstrap.ServerBootstrap;
 import org.jboss.netty.channel.group.ChannelGroup;
@@ -95,7 +93,7 @@ public class PubSubServer {
     // Netty related variables
     ServerSocketChannelFactory serverChannelFactory;
     ClientSocketChannelFactory clientChannelFactory;
-    ServerConfiguration conf;
+    protected ServerConfiguration conf;
     org.apache.hedwig.client.conf.ClientConfiguration clientConfiguration;
     ChannelGroup allChannels;
 
@@ -109,7 +107,7 @@ public class PubSubServer {
     // Metadata Manager Factory
     MetadataManagerFactory mm;
 
-    ZooKeeper zk; // null if we are in standalone mode
+    protected ZooKeeper zk; // null if we are in standalone mode
     BookKeeper bk; // null if we are in standalone mode
 
     // we use this to prevent long stack chains from building up in callbacks
@@ -167,25 +165,12 @@ public class PubSubServer {
     }
 
     protected void instantiateZookeeperClient() throws Exception {
-        if (!conf.isStandalone()) {
-            final CountDownLatch signalZkReady = new CountDownLatch(1);
-
-            zk = new ZooKeeper(conf.getZkHost(), conf.getZkTimeout(), new Watcher() {
-                @Override
-                public void process(WatchedEvent event) {
-                    if(Event.KeeperState.SyncConnected.equals(event.getState())) {
-                        signalZkReady.countDown();
-                    }
-                }
-            });
-            // wait until connection is effective
-            if (!signalZkReady.await(conf.getZkTimeout()*2, TimeUnit.MILLISECONDS)) {
-                logger.error("Could not establish connection with ZooKeeper after zk_timeout*2 = " +
-                             conf.getZkTimeout()*2 + " ms. (Default value for zk_timeout is 2000).");
-                throw new Exception("Could not establish connection with ZooKeeper after zk_timeout*2 = " +
-                                    conf.getZkTimeout()*2 + " ms. (Default value for zk_timeout is 2000).");
-            }
+        if (conf.isStandalone()) {
+            return;
         }
+        zk = ZooKeeperClient.createConnectedZooKeeperClient(conf.getZkHost(), conf.getZkTimeout(),
+            new BoundExponentialBackoffRetryPolicy(conf.getZkTimeout(), conf.getZkTimeout(),
+                                                   conf.getZkMaxRetries()));
     }
 
     protected void instantiateMetadataManagerFactory() throws Exception {

@@ -56,6 +56,22 @@ public abstract class AbstractTopicManager implements TopicManager {
     protected ServerConfiguration cfg;
     protected ScheduledExecutorService scheduler;
 
+    protected final Callback<Void> RELEASE_CALLBACK = new Callback<Void>() {
+        @Override
+        public void operationFailed(Object ctx, PubSubException exception) {
+            ByteString topic = (ByteString) ctx;
+            logger.error("Failure when releasing topic " + topic.toStringUtf8(), exception);
+        }
+
+        @Override
+        public void operationFinished(Object ctx, Void resultOfOperation) {
+            ByteString topic = (ByteString) ctx;
+            if (logger.isDebugEnabled()) {
+                logger.debug("successful released topic {}.", topic.toStringUtf8());
+            }
+        }
+    };
+
     private static final Logger logger = LoggerFactory.getLogger(AbstractTopicManager.class);
 
     private class GetOwnerOp extends TopicOpQueuer.AsynchronousOp<HedwigSocketAddress> {
@@ -115,23 +131,7 @@ public abstract class AbstractTopicManager implements TopicManager {
                         public void run() {
                             // Enqueue a release operation. (Recall that release
                             // doesn't "fail" even if the topic is missing.)
-                            releaseTopic(topic, new Callback<Void>() {
-
-                                @Override
-                                public void operationFailed(Object ctx, PubSubException exception) {
-                                    logger.error("failure that should never happen when periodically releasing topic "
-                                                 + topic, exception);
-                                }
-
-                                @Override
-                                public void operationFinished(Object ctx, Void resultOfOperation) {
-                                    if (logger.isDebugEnabled()) {
-                                        logger.debug("successful periodic release of topic "
-                                            + topic.toStringUtf8());
-                                    }
-                                }
-
-                            }, null);
+                            releaseTopic(topic, RELEASE_CALLBACK, topic);
                         }
                     }, cfg.getRetentionSecs(), TimeUnit.SECONDS);
                 }
@@ -177,6 +177,11 @@ public abstract class AbstractTopicManager implements TopicManager {
     @Override
     public final void releaseTopic(ByteString topic, Callback<Void> cb, Object ctx) {
         queuer.pushAndMaybeRun(topic, new ReleaseOp(topic, cb, ctx));
+    }
+
+    @Override
+    public HubServerManager getHubServerManager() {
+        return null;
     }
 
     /**

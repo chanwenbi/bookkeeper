@@ -22,6 +22,7 @@ import java.net.InetSocketAddress;
 import org.jboss.netty.channel.ChannelFuture;
 import org.jboss.netty.channel.ChannelFutureListener;
 
+import org.apache.hedwig.client.conf.ClientConfiguration;
 import org.apache.hedwig.client.data.PubSubData;
 import org.apache.hedwig.protocol.PubSubProtocol.OperationType;
 import static org.apache.hedwig.util.VarArgs.va;
@@ -40,14 +41,19 @@ class DefaultServerChannel extends HChannelImpl {
 
     private static Logger logger = LoggerFactory.getLogger(DefaultServerChannel.class);
 
-    DefaultServerChannel(InetSocketAddress host, AbstractHChannelManager channelManager) {
-        super(host, channelManager);
+    final String defaultHostStr;
+    final ClientConfiguration cfg;
+
+    DefaultServerChannel(ClientConfiguration cfg, AbstractHChannelManager channelManager) {
+        super(null, channelManager);
+        this.cfg = cfg;
+        defaultHostStr = cfg.getDefaultServerHostStr();
     }
 
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append("[DefaultServer: ").append(host).append("]");
+        sb.append("[DefaultServer: ").append(defaultHostStr).append("]");
         return sb.toString();
     }
 
@@ -62,7 +68,8 @@ class DefaultServerChannel extends HChannelImpl {
         } else {
             pipelineFactory = channelManager.getSubscriptionChannelPipelineFactory();
         }
-        ChannelFuture future = connect(host, pipelineFactory);
+        final InetSocketAddress defaultHost = cfg.getDefaultServerHost();
+        ChannelFuture future = connect(defaultHost, pipelineFactory);
         future.addListener(new ChannelFutureListener() {
             @Override
             public void operationComplete(ChannelFuture future) throws Exception {
@@ -75,7 +82,7 @@ class DefaultServerChannel extends HChannelImpl {
 
                 // Check if the connection to the server was done successfully.
                 if (!future.isSuccess()) {
-                    logger.error("Error connecting to host {}.", host);
+                    logger.error("Error connecting to host {}.", defaultHost);
                     future.getChannel().close();
 
                     retryOrFailOp(pubSubData);
@@ -83,7 +90,7 @@ class DefaultServerChannel extends HChannelImpl {
                     return;
                 }
                 logger.debug("Connected to host {} for pubSubData: {}",
-                             va(host, pubSubData));
+                             va(defaultHost, pubSubData));
                 channelManager.submitOpThruChannel(pubSubData, future.getChannel());
             }
         });
