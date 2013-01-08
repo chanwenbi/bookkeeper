@@ -152,7 +152,7 @@ public class HChannelImpl implements HChannel {
 
     private void writePubSubRequest(PubSubData pubSubData, PubSubRequest pubSubRequest) {
         if (closed || null == channel || State.CONNECTED != state) {
-            retryOrFailOp(pubSubData);
+            retryOrFailOp(pubSubData, host);
             return;
         }
 
@@ -181,7 +181,7 @@ public class HChannelImpl implements HChannel {
      * @param pubSubData
      *          Pub/Sub Operation
      */
-    protected void retryOrFailOp(PubSubData pubSubData) {
+    protected void retryOrFailOp(PubSubData pubSubData, InetSocketAddress host) {
         // if we were not able to connect to the host, it could be down
         ByteString hostString = ByteString.copyFromUtf8(HedwigSocketAddress.sockAddrStr(host));
         if (pubSubData.connectFailedServers != null &&
@@ -233,7 +233,7 @@ public class HChannelImpl implements HChannel {
             pendingOps = new ArrayDeque<PubSubData>();
         }
         for (PubSubData op : oldPendingOps) {
-            retryOrFailOp(op);
+            retryOrFailOp(op, host);
         }
     }
 
