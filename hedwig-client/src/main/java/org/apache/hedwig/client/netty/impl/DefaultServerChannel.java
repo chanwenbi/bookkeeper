@@ -85,7 +85,7 @@ class DefaultServerChannel extends HChannelImpl {
                     logger.error("Error connecting to host {}.", defaultHost);
                     future.getChannel().close();
 
-                    retryOrFailOp(pubSubData);
+                    retryOrFailOp(pubSubData, defaultHost);
                     // Finished with failure logic so just return.
                     return;
                 }
