@@ -55,6 +55,7 @@ import org.apache.hedwig.server.persistence.MapMethods;
 import org.apache.hedwig.server.persistence.PersistenceManager;
 import org.apache.hedwig.server.persistence.ScanCallback;
 import org.apache.hedwig.server.persistence.ScanRequest;
+import org.apache.hedwig.server.topics.TopicManager;
 import org.apache.hedwig.util.Callback;
 import static org.apache.hedwig.util.VarArgs.va;
 
@@ -107,8 +108,8 @@ public class FIFODeliveryManager implements Runnable, DeliveryManager {
      */
     Map<TopicSubscriber, ActiveSubscriberState> subscriberStates;
 
+    private TopicManager tm;
     private PersistenceManager persistenceMgr;
-
     private ServerConfiguration cfg;
 
     // Boolean indicating if this thread should continue running. This is used
@@ -116,7 +117,9 @@ public class FIFODeliveryManager implements Runnable, DeliveryManager {
     protected boolean keepRunning = true;
     private final Thread workerThread;
 
-    public FIFODeliveryManager(PersistenceManager persistenceMgr, ServerConfiguration cfg) {
+    public FIFODeliveryManager(TopicManager tm, PersistenceManager persistenceMgr,
+                               ServerConfiguration cfg) {
+        this.tm = tm;
         this.persistenceMgr = persistenceMgr;
         perTopicDeliveryPtrs = new HashMap<ByteString, SortedMap<Long, Set<ActiveSubscriberState>>>();
         subscriberStates = new HashMap<TopicSubscriber, ActiveSubscriberState>();
@@ -543,6 +546,12 @@ public class FIFODeliveryManager implements Runnable, DeliveryManager {
             if (!connected) {
                 return;
             }
+
+            // only increment topic access times when tried to deliver a message
+            // for those subscribers just waiting for a published for a long time
+            // we don't increment topic access times, so the topic would be evicted
+            // in future.
+            tm.incrementTopicAccessTimes(topic);
 
             if (!filter.testMessage(message)) {
                 sendingFinished();
