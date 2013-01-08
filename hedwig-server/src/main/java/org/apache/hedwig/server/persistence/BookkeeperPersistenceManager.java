@@ -197,10 +197,14 @@ public class BookkeeperPersistenceManager implements PersistenceManagerWithRange
                 public void onSuspend() {
                     // disable ledger change when hub server suspended.
                     disableLedgerChange();
+                    // disable ensemble change
+                    BookkeeperPersistenceManager.this.bk.disableEnsembleChange();
                 }
 
                 @Override
                 public void onResume() {
+                    // enable ensemble change
+                    BookkeeperPersistenceManager.this.bk.enableEnsembleChange();
                     // enable ledger change when hub server resumed.
                     enableLedgerChange();
                 }
