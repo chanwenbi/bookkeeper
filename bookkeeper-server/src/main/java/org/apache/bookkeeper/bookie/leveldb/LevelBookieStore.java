@@ -157,6 +157,20 @@ public class LevelBookieStore implements BookieStore {
 
         String dbPath = conf.geLeveldbPath();
 
+        // create sub directories for leveldb if necessary
+        File metaDir = new File(dbPath, "meta");
+        if (!metaDir.exists()) {
+            if (!metaDir.mkdirs()) {
+                throw new IOException("Failed to create meta database at " + dbPath);
+            }
+        }
+        File dataDir = new File(dbPath, "data");
+        if (dataDir.exists()) {
+            if (!dataDir.mkdirs()) {
+                throw new IOException("Failed to create data database at " + dbPath);
+            }
+        }
+
         // prepare the meta cache
         metaCache = CacheBuilder.newBuilder()
                 .expireAfterAccess(conf.getLevelBookieCacheTTL(), TimeUnit.SECONDS)
@@ -164,20 +178,24 @@ public class LevelBookieStore implements BookieStore {
                 .maximumSize(conf.getLevelBookieMaxCacheLedgers())
                 .build();
 
+        CompressionType compressionType =
+                conf.isLevelBookieCompressionEnabled() ? CompressionType.SNAPPY : CompressionType.NONE;
+
         Options metaOptions = new Options();
-        metaOptions.blockSize(BLOCK_SIZE);
-        metaOptions.cacheSize(META_CACHE_SIZE);
-        metaOptions.compressionType(CompressionType.SNAPPY);
+        metaOptions.blockSize(conf.getLevelBookieBlockSize());
+        metaOptions.cacheSize(conf.getLevelBookieMetaCacheSize());
+        metaOptions.compressionType(compressionType);
         metaOptions.createIfMissing(true);
-        metaOptions.writeBufferSize(META_WRITE_BUFFER_SIZE);
+        metaOptions.writeBufferSize(conf.getLevelBookieMetaWriteBufferSize());
         metaDB = factory.open(new File(dbPath, "meta"), metaOptions);
 
         Options dataOptions = new Options();
-        dataOptions.blockSize(BLOCK_SIZE);
-        dataOptions.cacheSize(DATA_CACHE_SIZE);
-        dataOptions.compressionType(CompressionType.SNAPPY);
+        dataOptions.blockSize(conf.getLevelBookieBlockSize());
+        dataOptions.cacheSize(conf.getLevelBookieDataCacheSize());
+        dataOptions.compressionType(compressionType);
         dataOptions.createIfMissing(true);
-        dataOptions.writeBufferSize(DATA_WRITE_BUFFER_SIZE);
+        dataOptions.writeBufferSize(conf.getLevelBookieDataWriteBufferSize());
+        dataOptions.maxOpenFiles(conf.getLevelBookieMaxOpenFiles());
         dataDB = factory.open(new File(dbPath, "data"), dataOptions);
 
         ro = new ReadOptions();

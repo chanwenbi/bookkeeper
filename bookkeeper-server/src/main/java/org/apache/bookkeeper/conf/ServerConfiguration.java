@@ -72,6 +72,13 @@ public class ServerConfiguration extends AbstractConfiguration {
     protected final static String LEVELBOOKIE_MAX_CACHE_LEDGERS = "levelBookieMaxCacheLedgers";
     protected final static String LEVELBOOKIE_INITIAL_CACHE_LEDGERS = "levelBookieInitalCacheLedgers";
     protected final static String LEVELBOOKIE_CACHE_TTL = "levelBookieCacheTTL";
+    protected final static String LEVELBOOKIE_BLOCK_SIZE = "levelBookieBlockSize";
+    protected final static String LEVELBOOKIE_META_CACHE_SIZE = "levelBookieMetaCacheSize";
+    protected final static String LEVELBOOKIE_DATA_CACHE_SIZE = "levelBookieDataCacheSize";
+    protected final static String LEVELBOOKIE_META_WRITE_BUFFER_SIZE = "levelBookieMetaWriteBufferSize";
+    protected final static String LEVELBOOKIE_DATA_WRITE_BUFFER_SIZE = "levelBookieDataWriteBufferSize";
+    protected final static String LEVELBOOKIE_MAX_OPEN_FILES = "levelBookieMaxOpenFiles";
+    protected final static String LEVELBOOKIE_ENABLE_COMPRESSION = "levelBookieEnableCompression";
 
     /**
      * Construct a default configuration object
@@ -559,7 +566,7 @@ public class ServerConfiguration extends AbstractConfiguration {
         setProperty(MAJOR_COMPACTION_INTERVAL, interval);
         return this;
     }
-    
+
     /**
      * Set the grace period which the rereplication worker will wait before
      * fencing and rereplicating a ledger fragment which is still being written
@@ -699,7 +706,7 @@ public class ServerConfiguration extends AbstractConfiguration {
     public boolean isAutoRecoveryDaemonEnabled() {
         return getBoolean(AUTO_RECOVERY_DAEMON_ENABLED, false);
     }
-    
+
     /**
      * Enabled leveldb as a bookie store.
      *
@@ -708,7 +715,7 @@ public class ServerConfiguration extends AbstractConfiguration {
     public boolean isLeveldbStoreEnabled() {
         return getBoolean(LEVELDB_STORE_ENABLED, false);
     }
-    
+
     /**
      * Enable/Disable leveldb as a bookie store.
      *
@@ -720,7 +727,7 @@ public class ServerConfiguration extends AbstractConfiguration {
         setProperty(LEVELDB_STORE_ENABLED, enabled);
         return this;
     }
-    
+
     /**
      * Get dir name to store leveldb
      *
@@ -741,7 +748,7 @@ public class ServerConfiguration extends AbstractConfiguration {
         this.setProperty(LEVELDB_STORE_PATH, leveldbPath);
         return this;
     }
-    
+
     /**
      * Get cache ttl for level bookie.
      *
@@ -750,7 +757,7 @@ public class ServerConfiguration extends AbstractConfiguration {
     public long getLevelBookieCacheTTL() {
         return this.getLong(LEVELBOOKIE_CACHE_TTL, 0L);
     }
-    
+
     /**
      * Set cache ttl for level bookie, in seconds. If the value is zero, disable 'expireAfterAccess'.
      *
@@ -762,7 +769,7 @@ public class ServerConfiguration extends AbstractConfiguration {
         setProperty(LEVELBOOKIE_CACHE_TTL, duration);
         return this;
     }
-    
+
     /**
      * Get max ledgers' metadata to be cached.
      *
@@ -771,7 +778,7 @@ public class ServerConfiguration extends AbstractConfiguration {
     public long getLevelBookieMaxCacheLedgers() {
         return this.getLong(LEVELBOOKIE_MAX_CACHE_LEDGERS, 100000);
     }
-    
+
     /**
      * Set max number of ledgers, whose metadata would be allowed to cache.
      *
@@ -783,7 +790,7 @@ public class ServerConfiguration extends AbstractConfiguration {
         setProperty(LEVELBOOKIE_MAX_CACHE_LEDGERS, ledgers);
         return this;
     }
-    
+
     /**
      * Get initial ledgers' metadata to be cached.
      *
@@ -792,7 +799,7 @@ public class ServerConfiguration extends AbstractConfiguration {
     public int getLevelBookieInitialCacheLedgers() {
         return this.getInt(LEVELBOOKIE_INITIAL_CACHE_LEDGERS, 100000);
     }
-    
+
     /**
      * Set initial number of ledgers, whose metadata would be allowed to cache.
      *
@@ -802,6 +809,150 @@ public class ServerConfiguration extends AbstractConfiguration {
      */
     public ServerConfiguration setLevelBookiInitialCacheLedgers(int ledgers) {
         setProperty(LEVELBOOKIE_INITIAL_CACHE_LEDGERS, ledgers);
+        return this;
+    }
+
+    /**
+     * Get approximate size of data packed per block in leveldb.
+     * 
+     * @return approximate size of data packed per block.
+     */
+    public int getLevelBookieBlockSize() {
+        return getInt(LEVELBOOKIE_BLOCK_SIZE, 8096);
+    }
+
+    /**
+     * Set approximate size of data packed per block in leveldb.
+     * @param blockSize
+     * @return server configuration object.
+     */
+    public ServerConfiguration setLevelBookieBlockSize(int blockSize) {
+        setProperty(LEVELBOOKIE_BLOCK_SIZE, blockSize);
+        return this;
+    }
+
+    /**
+     * Is Compression enabled for level bookie?
+     *
+     * @return true if compression is enabled for level bookie, otherwise false.
+     */
+    public boolean isLevelBookieCompressionEnabled() {
+        return getBoolean(LEVELBOOKIE_ENABLE_COMPRESSION, true);
+    }
+
+    /**
+     * Enable/disable compression for level bookie.
+     * 
+     * @param enabled
+     *          Enable/disable compression.
+     * @return server configuration object.
+     */
+    public ServerConfiguration setLevelBookieCompressionEnabled(boolean enabled) {
+        setProperty(LEVELBOOKIE_ENABLE_COMPRESSION, enabled);
+        return this;
+    }
+
+    /**
+     * Get the number of max open files for level bookie.
+     *
+     * @return the number of max open files for level bookie.
+     */
+    public int getLevelBookieMaxOpenFiles() {
+        return getInt(LEVELBOOKIE_MAX_OPEN_FILES, 1000);
+    }
+
+    /**
+     * Set the number of max open files for level bookie.
+     *
+     * @param maxOpenFiles
+     *          The number of max open files for level bookie.
+     */
+    public ServerConfiguration setLevelBookieMaxOpenFiles(int maxOpenFiles) {
+        setProperty(LEVELBOOKIE_MAX_OPEN_FILES, maxOpenFiles);
+        return this;
+    }
+
+    /**
+     * Get the cache size for metadata db.
+     *
+     * @return cache size for metadata db.
+     */
+    public long getLevelBookieMetaCacheSize() {
+        return getLong(LEVELBOOKIE_META_CACHE_SIZE, 128 * 1024 * 1024);
+    }
+
+    /**
+     * Set the cache size for metadata db.
+     *
+     * @param cacheSize
+     *          Cache size used for meta db.
+     * @return server configuration object.
+     */
+    public ServerConfiguration setLevelBookieMetaCacheSize(long cacheSize) {
+        setProperty(LEVELBOOKIE_META_CACHE_SIZE, cacheSize);
+        return this;
+    }
+
+    /**
+     * Get the cache size for data db.
+     *
+     * @return cache size for data db.
+     */
+    public long getLevelBookieDataCacheSize() {
+        return getLong(LEVELBOOKIE_DATA_CACHE_SIZE, 1 * 1024 * 1024 * 1024);
+    }
+
+    /**
+     * Set the cache size for data db.
+     *
+     * @param cacheSize
+     *          Cache size used for data db.
+     * @return server configuration object.
+     */
+    public ServerConfiguration setLevelBookieDataCacheSize(long cacheSize) {
+        setProperty(LEVELBOOKIE_DATA_CACHE_SIZE, cacheSize);
+        return this;
+    }
+
+    /**
+     * Get the write buffer size for meta db.
+     *
+     * @return write buffer size for meta db.
+     */
+    public int getLevelBookieMetaWriteBufferSize() {
+        return getInt(LEVELBOOKIE_META_WRITE_BUFFER_SIZE, 16 * 1024 * 1024);
+    }
+
+    /**
+     * Set the write buffer size for meta db.
+     *
+     * @param writeBufferSize
+     *          Write buffer size for meta db.
+     * @return server configuration object
+     */
+    public ServerConfiguration setLevelBookieMetaWriteBufferSize(int writeBufferSize) {
+        setProperty(LEVELBOOKIE_META_WRITE_BUFFER_SIZE, writeBufferSize);
+        return this;
+    }
+
+    /**
+     * Get the write buffer size for data db.
+     *
+     * @return write buffer size for data db.
+     */
+    public int getLevelBookieDataWriteBufferSize() {
+        return getInt(LEVELBOOKIE_DATA_WRITE_BUFFER_SIZE, 256 * 1024 * 1024);
+    }
+
+    /**
+     * Set the write buffer size for data db.
+     *
+     * @param writeBufferSize
+     *          Write buffer size for data db.
+     * @return server configuration object
+     */
+    public ServerConfiguration setLevelBookieDataWriteBufferSize(int writeBufferSize) {
+        setProperty(LEVELBOOKIE_DATA_WRITE_BUFFER_SIZE, writeBufferSize);
         return this;
     }
 }
