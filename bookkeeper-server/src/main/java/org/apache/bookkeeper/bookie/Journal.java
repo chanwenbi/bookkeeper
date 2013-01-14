@@ -267,7 +267,7 @@ class Journal extends Thread {
         super("BookieJournal-" + conf.getBookiePort());
         this.ledgerDirsManager = ledgerDirsManager;
         this.conf = conf;
-        this.journalDirectory = Bookie.getCurrentDirectory(conf.getJournalDir());
+        this.journalDirectory = InterleavedBookieStore.getCurrentDirectory(conf.getJournalDir());
         this.maxJournalSize = conf.getMaxJournalSize() * MB;
         this.maxBackupJournals = conf.getMaxBackupJournals();
 

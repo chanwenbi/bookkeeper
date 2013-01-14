@@ -21,46 +21,42 @@
 
 package org.apache.bookkeeper.bookie;
 
-import org.apache.bookkeeper.util.BookKeeperConstants;
-import org.apache.bookkeeper.util.HardLink;
-
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.cli.BasicParser;
-import org.apache.commons.cli.Options;
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.HelpFormatter;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import static com.google.common.base.Charsets.UTF_8;
 
 import java.io.File;
 import java.io.FilenameFilter;
 import java.io.IOException;
-
+import java.net.MalformedURLException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Scanner;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import java.util.Map;
-import java.util.HashMap;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Scanner;
-import java.util.NoSuchElementException;
-
-import java.net.MalformedURLException;
 import org.apache.bookkeeper.conf.ServerConfiguration;
+import org.apache.bookkeeper.util.BookKeeperConstants;
+import org.apache.bookkeeper.util.HardLink;
+import org.apache.commons.cli.BasicParser;
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.Options;
 import org.apache.commons.configuration.ConfigurationException;
-
-import org.apache.zookeeper.ZooKeeper;
-import org.apache.zookeeper.Watcher;
-import org.apache.zookeeper.WatchedEvent;
+import org.apache.commons.io.FileUtils;
 import org.apache.zookeeper.KeeperException;
-
-import static com.google.common.base.Charsets.UTF_8;
+import org.apache.zookeeper.WatchedEvent;
+import org.apache.zookeeper.Watcher;
+import org.apache.zookeeper.ZooKeeper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Application for upgrading the bookkeeper filesystem
  * between versions
+ * 
+ * TODO: reflect to use {@link BookieStore} interface.
  */
 public class FileSystemUpgrade {
     static Logger LOG = LoggerFactory.getLogger(FileSystemUpgrade.class);

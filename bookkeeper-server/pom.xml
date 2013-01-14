@@ -31,7 +31,19 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.libdir>${basedir}/lib</project.libdir>
   </properties>
+  <repositories>
+    <repository>
+      <id>fusesource.nexus.snapshot</id>
+      <name>FuseSource Community Snapshot Repository</name>
+      <url>http://repo.fusesource.com/nexus/content/groups/public-snapshots</url>
+    </repository>
+  </repositories>
   <dependencies>
+    <dependency>
+      <groupId>org.fusesource.leveldbjni</groupId>
+      <artifactId>leveldbjni-all</artifactId>
+      <version>1.1</version>
+    </dependency>
     <dependency>
       <groupId>com.google.protobuf</groupId>
       <artifactId>protobuf-java</artifactId>

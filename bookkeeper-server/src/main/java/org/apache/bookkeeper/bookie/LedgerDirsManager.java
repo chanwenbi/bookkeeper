@@ -51,7 +51,7 @@ public class LedgerDirsManager {
     private final Random rand = new Random();
 
     public LedgerDirsManager(ServerConfiguration conf) {
-        this.ledgerDirectories = Arrays.asList(Bookie
+        this.ledgerDirectories = Arrays.asList(InterleavedBookieStore
                 .getCurrentDirectories(conf.getLedgerDirs()));
         this.writableLedgerDirectories = new ArrayList<File>(ledgerDirectories);
         this.filledDirs = new ArrayList<File>();

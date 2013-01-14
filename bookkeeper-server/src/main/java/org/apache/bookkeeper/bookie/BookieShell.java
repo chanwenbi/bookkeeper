@@ -59,6 +59,8 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Bookie Shell is to provide utilities for users to administer a bookkeeper cluster.
+ * 
+ * TODO: reflect to use {@link BookieStore} interface to hide details for different stores.
  */
 public class BookieShell implements Tool {
 
@@ -641,8 +643,8 @@ public class BookieShell implements Tool {
     @Override
     public void setConf(Configuration conf) throws Exception {
         bkConf.loadConf(conf);
-        journalDirectory = Bookie.getCurrentDirectory(bkConf.getJournalDir());
-        ledgerDirectories = Bookie.getCurrentDirectories(bkConf.getLedgerDirs());
+        journalDirectory = InterleavedBookieStore.getCurrentDirectory(bkConf.getJournalDir());
+        ledgerDirectories = InterleavedBookieStore.getCurrentDirectories(bkConf.getLedgerDirs());
         formatter = EntryFormatter.newEntryFormatter(bkConf, ENTRY_FORMATTER_CLASS);
         LOG.debug("Using entry formatter {}", formatter.getClass().getName());
         pageSize = bkConf.getPageSize();
@@ -939,7 +941,7 @@ public class BookieShell implements Tool {
 
         System.out.println("--------- Lid=" + ledgerId + ", Eid=" + entryId
                          + ", ByteOffset=" + pos + ", EntrySize=" + entrySize + " ---------");
-        if (entryId == Bookie.METAENTRY_ID_LEDGER_KEY) {
+        if (entryId == InterleavedBookieStore.METAENTRY_ID_LEDGER_KEY) {
             int masterKeyLen = recBuff.getInt();
             byte[] masterKey = new byte[masterKeyLen];
             recBuff.get(masterKey);

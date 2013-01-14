@@ -18,14 +18,9 @@
 
 package org.apache.bookkeeper.bookie;
 
-import java.io.File;
-
 /**
  * Bookie MBean
  */
 public interface BookieMXBean {
-    /**
-     * @return log entry queue length
-     */
-    public int getQueueLength();
+
 }

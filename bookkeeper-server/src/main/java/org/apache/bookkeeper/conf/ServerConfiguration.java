@@ -66,6 +66,13 @@ public class ServerConfiguration extends AbstractConfiguration {
     protected final static String AUDITOR_PERIODIC_CHECK_INTERVAL = "auditorPeriodicCheckInterval";
     protected final static String AUTO_RECOVERY_DAEMON_ENABLED = "autoRecoveryDaemonEnabled";
 
+    // leveldb paramaters
+    protected final static String LEVELDB_STORE_ENABLED = "leveldbStoreEnabled";
+    protected final static String LEVELDB_STORE_PATH = "leveldbStorePath";
+    protected final static String LEVELBOOKIE_MAX_CACHE_LEDGERS = "levelBookieMaxCacheLedgers";
+    protected final static String LEVELBOOKIE_INITIAL_CACHE_LEDGERS = "levelBookieInitalCacheLedgers";
+    protected final static String LEVELBOOKIE_CACHE_TTL = "levelBookieCacheTTL";
+
     /**
      * Construct a default configuration object
      */
@@ -691,5 +698,110 @@ public class ServerConfiguration extends AbstractConfiguration {
      */
     public boolean isAutoRecoveryDaemonEnabled() {
         return getBoolean(AUTO_RECOVERY_DAEMON_ENABLED, false);
+    }
+    
+    /**
+     * Enabled leveldb as a bookie store.
+     *
+     * @return true if leveldb is enabled as a bookie store, otherwise, false.
+     */
+    public boolean isLeveldbStoreEnabled() {
+        return getBoolean(LEVELDB_STORE_ENABLED, false);
+    }
+    
+    /**
+     * Enable/Disable leveldb as a bookie store.
+     *
+     * @param enabled
+     *          Flag indicating enable/disable leveldb as a bookie store.
+     * @return server configuration object.
+     */
+    public ServerConfiguration setLeveldbStoreEnabled(boolean enabled) {
+        setProperty(LEVELDB_STORE_ENABLED, enabled);
+        return this;
+    }
+    
+    /**
+     * Get dir name to store leveldb
+     *
+     * @return leveldb dir name
+     */
+    public String geLeveldbPath() {
+        return this.getString(LEVELDB_STORE_PATH, "/tmp/bk-leveldb");
+    }
+
+    /**
+     * Set dir name to store journal files
+     *
+     * @param journalDir
+     *          Dir to store journal files
+     * @return server configuration
+     */
+    public ServerConfiguration setLeveldbPath(String leveldbPath) {
+        this.setProperty(LEVELDB_STORE_PATH, leveldbPath);
+        return this;
+    }
+    
+    /**
+     * Get cache ttl for level bookie.
+     *
+     * @return cache ttl.
+     */
+    public long getLevelBookieCacheTTL() {
+        return this.getLong(LEVELBOOKIE_CACHE_TTL, 0L);
+    }
+    
+    /**
+     * Set cache ttl for level bookie, in seconds. If the value is zero, disable 'expireAfterAccess'.
+     *
+     * @param duration
+     *          Cache TTL
+     * @return server configuration instance.
+     */
+    public ServerConfiguration setLevelBookieCacheTTL(long duration) {
+        setProperty(LEVELBOOKIE_CACHE_TTL, duration);
+        return this;
+    }
+    
+    /**
+     * Get max ledgers' metadata to be cached.
+     *
+     * @return max number of ledgers, whose metadata would be cached.
+     */
+    public long getLevelBookieMaxCacheLedgers() {
+        return this.getLong(LEVELBOOKIE_MAX_CACHE_LEDGERS, 100000);
+    }
+    
+    /**
+     * Set max number of ledgers, whose metadata would be allowed to cache.
+     *
+     * @param ledgers
+     *          number of ledgers.
+     * @return server configuration object.
+     */
+    public ServerConfiguration setLevelBookieMaxCacheLedgers(long ledgers) {
+        setProperty(LEVELBOOKIE_MAX_CACHE_LEDGERS, ledgers);
+        return this;
+    }
+    
+    /**
+     * Get initial ledgers' metadata to be cached.
+     *
+     * @return initial number of ledgers, whose metadata would be cached.
+     */
+    public int getLevelBookieInitialCacheLedgers() {
+        return this.getInt(LEVELBOOKIE_INITIAL_CACHE_LEDGERS, 100000);
+    }
+    
+    /**
+     * Set initial number of ledgers, whose metadata would be allowed to cache.
+     *
+     * @param ledgers
+     *          number of ledgers.
+     * @return server configuration object.
+     */
+    public ServerConfiguration setLevelBookiInitialCacheLedgers(int ledgers) {
+        setProperty(LEVELBOOKIE_INITIAL_CACHE_LEDGERS, ledgers);
+        return this;
     }
 }

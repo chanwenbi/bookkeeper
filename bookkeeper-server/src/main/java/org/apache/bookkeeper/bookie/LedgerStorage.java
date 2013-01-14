@@ -43,6 +43,8 @@ interface LedgerStorage {
      * being used by the storage system.
      */
     void shutdown() throws InterruptedException;
+    
+    void deleteLedger(long ledgerId) throws IOException;
 
     /**
      * Whether a ledger exists

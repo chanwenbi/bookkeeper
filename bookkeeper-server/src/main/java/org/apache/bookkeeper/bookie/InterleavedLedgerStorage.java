@@ -21,16 +21,14 @@
 
 package org.apache.bookkeeper.bookie;
 
-import java.nio.ByteBuffer;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
-import org.apache.bookkeeper.jmx.BKMBeanInfo;
 import org.apache.bookkeeper.conf.ServerConfiguration;
+import org.apache.bookkeeper.jmx.BKMBeanInfo;
 import org.apache.bookkeeper.meta.LedgerManager;
 import org.apache.bookkeeper.proto.BookieProtocol;
 import org.apache.bookkeeper.util.SnapshotMap;
-import org.apache.zookeeper.ZooKeeper;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -104,6 +102,11 @@ class InterleavedLedgerStorage implements LedgerStorage {
     public byte[] readMasterKey(long ledgerId) throws IOException, BookieException {
         return ledgerCache.readMasterKey(ledgerId);
     }
+    
+    @Override
+    public void deleteLedger(long ledgerId) throws IOException {
+        ledgerCache.deleteLedger(ledgerId);
+    }
 
     @Override
     public boolean ledgerExists(long ledgerId) throws IOException {
@@ -156,7 +159,6 @@ class InterleavedLedgerStorage implements LedgerStorage {
 
     @Override
     public void flush() throws IOException {
-
         if (!somethingWritten) {
             return;
         }

@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -15,24 +15,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.bookkeeper.bookie;
 
-import org.apache.bookkeeper.jmx.BKMBeanInfo;
-
 /**
- * Bookie Bean
+ * A state transistor used to control the bookie state.
  */
-public class BookieBean implements BookieMXBean, BKMBeanInfo {
+public interface StateTransistor {
+    
+    public static final StateTransistor NOP = new StateTransistor() {
 
-    @Override
-    public String getName() {
-        return "Bookie";
-    }
+        @Override
+        public void triggerShutdown(int exitCode) {
+            // do nothing
+        }
 
-    @Override
-    public boolean isHidden() {
-        return false;
-    }
+        @Override
+        public void transitToReadOnly() {
+            // do nothing
+        }
+        
+    };
 
+    public void triggerShutdown(int exitCode);
+    
+    public void transitToReadOnly();
+    
 }
