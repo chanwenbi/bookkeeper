@@ -51,14 +51,14 @@ public class EntryLogTest extends TestCase {
         File tmpDir = File.createTempFile("bkTest", ".dir");
         tmpDir.delete();
         tmpDir.mkdir();
-        File curDir = Bookie.getCurrentDirectory(tmpDir);
-        Bookie.checkDirectoryStructure(curDir);
+        File curDir = InterleavedBookieStore.getCurrentDirectory(tmpDir);
+        InterleavedBookieStore.checkDirectoryStructure(curDir);
 
         int gcWaitTime = 1000;
         ServerConfiguration conf = new ServerConfiguration();
         conf.setGcWaitTime(gcWaitTime);
         conf.setLedgerDirNames(new String[] {tmpDir.toString()});
-        Bookie bookie = new Bookie(conf);
+        InterleavedBookieStore bookie = new InterleavedBookieStore(conf, null, StateTransistor.NOP);
         // create some entries
         EntryLogger logger = ((InterleavedLedgerStorage)bookie.ledgerStorage).entryLogger;
         logger.addEntry(1, generateEntry(1, 1));
@@ -103,12 +103,12 @@ public class EntryLogTest extends TestCase {
         File tmpDir = File.createTempFile("entryLogTest", ".dir");
         tmpDir.delete();
         tmpDir.mkdir();
-        File curDir = Bookie.getCurrentDirectory(tmpDir);
-        Bookie.checkDirectoryStructure(curDir);
+        File curDir = InterleavedBookieStore.getCurrentDirectory(tmpDir);
+        InterleavedBookieStore.checkDirectoryStructure(curDir);
 
         ServerConfiguration conf = new ServerConfiguration();
         conf.setLedgerDirNames(new String[] {tmpDir.toString()});
-        Bookie bookie = new Bookie(conf);
+        InterleavedBookieStore bookie = new InterleavedBookieStore(conf, null, StateTransistor.NOP);
         // create some entries
         int numLogs = 3;
         int numEntries = 10;
@@ -195,7 +195,7 @@ public class EntryLogTest extends TestCase {
         ServerConfiguration conf = new ServerConfiguration();
         conf.setLedgerDirNames(new String[] { ledgerDir1.getAbsolutePath(),
                 ledgerDir2.getAbsolutePath() });
-        Bookie bookie = new Bookie(conf);
+        InterleavedBookieStore bookie = new InterleavedBookieStore(conf, null, StateTransistor.NOP);
         EntryLogger entryLogger = new EntryLogger(conf,
                 bookie.getLedgerDirsManager());
         InterleavedLedgerStorage ledgerStorage = ((InterleavedLedgerStorage) bookie.ledgerStorage);

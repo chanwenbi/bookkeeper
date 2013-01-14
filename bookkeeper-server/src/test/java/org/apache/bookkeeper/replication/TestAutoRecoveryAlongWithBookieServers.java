@@ -24,8 +24,8 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Enumeration;
-import java.util.Set;
 import java.util.Map.Entry;
+import java.util.Set;
 
 import org.apache.bookkeeper.client.BookKeeper;
 import org.apache.bookkeeper.client.LedgerEntry;
@@ -41,7 +41,7 @@ public class TestAutoRecoveryAlongWithBookieServers extends
     private String basePath = "";
 
     public TestAutoRecoveryAlongWithBookieServers() {
-        super(3);
+        super(3, false);
         baseConf.setAutoRecoveryDaemonEnabled(true);
         basePath = baseClientConf.getZkLedgersRootPath() + '/'
                 + BookKeeperConstants.UNDER_REPLICATION_NODE

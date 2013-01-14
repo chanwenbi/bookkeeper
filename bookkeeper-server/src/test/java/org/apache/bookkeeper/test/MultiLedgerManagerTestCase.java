@@ -37,7 +37,7 @@ import org.apache.bookkeeper.meta.LedgerManagerFactory;
 public abstract class MultiLedgerManagerTestCase extends BookKeeperClusterTestCase {
 
     public MultiLedgerManagerTestCase(int numBookies) {
-        super(numBookies);
+        super(numBookies, false);
     }
 
     @Parameters

@@ -21,25 +21,17 @@ package org.apache.bookkeeper.client;
  *
  */
 
-import org.junit.*;
 import java.net.InetSocketAddress;
-import java.util.Enumeration;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicBoolean;
-import org.apache.bookkeeper.conf.ClientConfiguration;
-import org.apache.bookkeeper.client.AsyncCallback.AddCallback;
-
-import org.apache.bookkeeper.client.LedgerHandle;
-import org.apache.bookkeeper.client.LedgerEntry;
-import org.apache.bookkeeper.client.BookKeeper;
-import org.apache.bookkeeper.client.BookKeeperAdmin;
-import org.apache.bookkeeper.client.BKException;
-import org.apache.bookkeeper.client.BookKeeper.DigestType;
-import org.apache.bookkeeper.test.BookKeeperClusterTestCase;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.apache.bookkeeper.client.AsyncCallback.AddCallback;
+import org.apache.bookkeeper.client.BookKeeper.DigestType;
+import org.apache.bookkeeper.test.BookKeeperClusterTestCase;
+import org.junit.Assert;
+import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,7 +45,8 @@ public class TestReadTimeout extends BookKeeperClusterTestCase {
     DigestType digestType;
 
     public TestReadTimeout() {
-        super(10);
+        // 10 bookies were started.
+        super(10, false);
         this.digestType = DigestType.CRC32;
     }
 

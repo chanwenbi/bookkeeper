@@ -22,21 +22,16 @@
 package org.apache.bookkeeper.test;
 
 import java.io.File;
-import org.junit.Test;
-import org.junit.Before;
-import org.junit.After;
-import static org.junit.Assert.*;
+import java.util.HashSet;
 
 import org.apache.bookkeeper.conf.ServerConfiguration;
-import java.util.HashSet;
-import junit.framework.TestCase;
 import org.apache.bookkeeper.proto.BookieServer;
-import org.apache.bookkeeper.bookie.Bookie;
+import org.junit.Test;
 
 public class BookieZKExpireTest extends BookKeeperClusterTestCase {
 
     public BookieZKExpireTest() {
-        super(0);
+        super(0, false);
         // 6000 is minimum due to default tick time
         baseConf.setZkTimeout(6000);
         baseClientConf.setZkTimeout(6000);

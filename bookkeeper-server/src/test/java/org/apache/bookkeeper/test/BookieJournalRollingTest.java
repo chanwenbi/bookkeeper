@@ -48,7 +48,7 @@ public class BookieJournalRollingTest extends BookKeeperClusterTestCase {
     DigestType digestType;
 
     public BookieJournalRollingTest() {
-        super(3);
+        super(3, false);
         this.digestType = DigestType.CRC32;
     }
 

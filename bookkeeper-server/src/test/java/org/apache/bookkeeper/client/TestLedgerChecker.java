@@ -42,7 +42,7 @@ public class TestLedgerChecker extends BookKeeperClusterTestCase {
     static Logger LOG = LoggerFactory.getLogger(TestLedgerChecker.class);
 
     public TestLedgerChecker() {
-        super(3);
+        super(3, false);
     }
 
     class CheckerCallback implements GenericCallback<Set<LedgerFragment>> {

@@ -34,7 +34,7 @@ import org.junit.Test;
 public class LedgerLayoutTest extends BookKeeperClusterTestCase {
 
     public LedgerLayoutTest() {
-        super(0);
+        super(0, false);
     }
 
     @Test(timeout=60000)

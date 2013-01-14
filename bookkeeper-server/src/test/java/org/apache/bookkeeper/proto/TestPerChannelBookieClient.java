@@ -44,7 +44,7 @@ public class TestPerChannelBookieClient extends BookKeeperClusterTestCase {
     static Logger LOG = LoggerFactory.getLogger(TestPerChannelBookieClient.class);
 
     public TestPerChannelBookieClient() {
-        super(1);
+        super(1, false);
     }
 
     /**

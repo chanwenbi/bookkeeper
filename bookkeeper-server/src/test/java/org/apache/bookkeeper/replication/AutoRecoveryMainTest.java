@@ -28,7 +28,7 @@ import org.apache.bookkeeper.test.BookKeeperClusterTestCase;
 public class AutoRecoveryMainTest extends BookKeeperClusterTestCase {
 
     public AutoRecoveryMainTest() {
-        super(3);
+        super(3, false);
     }
 
     /*

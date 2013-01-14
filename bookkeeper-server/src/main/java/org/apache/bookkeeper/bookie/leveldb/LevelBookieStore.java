@@ -161,13 +161,11 @@ public class LevelBookieStore implements BookieStore {
         File metaDir = new File(dbPath, "meta");
         if (!metaDir.exists()) {
             if (!metaDir.mkdirs()) {
-                throw new IOException("Failed to create meta database at " + dbPath);
             }
         }
         File dataDir = new File(dbPath, "data");
         if (dataDir.exists()) {
             if (!dataDir.mkdirs()) {
-                throw new IOException("Failed to create data database at " + dbPath);
             }
         }
 

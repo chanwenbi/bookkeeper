@@ -55,8 +55,8 @@ public class AsyncLedgerOpsTest extends MultiLedgerManagerMultiDigestTestCase
 
     DigestType digestType;
 
-    public AsyncLedgerOpsTest(String ledgerManagerFactory, DigestType digestType) {
-        super(3);
+    public AsyncLedgerOpsTest(String ledgerManagerFactory, DigestType digestType, boolean enableLeveldb) {
+        super(3, enableLeveldb);
         this.digestType = digestType;
         // set ledger manager type
         baseConf.setLedgerManagerFactoryClassName(ledgerManagerFactory);

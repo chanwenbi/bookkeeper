@@ -56,7 +56,7 @@ public class CompactionTest extends BookKeeperClusterTestCase {
     String msg;
 
     public CompactionTest() {
-        super(NUM_BOOKIES);
+        super(NUM_BOOKIES, false);
 
         this.digestType = DigestType.CRC32;
 

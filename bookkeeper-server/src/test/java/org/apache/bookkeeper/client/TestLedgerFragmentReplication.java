@@ -47,7 +47,7 @@ public class TestLedgerFragmentReplication extends BookKeeperClusterTestCase {
             .getLogger(TestLedgerFragmentReplication.class);
 
     public TestLedgerFragmentReplication() {
-        super(3);
+        super(3, false);
     }
 
     private static class CheckerCallback implements

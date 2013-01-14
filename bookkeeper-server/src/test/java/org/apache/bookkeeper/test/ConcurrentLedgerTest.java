@@ -50,7 +50,7 @@ public class ConcurrentLedgerTest extends TestCase {
     File txnDir, ledgerDir;
     int recvTimeout = 10000;
     Semaphore throttle;
-    ServerConfiguration conf = new ServerConfiguration();
+    protected ServerConfiguration conf = new ServerConfiguration();
 
     @Override
     @Before

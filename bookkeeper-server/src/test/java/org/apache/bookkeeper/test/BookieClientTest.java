@@ -53,7 +53,7 @@ public class BookieClientTest extends TestCase {
     public int port = 13645;
     public ClientSocketChannelFactory channelFactory;
     public OrderedSafeExecutor executor;
-    ServerConfiguration conf = new ServerConfiguration();
+    protected ServerConfiguration conf = new ServerConfiguration();
 
     @Override
     public void setUp() throws Exception {
@@ -64,10 +64,10 @@ public class BookieClientTest extends TestCase {
         // Since this test does not rely on the BookKeeper client needing to
         // know via ZooKeeper which Bookies are available, okay, so pass in null
         // for the zkServers input parameter when constructing the BookieServer.
-        ServerConfiguration conf = new ServerConfiguration();
         conf.setZkServers(null).setBookiePort(port)
             .setJournalDirName(tmpDir.getPath())
-            .setLedgerDirNames(new String[] { tmpDir.getPath() });
+            .setLedgerDirNames(new String[] { tmpDir.getPath() })
+            .setLeveldbPath(tmpDir.getPath());
         bs = new BookieServer(conf);
         bs.start();
         channelFactory = new NioClientSocketChannelFactory(Executors.newCachedThreadPool(), Executors

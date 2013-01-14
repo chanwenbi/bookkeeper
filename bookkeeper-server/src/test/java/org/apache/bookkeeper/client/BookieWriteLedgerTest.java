@@ -75,8 +75,8 @@ public class BookieWriteLedgerTest extends
     }
 
     public BookieWriteLedgerTest(String ledgerManagerFactory,
-            DigestType digestType) {
-        super(5);
+            DigestType digestType, boolean enableLeveldb) {
+        super(5, enableLeveldb);
         this.digestType = digestType;
         // set ledger manager
         baseConf.setLedgerManagerFactoryClassName(ledgerManagerFactory);

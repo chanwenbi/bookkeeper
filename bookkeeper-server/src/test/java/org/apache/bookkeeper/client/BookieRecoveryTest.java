@@ -90,8 +90,8 @@ public class BookieRecoveryTest extends MultiLedgerManagerMultiDigestTestCase {
     BookKeeperAdmin bkAdmin;
 
     // Constructor
-    public BookieRecoveryTest(String ledgerManagerFactory, DigestType digestType) {
-        super(3);
+    public BookieRecoveryTest(String ledgerManagerFactory, DigestType digestType, boolean enableLeveldb) {
+        super(3, enableLeveldb);
         this.digestType = digestType;
         this.ledgerManagerFactory = ledgerManagerFactory;
         LOG.info("Using ledger manager " + ledgerManagerFactory);

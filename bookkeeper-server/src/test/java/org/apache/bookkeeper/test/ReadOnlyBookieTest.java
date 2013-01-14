@@ -24,6 +24,7 @@ import java.io.File;
 import java.util.Enumeration;
 
 import org.apache.bookkeeper.bookie.Bookie;
+import org.apache.bookkeeper.bookie.InterleavedBookieStore;
 import org.apache.bookkeeper.bookie.LedgerDirsManager;
 import org.apache.bookkeeper.client.BKException;
 import org.apache.bookkeeper.client.BookKeeper.DigestType;
@@ -37,7 +38,7 @@ import org.apache.bookkeeper.conf.ServerConfiguration;
 public class ReadOnlyBookieTest extends BookKeeperClusterTestCase {
 
     public ReadOnlyBookieTest() {
-        super(2);
+        super(2, false);
     }
 
     /**
@@ -54,8 +55,9 @@ public class ReadOnlyBookieTest extends BookKeeperClusterTestCase {
         File[] ledgerDirs = bsConfs.get(1).getLedgerDirs();
         assertEquals("Only one ledger dir should be present", 1,
                 ledgerDirs.length);
-        Bookie bookie = bs.get(1).getBookie();
-        LedgerDirsManager ledgerDirsManager = bookie.getLedgerDirsManager();
+        Bookie bookie = (Bookie)bs.get(1).getBookie();
+        LedgerDirsManager ledgerDirsManager =
+                ((InterleavedBookieStore)(bookie.getBookieStore())).getLedgerDirsManager();
 
         for (int i = 0; i < 10; i++) {
             ledger.addEntry("data".getBytes());
@@ -91,10 +93,11 @@ public class ReadOnlyBookieTest extends BookKeeperClusterTestCase {
         File[] ledgerDirs = bsConfs.get(1).getLedgerDirs();
         assertEquals("Only one ledger dir should be present", 1,
                 ledgerDirs.length);
-        Bookie bookie = bs.get(1).getBookie();
+        Bookie bookie = (Bookie)bs.get(1).getBookie();
         LedgerHandle ledger = bkc.createLedger(2, 2, DigestType.MAC,
                 "".getBytes());
-        LedgerDirsManager ledgerDirsManager = bookie.getLedgerDirsManager();
+        LedgerDirsManager ledgerDirsManager =
+                ((InterleavedBookieStore)(bookie.getBookieStore())).getLedgerDirsManager();
 
         for (int i = 0; i < 10; i++) {
             ledger.addEntry("data".getBytes());
@@ -113,8 +116,7 @@ public class ReadOnlyBookieTest extends BookKeeperClusterTestCase {
         for (int i = 0; i < 10 && bookie.isAlive(); i++) {
             Thread.sleep(1000);
         }
-        assertFalse("Bookie should shutdown if readOnlyMode not enabled",
-                bookie.isAlive());
+        assertFalse("Bookie should shutdown if readOnlyMode not enabled", bookie.isAlive());
     }
 
     /**
@@ -127,10 +129,11 @@ public class ReadOnlyBookieTest extends BookKeeperClusterTestCase {
         File[] ledgerDirs = bsConfs.get(1).getLedgerDirs();
         assertEquals("Only one ledger dir should be present", 2,
                 ledgerDirs.length);
-        Bookie bookie = bs.get(1).getBookie();
+        Bookie bookie = (Bookie)bs.get(1).getBookie();
         LedgerHandle ledger = bkc.createLedger(2, 2, DigestType.MAC,
                 "".getBytes());
-        LedgerDirsManager ledgerDirsManager = bookie.getLedgerDirsManager();
+        LedgerDirsManager ledgerDirsManager =
+                ((InterleavedBookieStore)(bookie.getBookieStore())).getLedgerDirsManager();
 
         for (int i = 0; i < 10; i++) {
             ledger.addEntry("data".getBytes());
@@ -143,8 +146,7 @@ public class ReadOnlyBookieTest extends BookKeeperClusterTestCase {
         }
         assertEquals("writable dirs should have one dir", 1, ledgerDirsManager
                 .getWritableLedgerDirs().size());
-        assertTrue("Bookie should shutdown if readOnlyMode not enabled",
-                bookie.isAlive());
+        assertTrue("Bookie should shutdown if readOnlyMode not enabled", bookie.isAlive());
     }
 
     private void startNewBookieWithMultipleLedgerDirs(int numOfLedgerDirs)
@@ -175,7 +177,7 @@ public class ReadOnlyBookieTest extends BookKeeperClusterTestCase {
         killBookie(1);
         baseConf.setReadOnlyModeEnabled(true);
         startNewBookie();
-        bs.get(1).getBookie().transitionToReadOnlyMode();
+        ((Bookie)bs.get(1).getBookie()).transitToReadOnly();
         try {
             bkc.readBookiesBlocking();
             bkc.createLedger(2, 2, DigestType.CRC32, "".getBytes());

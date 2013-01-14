@@ -35,7 +35,7 @@ import org.junit.Test;
 public class LedgerCreateDeleteTest extends BookKeeperClusterTestCase {
 
     public LedgerCreateDeleteTest() {
-        super(1);
+        super(1, false);
     }
 
     @Override

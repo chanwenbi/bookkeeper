@@ -40,8 +40,8 @@ import org.junit.runners.Parameterized.Parameters;
 public abstract class MultiLedgerManagerMultiDigestTestCase extends BookKeeperClusterTestCase {
     static final Logger LOG = LoggerFactory.getLogger(MultiLedgerManagerMultiDigestTestCase.class);
 
-    public MultiLedgerManagerMultiDigestTestCase(int numBookies) {
-        super(numBookies);
+    public MultiLedgerManagerMultiDigestTestCase(int numBookies, boolean enableLeveldb) {
+        super(numBookies, enableLeveldb);
     }
 
     @Parameters
@@ -55,7 +55,12 @@ public abstract class MultiLedgerManagerMultiDigestTestCase extends BookKeeperCl
         DigestType[] digestTypes = new DigestType[] { DigestType.MAC, DigestType.CRC32 };
         for (String lm : ledgerManagers) {
             for (DigestType type : digestTypes) {
-                cfgs.add(new Object[] { lm, type });
+                cfgs.add(new Object[] { lm, type, false });
+            }
+        }
+        for (String lm : ledgerManagers) {
+            for (DigestType type : digestTypes) {
+                cfgs.add(new Object[] { lm, type, true });
             }
         }
         return cfgs;

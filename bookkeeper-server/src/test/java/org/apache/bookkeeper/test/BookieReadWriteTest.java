@@ -82,8 +82,8 @@ public class BookieReadWriteTest extends MultiLedgerManagerMultiDigestTestCase
 
     DigestType digestType;
 
-    public BookieReadWriteTest(String ledgerManagerFactory, DigestType digestType) {
-        super(3);
+    public BookieReadWriteTest(String ledgerManagerFactory, DigestType digestType, boolean enableLeveldb) {
+        super(3, enableLeveldb);
         this.digestType = digestType;
         // set ledger manager
         baseConf.setLedgerManagerFactoryClassName(ledgerManagerFactory);

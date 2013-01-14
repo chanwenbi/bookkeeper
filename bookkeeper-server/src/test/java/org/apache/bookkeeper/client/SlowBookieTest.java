@@ -43,7 +43,7 @@ public class SlowBookieTest extends BookKeeperClusterTestCase {
     static Logger LOG = LoggerFactory.getLogger(SlowBookieTest.class);
 
     public SlowBookieTest() {
-        super(4);
+        super(4, false);
     }
 
     @Test(timeout=60000)

@@ -20,7 +20,6 @@
  */
 package org.apache.bookkeeper.meta;
 
-import org.apache.bookkeeper.client.BookKeeper.DigestType;
 import org.apache.bookkeeper.conf.ClientConfiguration;
 import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.Watcher;
@@ -34,10 +33,7 @@ import java.util.ArrayList;
 import java.lang.reflect.Field;
 
 import org.apache.bookkeeper.test.BookKeeperClusterTestCase;
-import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
-import org.junit.Assert.*;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,7 +42,7 @@ public class TestLedgerManager extends BookKeeperClusterTestCase {
     static Logger LOG = LoggerFactory.getLogger(TestLedgerManager.class);
 
     public TestLedgerManager() {
-        super(0);
+        super(0, false);
     }
 
     private void writeLedgerLayout(String ledgersRootPath,

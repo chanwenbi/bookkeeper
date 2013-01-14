@@ -54,7 +54,7 @@ public class AuditorBookieTest extends BookKeeperClusterTestCase {
     private List<ZooKeeper> zkClients = new LinkedList<ZooKeeper>();
 
     public AuditorBookieTest() {
-        super(6);
+        super(6, false);
         electionPath = baseConf.getZkLedgersRootPath()
                 + "/underreplication/auditorelection";
     }

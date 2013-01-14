@@ -21,28 +21,23 @@
 
 package org.apache.bookkeeper.proto;
 
-import org.apache.bookkeeper.util.OrderedSafeExecutor;
-import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
-import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.GenericCallback;
-import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.ReadEntryCallback;
-import org.jboss.netty.buffer.ChannelBuffer;
+import static org.junit.Assert.assertEquals;
 
-import org.apache.bookkeeper.client.BKException;
-
-import org.apache.bookkeeper.test.BaseTestCase;
-import org.apache.bookkeeper.test.BookieClientTest;
-import static org.junit.Assert.*;
-import org.junit.Test;
-import org.junit.Before;
-import org.junit.After;
-
-import java.util.concurrent.TimeUnit;
-
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.net.InetSocketAddress;
-import java.net.InetAddress;
+
+import org.apache.bookkeeper.client.BKException;
+import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.GenericCallback;
+import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.ReadEntryCallback;
+import org.apache.bookkeeper.test.BookieClientTest;
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 
 public class TestProtoVersions {
     private BookieClientTest base;

@@ -25,6 +25,8 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import junit.framework.TestCase;
+
 import org.apache.bookkeeper.bookie.Bookie.NoLedgerException;
 import org.apache.bookkeeper.conf.ServerConfiguration;
 import org.apache.bookkeeper.meta.LedgerManagerFactory;
@@ -35,11 +37,8 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import junit.framework.TestCase;
 
 /**
  * LedgerCache related test cases
@@ -54,7 +53,7 @@ public class LedgerCacheTest extends TestCase {
     ServerConfiguration conf;
     File txnDir, ledgerDir;
 
-    private Bookie bookie;
+    private InterleavedBookieStore bookie;
 
     @Override
     @Before
@@ -72,7 +71,7 @@ public class LedgerCacheTest extends TestCase {
         conf.setZkServers(null);
         conf.setJournalDirName(txnDir.getPath());
         conf.setLedgerDirNames(new String[] { ledgerDir.getPath() });
-        bookie = new Bookie(conf);
+        bookie = new InterleavedBookieStore(conf, null, StateTransistor.NOP);
 
         ledgerManagerFactory =
             LedgerManagerFactory.newLedgerManagerFactory(conf, null);
@@ -257,7 +256,7 @@ public class LedgerCacheTest extends TestCase {
         ServerConfiguration conf = new ServerConfiguration();
         conf.setLedgerDirNames(new String[] { ledgerDir1.getAbsolutePath(), ledgerDir2.getAbsolutePath() });
 
-        Bookie bookie = new Bookie(conf);
+        InterleavedBookieStore bookie = new InterleavedBookieStore(conf, null, StateTransistor.NOP);
         InterleavedLedgerStorage ledgerStorage = ((InterleavedLedgerStorage) bookie.ledgerStorage);
         LedgerCacheImpl ledgerCache = (LedgerCacheImpl) ledgerStorage.ledgerCache;
         // Create ledger index file
@@ -303,12 +302,13 @@ public class LedgerCacheTest extends TestCase {
         File journalDir = File.createTempFile("bookie", "journal");
         journalDir.delete();
         journalDir.mkdir();
-        Bookie.checkDirectoryStructure(Bookie.getCurrentDirectory(journalDir));
+        InterleavedBookieStore
+                .checkDirectoryStructure(InterleavedBookieStore.getCurrentDirectory(journalDir));
 
         File ledgerDir = File.createTempFile("bookie", "ledger");
         ledgerDir.delete();
         ledgerDir.mkdir();
-        Bookie.checkDirectoryStructure(Bookie.getCurrentDirectory(ledgerDir));
+        InterleavedBookieStore.checkDirectoryStructure(InterleavedBookieStore.getCurrentDirectory(ledgerDir));
 
         ServerConfiguration conf = new ServerConfiguration()
             .setZkServers(null)

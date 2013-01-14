@@ -38,7 +38,7 @@ public abstract class BaseTestCase extends BookKeeperClusterTestCase {
     static final Logger LOG = LoggerFactory.getLogger(BaseTestCase.class);
 
     public BaseTestCase(int numBookies) {
-        super(numBookies);
+        super(numBookies, false);
     }
 
     @Parameters

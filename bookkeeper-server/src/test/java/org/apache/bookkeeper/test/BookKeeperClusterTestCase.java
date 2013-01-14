@@ -78,8 +78,9 @@ public abstract class BookKeeperClusterTestCase extends TestCase {
 
     private boolean isAutoRecoveryEnabled;
 
-    public BookKeeperClusterTestCase(int numBookies) {
+    public BookKeeperClusterTestCase(int numBookies, boolean enableLeveldb) {
         this.numBookies = numBookies;
+        baseConf.setLeveldbStoreEnabled(enableLeveldb);
     }
 
     @Before
@@ -196,6 +197,7 @@ public abstract class BookKeeperClusterTestCase extends TestCase {
             ledgerDirNames[i] = ledgerDirs[i].getPath();
         }
         conf.setLedgerDirNames(ledgerDirNames);
+        conf.setLeveldbPath(journalDir.getPath());
         return conf;
     }
 
@@ -364,13 +366,11 @@ public abstract class BookKeeperClusterTestCase extends TestCase {
         bs.clear();
         Thread.sleep(1000);
         // restart them to ensure we can't
-        int j = 0;
         for (ServerConfiguration conf : bsConfs) {
             if (null != newConf) {
                 conf.loadConf(newConf);
             }
             bs.add(startBookie(conf));
-            j++;
         }
     }
 
