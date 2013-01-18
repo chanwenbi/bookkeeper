@@ -334,6 +334,10 @@ class FileInfo {
         useCount++;
     }
 
+    synchronized int getUseCount() {
+        return useCount;
+    }
+
     synchronized public void release() {
         useCount--;
         if (isClosed && useCount == 0 && fc != null) {
