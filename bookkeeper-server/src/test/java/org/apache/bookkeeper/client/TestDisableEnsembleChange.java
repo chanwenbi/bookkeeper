@@ -114,11 +114,11 @@ public class TestDisableEnsembleChange extends BookKeeperClusterTestCase {
                          ensemblesBeforeFailure.get(i), ensemblesAfterFailure.get(i));
         }
 
-        // enable ensemble change
-        bkc.enableEnsembleChange();
         if (startNewBookie) {
             startNewBookie();
         }
+        // enable ensemble change
+        bkc.enableEnsembleChange();
         // reset add thread state
         finished.set(false);
         final CountDownLatch failLatch = new CountDownLatch(1);
