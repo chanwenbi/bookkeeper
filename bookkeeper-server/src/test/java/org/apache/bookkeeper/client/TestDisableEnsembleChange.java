@@ -61,7 +61,7 @@ public class TestDisableEnsembleChange extends BookKeeperClusterTestCase {
         ClientConfiguration conf = new ClientConfiguration();
         conf.setZkServers(zkUtil.getZooKeeperConnectString());
 
-        BookKeeper bkc = new BookKeeper(conf);
+        BookKeeperTestClient bkc = new BookKeeperTestClient(conf);
         // disable ensemble change
         bkc.disableEnsembleChange();
 
@@ -117,6 +117,8 @@ public class TestDisableEnsembleChange extends BookKeeperClusterTestCase {
         if (startNewBookie) {
             startNewBookie();
         }
+        // make sure bkc knew the bookie
+        bkc.readBookiesBlocking();
         // enable ensemble change
         bkc.enableEnsembleChange();
         // reset add thread state
