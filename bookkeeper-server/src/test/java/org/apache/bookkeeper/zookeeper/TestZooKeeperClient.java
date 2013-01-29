@@ -336,8 +336,8 @@ public class TestZooKeeperClient extends TestCase {
             @Override
             public void processResult(int rc, String path, Object ctx, List<String> childList, Stat stat) {
                 if (KeeperException.Code.OK.intValue() == rc) {
-                    getChildLatch.countDown();
                     children.set(childList);
+                    getChildLatch.countDown();
                 }
             }
 
