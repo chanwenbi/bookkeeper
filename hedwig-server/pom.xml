@@ -89,6 +89,11 @@
       <scope>test</scope>
       <type>test-jar</type>
     </dependency>
+    <dependency>
+      <groupId>org.fusesource.leveldbjni</groupId>
+      <artifactId>leveldbjni-all</artifactId>
+      <version>1.5</version>
+    </dependency>
     <!--
         Annoying dependency we need to include because
         zookeeper uses log4j and so we transatively do, but

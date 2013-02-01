@@ -24,6 +24,7 @@ import org.junit.Before;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
+import java.io.File;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -51,8 +52,8 @@ public class MessageBoundedPersistenceTest extends HedwigHubTestBase {
 
     protected class SmallReadAheadServerConfiguration
         extends HedwigHubTestBase.HubServerConfiguration {
-        SmallReadAheadServerConfiguration(int serverPort, int sslServerPort) {
-            super(serverPort, sslServerPort);
+        SmallReadAheadServerConfiguration(int serverPort, int sslServerPort, File dir) {
+            super(serverPort, sslServerPort, dir);
         }
         public long getMaximumCacheSize() {
             return 1;
@@ -67,8 +68,8 @@ public class MessageBoundedPersistenceTest extends HedwigHubTestBase {
         }
     }
 
-    protected ServerConfiguration getServerConfiguration(int serverPort, int sslServerPort) {
-        return new SmallReadAheadServerConfiguration(serverPort, sslServerPort);
+    protected ServerConfiguration getServerConfiguration(int serverPort, int sslServerPort, File dir) {
+        return new SmallReadAheadServerConfiguration(serverPort, sslServerPort, dir);
     }
 
     private class MessageBoundClientConfiguration extends HubClientConfiguration {
@@ -229,7 +230,8 @@ public class MessageBoundedPersistenceTest extends HedwigHubTestBase {
         client.close();
     }
 
-    @Test(timeout=60000)
+    // NOTE: for leveldb, no ledger concepts
+    /** @Test(timeout=60000)
     public void testLedgerGC() throws Exception {
         Client client = new HedwigClient(new MessageBoundClientConfiguration());
         Publisher pub = client.getPublisher();
@@ -277,4 +279,5 @@ public class MessageBoundedPersistenceTest extends HedwigHubTestBase {
 
         client.close();
     }
+    **/
 }

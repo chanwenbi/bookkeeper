@@ -17,6 +17,8 @@
  */
 package org.apache.hedwig.server;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -31,6 +33,7 @@ import org.apache.hedwig.client.conf.ClientConfiguration;
 import org.apache.hedwig.server.common.ServerConfiguration;
 import org.apache.hedwig.server.netty.PubSubServer;
 import org.apache.hedwig.server.persistence.BookKeeperTestBase;
+import org.apache.hedwig.util.FileUtils;
 import org.apache.hedwig.util.HedwigSocketAddress;
 
 import org.apache.bookkeeper.test.PortManager;
@@ -57,12 +60,19 @@ public abstract class HedwigHubTestBase extends TestCase {
     protected final int numServers;
     protected List<PubSubServer> serversList;
     protected List<HedwigSocketAddress> serverAddresses;
+    protected List<File> leveldbDirs;
+    protected boolean useLeveldbPersistence;
 
     public HedwigHubTestBase() {
         this(1);
     }
 
     protected HedwigHubTestBase(int numServers) {
+    	this(numServers, true);
+    }
+    
+    protected HedwigHubTestBase(int numServers, boolean useLeveldb) {
+    	this.useLeveldbPersistence = useLeveldb;
         this.numServers = numServers;
 
         serverAddresses = new LinkedList<HedwigSocketAddress>();
@@ -78,10 +88,12 @@ public abstract class HedwigHubTestBase extends TestCase {
     // configuration.
     protected class HubServerConfiguration extends ServerConfiguration {
         private final int serverPort, sslServerPort;
+        private final File leveldbDir;
 
-        public HubServerConfiguration(int serverPort, int sslServerPort) {
+        public HubServerConfiguration(int serverPort, int sslServerPort, File leveldbDir) {
             this.serverPort = serverPort;
             this.sslServerPort = sslServerPort;
+            this.leveldbDir = leveldbDir;
         }
 
         @Override
@@ -113,6 +125,24 @@ public abstract class HedwigHubTestBase extends TestCase {
         public String getPassword() {
             return "eUySvp2phM2Wk";
         }
+        
+        @Override
+        public String getLeveldbPersistencePath() {
+        	if (null == leveldbDir) {
+        		return null;
+        	}
+        	try {
+				return leveldbDir.getCanonicalPath().toString();
+			} catch (IOException e) {
+				return null;
+			}
+        }
+        
+        @Override
+        public boolean isLeveldbPersistenceEnabled() {
+        	return null != leveldbDir;
+        }
+
     }
 
     public class HubClientConfiguration extends ClientConfiguration {
@@ -126,17 +156,21 @@ public abstract class HedwigHubTestBase extends TestCase {
     // the specified ports. Extending child classes can override this. This
     // default implementation will return the HubServerConfiguration object
     // defined above.
-    protected ServerConfiguration getServerConfiguration(int serverPort, int sslServerPort) {
-        return new HubServerConfiguration(serverPort, sslServerPort);
+    protected ServerConfiguration getServerConfiguration(int serverPort, int sslServerPort, File leveldbDir) {
+        return new HubServerConfiguration(serverPort, sslServerPort, leveldbDir);
     }
 
     protected void startHubServers() throws Exception {
         // Now create the PubSubServer Hubs
         serversList = new LinkedList<PubSubServer>();
+        leveldbDirs = new LinkedList<File>();
 
         for (int i = 0; i < numServers; i++) {
+        	File tmpDir = FileUtils.createTempDirectory("hub-leveldb", serverAddresses.get(i).toString());
+        	leveldbDirs.add(tmpDir);
             ServerConfiguration conf = getServerConfiguration(serverAddresses.get(i).getPort(),
-                                                              serverAddresses.get(i).getSSLPort());
+                                                              serverAddresses.get(i).getSSLPort(),
+                                                              useLeveldbPersistence ? tmpDir : null);
             PubSubServer s = new PubSubServer(conf, new ClientConfiguration(), new LoggingExceptionHandler());
             serversList.add(s);
             s.start();
@@ -146,6 +180,9 @@ public abstract class HedwigHubTestBase extends TestCase {
         // Shutdown all of the PubSubServers
         for (PubSubServer server : serversList) {
             server.shutdown();
+        }
+        for (File dir : leveldbDirs) {
+        	org.apache.commons.io.FileUtils.deleteDirectory(dir);
         }
         serversList.clear();
     }

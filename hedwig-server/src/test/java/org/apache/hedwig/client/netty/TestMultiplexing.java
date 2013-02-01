@@ -17,6 +17,7 @@
  */
 package org.apache.hedwig.client.netty;
 
+import java.io.File;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -42,8 +43,8 @@ public class TestMultiplexing extends HedwigHubTestBase {
     private static final int DEFAULT_MSG_WINDOW_SIZE = 10;
 
     protected class TestServerConfiguration extends HubServerConfiguration {
-        TestServerConfiguration(int serverPort, int sslServerPort) {
-            super(serverPort, sslServerPort);
+        TestServerConfiguration(int serverPort, int sslServerPort, File dir) {
+            super(serverPort, sslServerPort, dir);
         }
         @Override
         public int getDefaultMessageWindowSize() {
@@ -248,8 +249,8 @@ public class TestMultiplexing extends HedwigHubTestBase {
     }
 
     @Override
-    protected ServerConfiguration getServerConfiguration(int port, int sslPort) {
-        return new TestServerConfiguration(port, sslPort);
+    protected ServerConfiguration getServerConfiguration(int port, int sslPort, File dir) {
+        return new TestServerConfiguration(port, sslPort, dir);
     }
 
     @Test(timeout=60000)

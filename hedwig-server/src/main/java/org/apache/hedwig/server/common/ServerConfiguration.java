@@ -80,6 +80,15 @@ public class ServerConfiguration extends AbstractConfiguration {
     protected final static String METASTORE_IMPL_CLASS = "metastore_impl_class";
     protected final static String METASTORE_MAX_ENTRIES_PER_SCAN = "metastoreMaxEntriesPerScan";
 
+    // leveldb settings
+    protected final static String LEVELDB_PERSISTENCE_ENABLED = "leveldb_persistence_enabled";
+    protected final static String LEVELDB_PERSISTENCE_PATH = "leveldb_persistence_path";
+    protected final static String LEVELDB_BLOCK_SIZE = "leveldb_block_size";
+    protected final static String LEVELDB_CACHE_SIZE = "leveldb_cache_size";
+    protected final static String LEVELDB_WRITE_BUFFER_SIZE = "leveldb_write_buffer_size";
+    protected final static String LEVELDB_MAX_OPEN_FILES = "leveldb_max_open_files";
+    protected final static String LEVELDB_NUM_IO_WORKERS = "leveldb_num_io_workers";
+    
     private static ClassLoader defaultLoader;
     static {
         defaultLoader = Thread.currentThread().getContextClassLoader();
@@ -580,5 +589,33 @@ public class ServerConfiguration extends AbstractConfiguration {
      */
     public int getMetastoreMaxEntriesPerScan() {
         return conf.getInt(METASTORE_MAX_ENTRIES_PER_SCAN, 50);
+    }
+    
+    public String getLeveldbPersistencePath() {
+    	return conf.getString(LEVELDB_PERSISTENCE_PATH, "/tmp/hub-leveldb");
+    }
+    
+    public int getLeveldbBlockSize() {
+    	return conf.getInt(LEVELDB_BLOCK_SIZE, 65536);
+    }
+    
+    public long getLeveldbCacheSize() {
+    	return conf.getLong(LEVELDB_CACHE_SIZE, 536870912);
+    }
+    
+    public int getLeveldbWriteBufferSize() {
+    	return conf.getInt(LEVELDB_WRITE_BUFFER_SIZE, 67108864);
+    }
+    
+    public int getLeveldbMaxOpenFiles() {
+    	return conf.getInt(LEVELDB_MAX_OPEN_FILES, 10000);
+    }
+    
+    public int getLeveldbNumIOWorkers() {
+    	return conf.getInt(LEVELDB_NUM_IO_WORKERS, Runtime.getRuntime().availableProcessors());
+    }
+    
+    public boolean isLeveldbPersistenceEnabled() {
+    	return conf.getBoolean(LEVELDB_PERSISTENCE_ENABLED, false);
     }
 }

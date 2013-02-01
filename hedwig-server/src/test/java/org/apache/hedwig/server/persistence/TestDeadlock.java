@@ -17,6 +17,7 @@
  */
 package org.apache.hedwig.server.persistence;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.SynchronousQueue;
@@ -175,7 +176,7 @@ public class TestDeadlock extends HedwigHubTestBase {
 
     class TestServerConfiguration extends HubServerConfiguration {
         public TestServerConfiguration(int serverPort, int sslServerPort) {
-            super(serverPort, sslServerPort);
+            super(serverPort, sslServerPort, null);
         }
         @Override
         public int getBkEnsembleSize() {
@@ -196,7 +197,7 @@ public class TestDeadlock extends HedwigHubTestBase {
     }
 
     @Override
-    protected ServerConfiguration getServerConfiguration(int serverPort, int sslServerPort) {
+    protected ServerConfiguration getServerConfiguration(int serverPort, int sslServerPort, File dir) {
         ServerConfiguration serverConf = new TestServerConfiguration(serverPort, sslServerPort);
 
         org.apache.bookkeeper.conf.ClientConfiguration bkClientConf =

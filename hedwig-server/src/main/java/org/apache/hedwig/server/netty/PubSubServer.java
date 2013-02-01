@@ -71,6 +71,7 @@ import org.apache.hedwig.server.meta.MetadataManagerFactory;
 import org.apache.hedwig.server.meta.ZkMetadataManagerFactory;
 import org.apache.hedwig.server.persistence.BookkeeperPersistenceManager;
 import org.apache.hedwig.server.persistence.LocalDBPersistenceManager;
+import org.apache.hedwig.server.persistence.LeveldbPersistenceManager;
 import org.apache.hedwig.server.persistence.PersistenceManager;
 import org.apache.hedwig.server.persistence.PersistenceManagerWithRangeScan;
 import org.apache.hedwig.server.persistence.ReadAheadCache;
@@ -131,6 +132,8 @@ public class PubSubServer {
 
             underlyingPM = LocalDBPersistenceManager.instance();
 
+        } else if (conf.isLeveldbPersistenceEnabled()) {
+        	underlyingPM = new LeveldbPersistenceManager(conf, tm);
         } else {
             try {
                 ClientConfiguration bkConf = new ClientConfiguration();

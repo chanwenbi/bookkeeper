@@ -17,6 +17,7 @@
  */
 package org.apache.hedwig.server.delivery;
 
+import java.io.File;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedList;
@@ -56,8 +57,8 @@ public class TestThrottlingDelivery extends HedwigHubTestBase {
 
     protected class ThrottleDeliveryServerConfiguration extends HubServerConfiguration {
 
-        ThrottleDeliveryServerConfiguration(int serverPort, int sslServerPort) {
-            super(serverPort, sslServerPort);
+        ThrottleDeliveryServerConfiguration(int serverPort, int sslServerPort, File dbDir) {
+            super(serverPort, sslServerPort, dbDir);
         }
 
         @Override
@@ -184,8 +185,8 @@ public class TestThrottlingDelivery extends HedwigHubTestBase {
     }
 
     @Override
-    protected ServerConfiguration getServerConfiguration(int port, int sslPort) {
-        return new ThrottleDeliveryServerConfiguration(port, sslPort);
+    protected ServerConfiguration getServerConfiguration(int port, int sslPort, File dir) {
+        return new ThrottleDeliveryServerConfiguration(port, sslPort, dir);
     }
 
     @Test(timeout=60000)

@@ -17,6 +17,7 @@
  */
 package org.apache.hedwig.server.subscriptions;
 
+import java.io.File;
 import java.util.concurrent.SynchronousQueue;
 
 import org.apache.hedwig.client.HedwigClient;
@@ -115,7 +116,7 @@ public class TestUpdateSubscriptionState extends HedwigHubTestBase {
     protected class NewHubServerConfiguration extends HubServerConfiguration {
 
         public NewHubServerConfiguration(int serverPort, int sslServerPort) {
-            super(serverPort, sslServerPort);
+            super(serverPort, sslServerPort, null);
         }
 
         @Override
@@ -126,7 +127,7 @@ public class TestUpdateSubscriptionState extends HedwigHubTestBase {
     }
 
     @Override
-    protected ServerConfiguration getServerConfiguration(int serverPort, int sslServerPort) {
+    protected ServerConfiguration getServerConfiguration(int serverPort, int sslServerPort, File dir) {
         return new NewHubServerConfiguration(serverPort, sslServerPort);
     }
 
