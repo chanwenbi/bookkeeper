@@ -82,6 +82,10 @@ public class TestConcurrentTopicAcquisition extends HedwigHubTestBase {
         }
     }
     
+    public TestConcurrentTopicAcquisition() {
+    	super(1, false);
+    }
+    
     @Override
     public void setUp() throws Exception {
         super.setUp();
