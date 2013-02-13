@@ -188,7 +188,7 @@ public abstract class HedwigHubTestBase extends TestCase {
 
     @Override
     @Before
-    protected void setUp() throws Exception {
+    public void setUp() throws Exception {
         logger.info("STARTING " + getName());
         if (! standalone) {
             bktb = new BookKeeperTestBase(numBookies, readDelay);
@@ -200,7 +200,7 @@ public abstract class HedwigHubTestBase extends TestCase {
 
     @Override
     @After
-    protected void tearDown() throws Exception {
+    public void tearDown() throws Exception {
         logger.info("tearDown starting");
         stopHubServers();
         if (null != bktb) bktb.tearDown();

@@ -37,28 +37,24 @@ import java.net.InetSocketAddress;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.apache.bookkeeper.conf.ClientConfiguration;
 import org.apache.bookkeeper.client.BookKeeperAdmin;
 import org.apache.bookkeeper.client.BookKeeper;
 import org.apache.bookkeeper.client.LedgerHandle;
 import org.apache.bookkeeper.client.BKException;
 import org.apache.bookkeeper.client.LedgerChecker;
 import org.apache.bookkeeper.client.LedgerFragment;
-import org.apache.bookkeeper.util.StringUtils;
-
-import org.apache.bookkeeper.util.ZkUtils;
-import org.apache.bookkeeper.zookeeper.ZooKeeperWatcherBase;
-
+import org.apache.bookkeeper.conf.ClientConfiguration;
 import org.apache.bookkeeper.conf.ServerConfiguration;
 import org.apache.bookkeeper.meta.LedgerManagerFactory;
 import org.apache.bookkeeper.meta.LedgerManager;
 import org.apache.bookkeeper.meta.LedgerUnderreplicationManager;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.GenericCallback;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.Processor;
-
 import org.apache.bookkeeper.replication.ReplicationException.BKAuditException;
 import org.apache.bookkeeper.replication.ReplicationException.CompatibilityException;
 import org.apache.bookkeeper.replication.ReplicationException.UnavailableException;
+import org.apache.bookkeeper.util.StringUtils;
+import org.apache.bookkeeper.zookeeper.ZooKeeperClient;
 import org.apache.commons.collections.CollectionUtils;
 import com.google.common.collect.Sets;
 import org.apache.zookeeper.KeeperException;
@@ -379,9 +375,8 @@ public class Auditor implements Watcher {
      */
     private void checkAllLedgers() throws BKAuditException, BKException,
             IOException, InterruptedException, KeeperException {
-        ZooKeeperWatcherBase w = new ZooKeeperWatcherBase(conf.getZkTimeout());
-        ZooKeeper newzk = ZkUtils.createConnectedZookeeperClient(conf.getZkServers(), w);
-
+        ZooKeeper newzk = ZooKeeperClient.createConnectedZooKeeperClient(
+                conf.getZkServers(), conf.getZkTimeout());
         final BookKeeper client = new BookKeeper(new ClientConfiguration(conf),
                                                  newzk);
         final BookKeeperAdmin admin = new BookKeeperAdmin(client);

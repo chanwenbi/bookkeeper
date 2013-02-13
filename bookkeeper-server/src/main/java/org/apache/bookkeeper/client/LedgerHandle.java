@@ -651,16 +651,6 @@ public class LedgerHandle {
         InetSocketAddress newBookie;
         LOG.info("Handling failure of bookie: {} index: {}", addr, bookieIndex);
         final ArrayList<InetSocketAddress> newEnsemble = new ArrayList<InetSocketAddress>();
-        blockAddCompletions.incrementAndGet();
-
-        if (bk.ensembleChangeDisabled) {
-            blockAddCompletions.decrementAndGet();
-            LOG.info("Ensemble change is disabled, retry sending to {}, bookieIndex {} again.",
-                     addr, bookieIndex);
-            unsetSuccessAndSendWriteRequest(bookieIndex);
-            return;
-        }
-
         final long newEnsembleStartEntry = lastAddConfirmed + 1;
         // avoid parallel ensemble changes to same ensemble.
         synchronized (metadata) {
@@ -682,6 +672,14 @@ public class LedgerHandle {
 
     void handleBookieFailure(final InetSocketAddress addr, final int bookieIndex) {
         blockAddCompletions.incrementAndGet();
+
+        if (bk.ensembleChangeDisabled) {
+            blockAddCompletions.decrementAndGet();
+            LOG.info("Ensemble change is disabled, retry sending to {}, bookieIndex {} again.",
+                     addr, bookieIndex);
+            unsetSuccessAndSendWriteRequest(bookieIndex);
+            return;
+        }
 
         synchronized (metadata) {
             if (!metadata.currentEnsemble.get(bookieIndex).equals(addr)) {

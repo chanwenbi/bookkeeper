@@ -32,18 +32,16 @@ import java.io.FilenameFilter;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import org.apache.bookkeeper.bookie.Bookie;
 import org.apache.bookkeeper.bookie.BookieAccessor;
-import org.apache.bookkeeper.util.StringUtils;
-import org.apache.bookkeeper.zookeeper.ZooKeeperWatcherBase;
+import org.apache.bookkeeper.bookie.LedgerCacheImpl;
 import org.apache.bookkeeper.client.BookKeeper.DigestType;
 import org.apache.bookkeeper.client.LedgerHandle;
 import org.apache.bookkeeper.conf.ServerConfiguration;
 import org.apache.bookkeeper.meta.LedgerManagerFactory;
 import org.apache.bookkeeper.meta.LedgerUnderreplicationManager;
-
-import org.apache.bookkeeper.util.ZkUtils;
-import org.apache.bookkeeper.bookie.Bookie;
-import org.apache.bookkeeper.bookie.LedgerCacheImpl;
+import org.apache.bookkeeper.util.StringUtils;
+import org.apache.bookkeeper.zookeeper.ZooKeeperClient;
 import org.apache.zookeeper.ZooKeeper;
 import org.junit.Before;
 import org.junit.After;
@@ -82,9 +80,8 @@ public class AuditorPeriodicCheckTest extends BookKeeperClusterTestCase {
 
             String addr = StringUtils.addrToString(bs.get(i).getLocalAddress());
 
-            ZooKeeperWatcherBase w = new ZooKeeperWatcherBase(10000);
-            ZooKeeper zk = ZkUtils.createConnectedZookeeperClient(
-                    zkUtil.getZooKeeperConnectString(), w);
+            ZooKeeper zk = ZooKeeperClient.createConnectedZooKeeperClient(
+                    zkUtil.getZooKeeperConnectString(), 10000);
             zkClients.add(zk);
 
             AuditorElector auditorElector = new AuditorElector(addr,

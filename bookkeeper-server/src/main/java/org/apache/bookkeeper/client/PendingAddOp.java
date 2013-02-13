@@ -177,22 +177,4 @@ class PendingAddOp implements WriteCallback {
         return sb.toString();
     }
 
-    @Override
-    public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("PendingAddOp(lid:").append(lh.ledgerId)
-          .append(", eid:").append(entryId).append(", completed:")
-          .append(completed).append(")");
-        return sb.toString();
-    }
-
-    @Override
-    public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("PendingAddOp(lid:").append(lh.ledgerId)
-          .append(", eid:").append(entryId).append(", completed:")
-          .append(completed).append(")");
-        return sb.toString();
-    }
-
 }
