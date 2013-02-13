@@ -54,7 +54,8 @@ public class ReadOnlyBookieTest extends BookKeeperClusterTestCase {
         assertEquals("Only one ledger dir should be present", 1,
                 ledgerDirs.length);
         Bookie bookie = bs.get(1).getBookie();
-        LedgerDirsManager ledgerDirsManager = bookie.getLedgerDirsManager();
+        LedgerDirsManager ledgerDirsManager = ((InterleavedBookieStore) bookie.getBookieStore())
+                .getLedgerDirsManager();
 
         for (int i = 0; i < 10; i++) {
             ledger.addEntry("data".getBytes());
@@ -93,7 +94,8 @@ public class ReadOnlyBookieTest extends BookKeeperClusterTestCase {
         Bookie bookie = bs.get(1).getBookie();
         LedgerHandle ledger = bkc.createLedger(2, 2, DigestType.MAC,
                 "".getBytes());
-        LedgerDirsManager ledgerDirsManager = bookie.getLedgerDirsManager();
+        LedgerDirsManager ledgerDirsManager = ((InterleavedBookieStore) bookie.getBookieStore())
+                .getLedgerDirsManager();
 
         for (int i = 0; i < 10; i++) {
             ledger.addEntry("data".getBytes());
@@ -109,11 +111,11 @@ public class ReadOnlyBookieTest extends BookKeeperClusterTestCase {
         }
 
         // wait for up to 10 seconds for bookie to shut down
-        for (int i = 0; i < 10 && bookie.isAlive(); i++) {
+        for (int i = 0; i < 10 && ((InterleavedBookieStore) bookie.getBookieStore()).isAlive(); i++) {
             Thread.sleep(1000);
         }
         assertFalse("Bookie should shutdown if readOnlyMode not enabled",
-                bookie.isAlive());
+                ((InterleavedBookieStore) bookie.getBookieStore()).isAlive());
     }
 
     /**
@@ -129,7 +131,8 @@ public class ReadOnlyBookieTest extends BookKeeperClusterTestCase {
         Bookie bookie = bs.get(1).getBookie();
         LedgerHandle ledger = bkc.createLedger(2, 2, DigestType.MAC,
                 "".getBytes());
-        LedgerDirsManager ledgerDirsManager = bookie.getLedgerDirsManager();
+        LedgerDirsManager ledgerDirsManager = ((InterleavedBookieStore) bookie.getBookieStore())
+                .getLedgerDirsManager();
 
         for (int i = 0; i < 10; i++) {
             ledger.addEntry("data".getBytes());
@@ -143,7 +146,7 @@ public class ReadOnlyBookieTest extends BookKeeperClusterTestCase {
         assertEquals("writable dirs should have one dir", 1, ledgerDirsManager
                 .getWritableLedgerDirs().size());
         assertTrue("Bookie should shutdown if readOnlyMode not enabled",
-                bookie.isAlive());
+                ((InterleavedBookieStore) bookie.getBookieStore()).isAlive());
     }
 
     private void startNewBookieWithMultipleLedgerDirs(int numOfLedgerDirs)

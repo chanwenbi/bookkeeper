@@ -22,19 +22,15 @@ package org.apache.bookkeeper.bookie;
  */
 
 import java.util.Enumeration;
-import java.util.List;
 
-import org.apache.bookkeeper.conf.ServerConfiguration;
+import org.apache.bookkeeper.client.BookKeeper.DigestType;
 import org.apache.bookkeeper.client.LedgerEntry;
 import org.apache.bookkeeper.client.LedgerHandle;
-import org.apache.bookkeeper.client.BookKeeper.DigestType;
 import org.apache.bookkeeper.test.BookKeeperClusterTestCase;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import org.junit.Assert;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * This class tests that index corruption cases
@@ -56,13 +52,14 @@ public class IndexCorruptionTest extends BookKeeperClusterTestCase {
     public void testNoSuchLedger() throws Exception {
         LOG.debug("Testing NoSuchLedger");
 
-        Bookie.SyncThread syncThread = bs.get(0).getBookie().syncThread;
+        InterleavedBookieStore.SyncThread syncThread = ((InterleavedBookieStore) bs.get(0).getBookie()
+                .getBookieStore()).syncThread;
         syncThread.suspendSync();
         // Create a ledger
         LedgerHandle lh = bkc.createLedger(1, 1, digestType, "".getBytes());
 
         // Close the ledger which cause a readEntry(0) call
-        LedgerHandle newLh = bkc.openLedger(lh.getId(), digestType, "".getBytes());
+        bkc.openLedger(lh.getId(), digestType, "".getBytes());
 
         // Create a new ledger to write entries
         String dummyMsg = "NoSuchLedger";
@@ -97,7 +94,8 @@ public class IndexCorruptionTest extends BookKeeperClusterTestCase {
     public void testEmptyIndexPage() throws Exception {
         LOG.debug("Testing EmptyIndexPage");
 
-        Bookie.SyncThread syncThread = bs.get(0).getBookie().syncThread;
+        InterleavedBookieStore.SyncThread syncThread = ((InterleavedBookieStore) bs.get(0).getBookie()
+                .getBookieStore()).syncThread;
         assertNotNull("Not found SyncThread.", syncThread);
 
         syncThread.suspendSync();
@@ -122,7 +120,7 @@ public class IndexCorruptionTest extends BookKeeperClusterTestCase {
         syncThread.suspendSync();
 
         // Close ledger 1 which cause a readEntry(0) call
-        LedgerHandle newLh1 = bkc.openLedger(lh1.getId(), digestType, "".getBytes());
+        bkc.openLedger(lh1.getId(), digestType, "".getBytes());
 
         // write another 3 entries to ledger 2
         for (int i=0; i<3; i++) {

@@ -552,7 +552,7 @@ public class ServerConfiguration extends AbstractConfiguration {
         setProperty(MAJOR_COMPACTION_INTERVAL, interval);
         return this;
     }
-    
+
     /**
      * Set the grace period which the rereplication worker will wait before
      * fencing and rereplicating a ledger fragment which is still being written
@@ -689,4 +689,5 @@ public class ServerConfiguration extends AbstractConfiguration {
     public boolean isAutoRecoveryDaemonEnabled() {
         return getBoolean(AUTO_RECOVERY_DAEMON_ENABLED, false);
     }
+
 }

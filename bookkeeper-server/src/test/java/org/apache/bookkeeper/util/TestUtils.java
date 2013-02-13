@@ -25,13 +25,13 @@ import java.io.File;
 import java.util.HashSet;
 import java.util.Set;
 
-import org.apache.bookkeeper.bookie.Bookie;
+import org.apache.bookkeeper.bookie.InterleavedBookieStore;
 
 public class TestUtils {
     public static boolean hasLogFiles(File ledgerDirectory, boolean partial, Integer... logsId) {
         boolean result = partial ? false : true;
         Set<Integer> logs = new HashSet<Integer>();
-        for (File file : Bookie.getCurrentDirectory(ledgerDirectory).listFiles()) {
+        for (File file : InterleavedBookieStore.getCurrentDirectory(ledgerDirectory).listFiles()) {
             if (file.isFile()) {
                 String name = file.getName();
                 if (!name.endsWith(".log")) {

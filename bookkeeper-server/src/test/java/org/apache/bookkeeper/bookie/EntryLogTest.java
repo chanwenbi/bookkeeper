@@ -35,7 +35,6 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,8 +50,8 @@ public class EntryLogTest extends TestCase {
         File tmpDir = File.createTempFile("bkTest", ".dir");
         tmpDir.delete();
         tmpDir.mkdir();
-        File curDir = Bookie.getCurrentDirectory(tmpDir);
-        Bookie.checkDirectoryStructure(curDir);
+        File curDir = InterleavedBookieStore.getCurrentDirectory(tmpDir);
+        InterleavedBookieStore.checkDirectoryStructure(curDir);
 
         int gcWaitTime = 1000;
         ServerConfiguration conf = new ServerConfiguration();
@@ -60,7 +59,7 @@ public class EntryLogTest extends TestCase {
         conf.setLedgerDirNames(new String[] {tmpDir.toString()});
         Bookie bookie = new Bookie(conf);
         // create some entries
-        EntryLogger logger = ((InterleavedLedgerStorage)bookie.ledgerStorage).entryLogger;
+        EntryLogger logger = ((InterleavedLedgerStorage) ((InterleavedBookieStore) bookie.getBookieStore()).ledgerStorage).entryLogger;
         logger.addEntry(1, generateEntry(1, 1));
         logger.addEntry(3, generateEntry(3, 1));
         logger.addEntry(2, generateEntry(2, 1));
@@ -71,7 +70,8 @@ public class EntryLogTest extends TestCase {
         raf.setLength(raf.length()-10);
         raf.close();
         // now see which ledgers are in the log
-        logger = new EntryLogger(conf, bookie.getLedgerDirsManager());
+        logger = new EntryLogger(conf,
+                ((InterleavedBookieStore) bookie.getBookieStore()).getLedgerDirsManager());
 
         EntryLogMetadata meta = new EntryLogMetadata(0L);
         ExtractionScanner scanner = new ExtractionScanner(meta);
@@ -103,8 +103,8 @@ public class EntryLogTest extends TestCase {
         File tmpDir = File.createTempFile("entryLogTest", ".dir");
         tmpDir.delete();
         tmpDir.mkdir();
-        File curDir = Bookie.getCurrentDirectory(tmpDir);
-        Bookie.checkDirectoryStructure(curDir);
+        File curDir = InterleavedBookieStore.getCurrentDirectory(tmpDir);
+        InterleavedBookieStore.checkDirectoryStructure(curDir);
 
         ServerConfiguration conf = new ServerConfiguration();
         conf.setLedgerDirNames(new String[] {tmpDir.toString()});
@@ -117,7 +117,7 @@ public class EntryLogTest extends TestCase {
             positions[i] = new long[numEntries];
 
             EntryLogger logger = new EntryLogger(conf,
-                    bookie.getLedgerDirsManager());
+                    ((InterleavedBookieStore) bookie.getBookieStore()).getLedgerDirsManager());
             for (int j=0; j<numEntries; j++) {
                 positions[i][j] = logger.addEntry(i, generateEntry(i, j));
             }
@@ -132,7 +132,7 @@ public class EntryLogTest extends TestCase {
             positions[i] = new long[numEntries];
 
             EntryLogger logger = new EntryLogger(conf,
-                    bookie.getLedgerDirsManager());
+                    ((InterleavedBookieStore) bookie.getBookieStore()).getLedgerDirsManager());
             for (int j=0; j<numEntries; j++) {
                 positions[i][j] = logger.addEntry(i, generateEntry(i, j));
             }
@@ -140,7 +140,7 @@ public class EntryLogTest extends TestCase {
         }
 
         EntryLogger newLogger = new EntryLogger(conf,
-                bookie.getLedgerDirsManager());
+                ((InterleavedBookieStore) bookie.getBookieStore()).getLedgerDirsManager());
         for (int i=0; i<(2*numLogs+1); i++) {
             File logFile = new File(curDir, Long.toHexString(i) + ".log");
             assertTrue(logFile.exists());
@@ -197,8 +197,9 @@ public class EntryLogTest extends TestCase {
                 ledgerDir2.getAbsolutePath() });
         Bookie bookie = new Bookie(conf);
         EntryLogger entryLogger = new EntryLogger(conf,
-                bookie.getLedgerDirsManager());
-        InterleavedLedgerStorage ledgerStorage = ((InterleavedLedgerStorage) bookie.ledgerStorage);
+                ((InterleavedBookieStore) bookie.getBookieStore()).getLedgerDirsManager());
+        InterleavedLedgerStorage ledgerStorage = ((InterleavedLedgerStorage) ((InterleavedBookieStore) bookie
+                .getBookieStore()).ledgerStorage);
         ledgerStorage.entryLogger = entryLogger;
         // Create ledgers
         ledgerStorage.setMasterKey(1, "key".getBytes());
@@ -208,7 +209,8 @@ public class EntryLogTest extends TestCase {
         ledgerStorage.addEntry(generateEntry(1, 1));
         ledgerStorage.addEntry(generateEntry(2, 1));
         // Add entry with disk full failure simulation
-        bookie.getLedgerDirsManager().addToFilledDirs(entryLogger.currentDir);
+        ((InterleavedBookieStore) bookie.getBookieStore()).getLedgerDirsManager().addToFilledDirs(
+                entryLogger.currentDir);
         ledgerStorage.addEntry(generateEntry(3, 1));
         // Verify written entries
         Assert.assertArrayEquals(generateEntry(1, 1).array(), ledgerStorage

@@ -104,6 +104,11 @@ class InterleavedLedgerStorage implements LedgerStorage {
     public byte[] readMasterKey(long ledgerId) throws IOException, BookieException {
         return ledgerCache.readMasterKey(ledgerId);
     }
+    
+    @Override
+    public void deleteLedger(long ledgerId) throws IOException {
+        ledgerCache.deleteLedger(ledgerId);
+    }
 
     @Override
     public boolean ledgerExists(long ledgerId) throws IOException {

@@ -18,8 +18,6 @@
 
 package org.apache.bookkeeper.bookie;
 
-import java.io.File;
-
 import org.apache.bookkeeper.jmx.BKMBeanInfo;
 
 /**
@@ -41,11 +39,6 @@ public class BookieBean implements BookieMXBean, BKMBeanInfo {
     @Override
     public boolean isHidden() {
         return false;
-    }
-
-    @Override
-    public int getQueueLength() {
-        return bk.journal.getJournalQueueLength();
     }
 
 }

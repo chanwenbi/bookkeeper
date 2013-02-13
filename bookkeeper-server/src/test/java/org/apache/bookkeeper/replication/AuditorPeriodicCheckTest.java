@@ -20,34 +20,32 @@
  */
 package org.apache.bookkeeper.replication;
 
-import org.apache.bookkeeper.test.BookKeeperClusterTestCase;
-
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.HashMap;
-import java.util.List;
-import java.util.LinkedList;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.bookkeeper.bookie.Bookie;
 import org.apache.bookkeeper.bookie.BookieAccessor;
+import org.apache.bookkeeper.bookie.InterleavedBookieStore;
 import org.apache.bookkeeper.bookie.LedgerCacheImpl;
 import org.apache.bookkeeper.client.BookKeeper.DigestType;
 import org.apache.bookkeeper.client.LedgerHandle;
 import org.apache.bookkeeper.conf.ServerConfiguration;
 import org.apache.bookkeeper.meta.LedgerManagerFactory;
 import org.apache.bookkeeper.meta.LedgerUnderreplicationManager;
+import org.apache.bookkeeper.test.BookKeeperClusterTestCase;
 import org.apache.bookkeeper.util.StringUtils;
 import org.apache.bookkeeper.zookeeper.ZooKeeperClient;
 import org.apache.zookeeper.ZooKeeper;
-import org.junit.Before;
 import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
-import static org.junit.Assert.assertEquals;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -126,7 +124,7 @@ public class AuditorPeriodicCheckTest extends BookKeeperClusterTestCase {
 
 
         File ledgerDir = bsConfs.get(0).getLedgerDirs()[0];
-        ledgerDir = Bookie.getCurrentDirectory(ledgerDir);
+        ledgerDir = InterleavedBookieStore.getCurrentDirectory(ledgerDir);
         // corrupt of entryLogs
         File[] entryLogs = ledgerDir.listFiles(new FilenameFilter() {
                 public boolean accept(File dir, String name) {
@@ -180,7 +178,7 @@ public class AuditorPeriodicCheckTest extends BookKeeperClusterTestCase {
         BookieAccessor.forceFlush(bs.get(0).getBookie());
 
         File ledgerDir = bsConfs.get(0).getLedgerDirs()[0];
-        ledgerDir = Bookie.getCurrentDirectory(ledgerDir);
+        ledgerDir = InterleavedBookieStore.getCurrentDirectory(ledgerDir);
 
         // corrupt of entryLogs
         File index = new File(ledgerDir, LedgerCacheImpl.getLedgerName(ledgerToCorrupt));

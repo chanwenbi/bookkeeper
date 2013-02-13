@@ -28,7 +28,6 @@ import org.apache.bookkeeper.bookie.LedgerDirsManager.NoWritableLedgerDirExcepti
 import org.apache.bookkeeper.conf.ServerConfiguration;
 import org.junit.Before;
 import org.junit.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,8 +43,8 @@ public class TestLedgerDirsManager extends TestCase {
         File tmpDir = File.createTempFile("bkTest", ".dir");
         tmpDir.delete();
         tmpDir.mkdir();
-        curDir = Bookie.getCurrentDirectory(tmpDir);
-        Bookie.checkDirectoryStructure(curDir);
+        curDir = InterleavedBookieStore.getCurrentDirectory(tmpDir);
+        InterleavedBookieStore.checkDirectoryStructure(curDir);
 
         ServerConfiguration conf = new ServerConfiguration();
         conf.setLedgerDirNames(new String[] {tmpDir.toString()});

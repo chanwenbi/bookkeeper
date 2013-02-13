@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -15,12 +15,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.bookkeeper.bookie;
 
+
 /**
- * Bookie MBean
+ * A state transistor used to control the bookie state.
  */
-public interface BookieMXBean {
+public interface StateTransistor {
+
+    public static final StateTransistor NOP = new StateTransistor() {
+
+        @Override
+        public void triggerShutdown(int exitCode) {
+            // do nothing
+        }
+
+        @Override
+        public void transitToReadOnly() {
+            // do nothing
+        }
+
+    };
+
+    public void triggerShutdown(int exitCode);
+
+    public void transitToReadOnly();
 
 }
