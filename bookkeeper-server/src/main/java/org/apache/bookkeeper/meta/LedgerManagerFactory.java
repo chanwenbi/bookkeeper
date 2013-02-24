@@ -20,15 +20,14 @@ package org.apache.bookkeeper.meta;
 
 import java.io.IOException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import org.apache.bookkeeper.replication.ReplicationException;
 import org.apache.bookkeeper.conf.AbstractConfiguration;
+import org.apache.bookkeeper.replication.ReplicationException;
 import org.apache.bookkeeper.util.ReflectionUtils;
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.ZooKeeper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public abstract class LedgerManagerFactory {
 
@@ -74,6 +73,14 @@ public abstract class LedgerManagerFactory {
      * @see LedgerManager
      */
     public abstract LedgerManager newLedgerManager();
+
+    /**
+     * Return super ledger manager to manage super ledger metadata.
+     * 
+     * @return super ledger manager
+     * @see SuperLedgerManager
+     */
+    public abstract SuperLedgerManager newSuperLedgerManager();
 
     /**
      * Return a ledger underreplication manager, which is used to

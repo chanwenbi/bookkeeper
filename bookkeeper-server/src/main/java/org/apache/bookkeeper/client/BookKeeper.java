@@ -30,18 +30,27 @@ import org.apache.bookkeeper.client.AsyncCallback.CreateCallback;
 import org.apache.bookkeeper.client.AsyncCallback.DeleteCallback;
 import org.apache.bookkeeper.client.AsyncCallback.OpenCallback;
 import org.apache.bookkeeper.client.BKException.Code;
+import org.apache.bookkeeper.client.sl.SuperLedgerCallbacks.OpenSuperLedgerCallback;
+import org.apache.bookkeeper.client.sl.SuperLedgerConfig;
+import org.apache.bookkeeper.client.sl.SuperLedgerOpenOp;
 import org.apache.bookkeeper.conf.ClientConfiguration;
 import org.apache.bookkeeper.meta.LedgerManager;
 import org.apache.bookkeeper.meta.LedgerManagerFactory;
+import org.apache.bookkeeper.meta.SuperLedgerManager;
 import org.apache.bookkeeper.proto.BookieClient;
+import org.apache.bookkeeper.proto.sl.SuperLedgerClient;
+import org.apache.bookkeeper.proto.sl.SuperLedgerProtocol.StatusCode;
 import org.apache.bookkeeper.util.OrderedSafeExecutor;
 import org.apache.bookkeeper.zookeeper.ZooKeeperClient;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.ZooKeeper;
+import org.apache.zookeeper.common.PathUtils;
 import org.jboss.netty.channel.socket.ClientSocketChannelFactory;
 import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.protobuf.ByteString;
 
 /**
  * BookKeeper client. We assume there is one single writer to a ledger at any
@@ -72,6 +81,7 @@ public class BookKeeper {
     // instantiated us
     boolean ownZKHandle = false;
 
+    final SuperLedgerClient slClient;
     final BookieClient bookieClient;
     final BookieWatcher bookieWatcher;
 
@@ -81,6 +91,7 @@ public class BookKeeper {
     // Ledger manager responsible for how to store ledger meta data
     final LedgerManagerFactory ledgerManagerFactory;
     final LedgerManager ledgerManager;
+    final SuperLedgerManager superLedgerManager;
 
     final ClientConfiguration conf;
 
@@ -127,12 +138,14 @@ public class BookKeeper {
         this.scheduler = Executors.newSingleThreadScheduledExecutor();
 
         mainWorkerPool = new OrderedSafeExecutor(conf.getNumWorkerThreads());
+        slClient = new SuperLedgerClient(conf, channelFactory, mainWorkerPool);
         bookieClient = new BookieClient(conf, channelFactory, mainWorkerPool);
         bookieWatcher = new BookieWatcher(conf, scheduler, this);
         bookieWatcher.readBookiesBlocking();
 
         ledgerManagerFactory = LedgerManagerFactory.newLedgerManagerFactory(conf, zk);
         ledgerManager = ledgerManagerFactory.newLedgerManager();
+        superLedgerManager = ledgerManagerFactory.newSuperLedgerManager();
 
         ownChannelFactory = true;
         ownZKHandle = true;
@@ -191,12 +204,18 @@ public class BookKeeper {
         this.scheduler = Executors.newSingleThreadScheduledExecutor();
 
         mainWorkerPool = new OrderedSafeExecutor(conf.getNumWorkerThreads());
+        slClient = new SuperLedgerClient(conf, channelFactory, mainWorkerPool);
         bookieClient = new BookieClient(conf, channelFactory, mainWorkerPool);
         bookieWatcher = new BookieWatcher(conf, scheduler, this);
         bookieWatcher.readBookiesBlocking();
 
         ledgerManagerFactory = LedgerManagerFactory.newLedgerManagerFactory(conf, zk);
         ledgerManager = ledgerManagerFactory.newLedgerManager();
+        superLedgerManager = ledgerManagerFactory.newSuperLedgerManager();
+    }
+
+    public OrderedSafeExecutor getMainWorkerPool() {
+        return mainWorkerPool;
     }
 
     LedgerManager getLedgerManager() {
@@ -218,7 +237,7 @@ public class BookKeeper {
         return zk;
     }
 
-    protected ClientConfiguration getConf() {
+    public ClientConfiguration getConf() {
         return conf;
     }
 
@@ -229,6 +248,10 @@ public class BookKeeper {
      */
     BookieClient getBookieClient() {
         return bookieClient;
+    }
+
+    public SuperLedgerClient getSuperLedgerClient() {
+        return slClient;
     }
 
     /**
@@ -569,6 +592,24 @@ public class BookKeeper {
         }
     }
 
+    public void asyncOpenSuperLedger(ByteString ledgerName, SuperLedgerConfig ledgerConfig,
+            OpenSuperLedgerCallback callback, Object ctx) {
+        try {
+            PathUtils.validatePath(ledgerName.toString());
+            if (ledgerConfig.validate()) {
+                new SuperLedgerOpenOp(this, scheduler, superLedgerManager, ledgerName, ledgerConfig,
+                        callback, ctx).initiate();
+            } else {
+                LOG.error("Failed to open super ledger {} using invalid config : {}",
+                        ledgerName.toStringUtf8(), ledgerConfig);
+                callback.openComplete(StatusCode.EINVALIDARGS, null, ctx);
+            }
+        } catch (IllegalArgumentException iae) {
+            LOG.error("Failed to open super ledger " + ledgerName.toStringUtf8() + " : ", iae);
+            callback.openComplete(StatusCode.EINVALIDARGS, null, ctx);
+        }
+    }
+
     /**
      * Shuts down client.
      *
@@ -583,9 +624,11 @@ public class BookKeeper {
             LOG.warn("The mainWorkerPool did not shutdown cleanly");
         }
 
+        slClient.close();
         bookieClient.close();
         try {
             ledgerManager.close();
+            superLedgerManager.close();
             ledgerManagerFactory.uninitialize();
         } catch (IOException ie) {
             LOG.error("Failed to close ledger manager : ", ie);

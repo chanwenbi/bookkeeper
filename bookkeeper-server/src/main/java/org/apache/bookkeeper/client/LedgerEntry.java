@@ -24,9 +24,9 @@ package org.apache.bookkeeper.client;
 import java.io.IOException;
 import java.io.InputStream;
 
+import org.jboss.netty.buffer.ChannelBufferInputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.jboss.netty.buffer.ChannelBufferInputStream;
 
 /**
  * Ledger entry. Its a simple tuple containing the ledger id, the entry-id, and
@@ -37,12 +37,12 @@ import org.jboss.netty.buffer.ChannelBufferInputStream;
 public class LedgerEntry {
     Logger LOG = LoggerFactory.getLogger(LedgerEntry.class);
 
-    long ledgerId;
-    long entryId;
-    long length;
-    ChannelBufferInputStream entryDataStream;
+    protected long ledgerId;
+    protected long entryId;
+    protected long length;
+    protected ChannelBufferInputStream entryDataStream;
 
-    LedgerEntry(long lId, long eId) {
+    protected LedgerEntry(long lId, long eId) {
         this.ledgerId = lId;
         this.entryId = eId;
     }

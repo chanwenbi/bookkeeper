@@ -28,7 +28,7 @@ import java.util.List;
  * to.
  */
 
-interface DistributionSchedule {
+public interface DistributionSchedule {
 
     /**
      * return the set of bookie indices to send the message to

@@ -19,15 +19,13 @@ package org.apache.bookkeeper.conf;
 
 import java.net.URL;
 
+import org.apache.bookkeeper.meta.LedgerManagerFactory;
+import org.apache.bookkeeper.util.ReflectionUtils;
 import org.apache.commons.configuration.CompositeConfiguration;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.configuration.PropertiesConfiguration;
 import org.apache.commons.configuration.SystemConfiguration;
-
-import org.apache.bookkeeper.meta.LedgerManagerFactory;
-import org.apache.bookkeeper.util.ReflectionUtils;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,6 +48,7 @@ public abstract class AbstractConfiguration extends CompositeConfiguration {
     protected final static String LEDGER_MANAGER_TYPE = "ledgerManagerType";
     protected final static String LEDGER_MANAGER_FACTORY_CLASS = "ledgerManagerFactoryClass";
     protected final static String ZK_LEDGERS_ROOT_PATH = "zkLedgersRootPath";
+    protected final static String ZK_SUPER_LEDGERS_ROOT_PATH = "zkSuperLedgersRootPath";
     protected final static String AVAILABLE_NODE = "available";
     protected final static String REREPLICATION_ENTRY_BATCH_SIZE = "rereplicationEntryBatchSize";
 
@@ -167,6 +166,25 @@ public abstract class AbstractConfiguration extends CompositeConfiguration {
      */
     public String getZkLedgersRootPath() {
         return getString(ZK_LEDGERS_ROOT_PATH, "/ledgers");
+    }
+
+    /**
+     * Set Zk Super Ledgers Root Path.
+     * 
+     * @param zkLedgersPath
+     *            zk ledgers root path
+     */
+    public void setZkSuperLedgersRootPath(String zkLedgersPath) {
+        setProperty(ZK_SUPER_LEDGERS_ROOT_PATH, zkLedgersPath);
+    }
+
+    /**
+     * Get Zk Ledgers Root Path.
+     * 
+     * @return zk ledgers root path
+     */
+    public String getZkSuperLedgersRootPath() {
+        return getString(ZK_SUPER_LEDGERS_ROOT_PATH, "/superledgers");
     }
 
     /**

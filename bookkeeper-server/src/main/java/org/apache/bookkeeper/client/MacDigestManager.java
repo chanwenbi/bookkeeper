@@ -18,6 +18,8 @@ package org.apache.bookkeeper.client;
 * limitations under the License.
 */
 
+import static com.google.common.base.Charsets.UTF_8;
+
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -28,9 +30,7 @@ import javax.crypto.spec.SecretKeySpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static com.google.common.base.Charsets.UTF_8;
-
-class MacDigestManager extends DigestManager {
+public class MacDigestManager extends DigestManager {
     final static Logger LOG = LoggerFactory.getLogger(MacDigestManager.class);
 
     public static String DIGEST_ALGORITHM = "SHA-1";
@@ -59,7 +59,7 @@ class MacDigestManager extends DigestManager {
         this.passwd = passwd;
     }
 
-    static byte[] genDigest(String pad, byte[] passwd) throws NoSuchAlgorithmException {
+    public static byte[] genDigest(String pad, byte[] passwd) throws NoSuchAlgorithmException {
         MessageDigest digest = MessageDigest.getInstance(DIGEST_ALGORITHM);
         digest.update(pad.getBytes(UTF_8));
         digest.update(passwd);

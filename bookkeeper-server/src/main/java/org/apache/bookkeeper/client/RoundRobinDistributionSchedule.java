@@ -17,11 +17,11 @@
  */
 package org.apache.bookkeeper.client;
 
-import org.apache.bookkeeper.util.MathUtils;
-
-import java.util.List;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
+
+import org.apache.bookkeeper.util.MathUtils;
 
 /**
  * A specific {@link DistributionSchedule} that places entries in round-robin
@@ -30,7 +30,7 @@ import java.util.HashSet;
  * on.
  *
  */
-class RoundRobinDistributionSchedule implements DistributionSchedule {
+public class RoundRobinDistributionSchedule implements DistributionSchedule {
     private int writeQuorumSize;
     private int ackQuorumSize;
     private int ensembleSize;

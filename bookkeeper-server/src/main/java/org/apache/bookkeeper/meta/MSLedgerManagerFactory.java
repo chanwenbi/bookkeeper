@@ -25,9 +25,9 @@ import java.util.Iterator;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.CountDownLatch;
 
 import org.apache.bookkeeper.client.BKException;
 import org.apache.bookkeeper.client.LedgerMetadata;
@@ -519,6 +519,12 @@ public class MSLedgerManagerFactory extends LedgerManagerFactory {
     @Override
     public LedgerManager newLedgerManager() {
         return new MsLedgerManager(conf, zk, metastore);
+    }
+
+    @Override
+    public SuperLedgerManager newSuperLedgerManager() {
+        // TODO change to use metastore api.
+        return new ZkSuperLedgerManager(conf, zk);
     }
 
     @Override

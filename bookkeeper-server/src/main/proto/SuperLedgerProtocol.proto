@@ -1,0 +1,238 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+option java_package = "org.apache.bookkeeper.proto.sl";
+option optimize_for = SPEED;
+
+//
+// Request / Response Protocol
+//
+
+enum OperationType {
+    ADD_DATA_ENTRY = 1;
+    READ_DATA_ENTRY = 2;
+    WRITE_ACCT_META = 3;
+    READ_ACCT_META = 4;
+    FENCE_SUPER_LEDGER = 5;
+}
+
+message PacketHeader {
+    required OperationType type = 1;
+    required uint64 txnId = 2;
+}
+
+message SimpleRequest {
+    required PacketHeader header = 1;
+
+    // different requests
+    optional AddDataEntryRequest addEntryRequest = 10;
+    optional ReadDataEntryRequest readEntryRequest = 11;
+    optional WriteAcctMetaRequest writeAcctRequest = 12;
+    optional ReadAcctMetaRequest readAcctRequest = 13;
+    optional FenceSuperLedgerRequest fenceRequest = 14;
+}
+
+message AddDataEntryRequest {
+    enum Flag {
+        NONE = 0;
+        RECOVERY_ADD = 1;
+    }
+    required bytes acctName = 1;
+    required bytes masterKey = 2;
+    optional Flag flag = 3 [default = NONE];
+    message PayLoad {
+        required int64 entryId = 1;
+        required bytes body = 2;
+    }
+    repeated PayLoad payloads = 10;
+}
+
+message ReadDataEntryRequest {
+    required bytes acctName = 1;
+    required int64 entryId = 2;
+    optional bytes masterKey = 3;
+}
+
+message WriteAcctMetaRequest {
+    required bytes acctName = 1;
+    required AccountMetadata acctMeta = 2;
+    required bytes masterKey = 3;
+}
+
+message ReadAcctMetaRequest {
+    required bytes acctName = 1;
+    optional bool readLastEntryId = 2;
+}
+
+message FenceSuperLedgerRequest {
+    required bytes masterKey = 1;
+    required int32 epoch = 2;
+}
+
+message SuperLedgerRequest {
+    required bytes ledgerName = 1;
+    required int32 epoch = 2;
+
+    repeated SimpleRequest requests = 3;
+}
+
+enum StatusCode {
+    EOK = 0;
+    
+    // General Error 1xx
+    EBADDIGEST = 101;
+    EINTR = 102;
+    EINVALIDARGS = 103;
+
+    // Closed Errors 2xx
+    ESUPERLEDGERCLOSED = 201;
+    EACCTCLOSED = 202;
+    ECURSORCLOSED = 203;
+    
+    // Client Side Error 3xx
+    EBOOKIENOTAVAILABLE = 301;
+    EWRITEEXCEPTION = 302;
+    EREADEXCEPTION = 303;
+    EFENCEEXCEPTION = 304;
+
+    // Server Side Errors 4xx
+    ENOSUPERLEDGER = 401;
+    ENOACCT = 402;
+    ENOCUSOR = 403;
+    ENOSLENTRY = 404;
+
+    // I/O Errors 5xx
+    EIO = 501;
+    EUA = 502;
+    EFENCED = 503;
+    EREADONLY = 504;
+    EBADREQ = 505;
+
+    // Metadata Errors 6xx
+    EMETADATAEXCEPTION = 601;
+    EBADMETADATAVERSION = 602;
+}
+
+message AddDataEntryResponse {
+    required bytes acctName = 1;
+    repeated int64 entries = 2;
+}
+
+message ReadDataEntryResponse {
+    required bytes acctName = 1;
+    required int64 entryId = 2;
+    optional bytes data = 3;
+}
+
+message WriteAcctMetaResponse {
+    required bytes acctName = 1;
+}
+
+message ReadAcctMetaResponse {
+    required bytes acctName = 1;
+    optional AccountMetadata acctMeta = 2;
+    optional int64 lastEntryId = 3;
+}
+
+message FenceSuperLedgerResponse {
+    // nothing now
+}
+
+message SimpleResponse {
+    required PacketHeader header = 1;
+    required StatusCode status = 2;
+
+    // response bodies
+    optional AddDataEntryResponse addEntryResponse = 10;
+    optional ReadDataEntryResponse readEntryResponse = 11;
+    optional WriteAcctMetaResponse writeAcctResponse = 12;
+    optional ReadAcctMetaResponse readAcctResponse = 13;
+}
+
+message SuperLedgerResponse {
+    required bytes ledgerName = 1;
+
+    repeated SimpleResponse responses = 2;
+}
+
+//
+// Metadata Format
+//
+
+/**
+ * MetaData Format for SuperLedger
+ */
+message SuperLedgerMetadataFormat {
+    // Ensemble Configuration
+    required int32 ensembleSize = 1;
+    required int32 writeQuorumSize = 2;
+    required int32 ackQuorumSize = 3;
+
+    repeated string ensembleMember = 4;
+
+    // Ledger Metadata
+    enum DigestType {
+        CRC32 = 1;
+        HMAC = 2;
+    }
+    required DigestType digestType = 10;
+    required bytes password = 11;
+
+    // Epoch Configuration
+    message Epoch {
+        required int32 epoch = 1;
+        required uint64 ctime = 2;
+    }
+    // Epoch Unit
+    required uint64 epochTime = 20;
+    // preivous Epochs
+    repeated Epoch epochs = 21;
+}
+
+//
+// Bookie Side Metadata
+//
+
+message AccountMetadata {
+    required uint64 version = 1;
+
+    // metadata payload
+    optional EpochMetadata epochMetadata = 10;
+    optional CursorMetadata cursorMetadata = 11;
+}
+
+message EpochMetadata {
+    message Epoch {
+        required int32 epoch = 1;
+        optional int64 lastEntryId = 2;
+        
+    }
+    repeated Epoch epochBoundaries = 1;
+}
+
+message CursorMetadata {
+    message Cursor {
+        required bytes name = 1;
+        required int64 lastConsumedEntryId = 2;
+    }
+    repeated Cursor cursors = 2;
+}
+
+message SuperLedgerState {
+    optional int32 fencedEpoch = 1 [default = -1];
+    optional bytes masterKey = 2;
+}

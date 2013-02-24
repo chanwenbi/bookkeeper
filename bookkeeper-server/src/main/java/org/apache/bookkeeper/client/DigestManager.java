@@ -23,11 +23,11 @@ import java.security.GeneralSecurityException;
 
 import org.apache.bookkeeper.client.BKException.BKDigestMatchException;
 import org.apache.bookkeeper.client.BookKeeper.DigestType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.buffer.ChannelBufferInputStream;
 import org.jboss.netty.buffer.ChannelBuffers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * This class takes an entry, attaches a digest to it and packages it with relevant
@@ -36,10 +36,10 @@ import org.jboss.netty.buffer.ChannelBuffers;
  * for the packet. Currently 2 types of digests are supported: MAC (based on SHA-1) and CRC32
  */
 
-abstract class DigestManager {
+public abstract class DigestManager {
     static final Logger logger = LoggerFactory.getLogger(DigestManager.class);
 
-    static final int METADATA_LENGTH = 32;
+    public static final int METADATA_LENGTH = 32;
 
     long ledgerId;
 
@@ -59,7 +59,8 @@ abstract class DigestManager {
         macCodeLength = getMacCodeLength();
     }
 
-    static DigestManager instantiate(long ledgerId, byte[] passwd, DigestType digestType) throws GeneralSecurityException {
+    public static DigestManager instantiate(long ledgerId, byte[] passwd, DigestType digestType)
+            throws GeneralSecurityException {
         switch(digestType) {
         case MAC:
             return new MacDigestManager(ledgerId, passwd);
@@ -161,16 +162,16 @@ abstract class DigestManager {
      * @return
      * @throws BKDigestMatchException
      */
-    ChannelBufferInputStream verifyDigestAndReturnData(long entryId, ChannelBuffer dataReceived)
+    public ChannelBufferInputStream verifyDigestAndReturnData(long entryId, ChannelBuffer dataReceived)
             throws BKDigestMatchException {
         verifyDigest(entryId, dataReceived);
         dataReceived.readerIndex(METADATA_LENGTH + macCodeLength);
         return new ChannelBufferInputStream(dataReceived);
     }
 
-    static class RecoveryData {
-        long lastAddConfirmed;
-        long length;
+    public static class RecoveryData {
+        public final long lastAddConfirmed;
+        public final long length;
 
         public RecoveryData(long lastAddConfirmed, long length) {
             this.lastAddConfirmed = lastAddConfirmed;
@@ -179,7 +180,8 @@ abstract class DigestManager {
 
     }
 
-    RecoveryData verifyDigestAndReturnLastConfirmed(ChannelBuffer dataReceived) throws BKDigestMatchException {
+    public RecoveryData verifyDigestAndReturnLastConfirmed(ChannelBuffer dataReceived)
+            throws BKDigestMatchException {
         verifyDigest(dataReceived);
         dataReceived.readerIndex(8);
 
