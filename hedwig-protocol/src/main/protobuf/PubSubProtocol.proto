@@ -61,6 +61,29 @@ message MessageSeqId{
     repeated RegionSpecificSeqId remoteComponents = 2;    
 }
 
+/**
+ * Messages used for internal
+ */
+message InternalMessage {
+    enum Type {
+        DATA = 0;
+        FENCE = 1;
+    }
+    required Type type = 1;
+
+    optional IDataMessage dataMsg = 11;
+    optional IFenceMessage fenceMsg = 12;
+}
+
+message IDataMessage {
+    required bytes body = 1;
+}
+
+message IFenceMessage {
+    required string hostname = 1;
+    required uint64 timestamp = 2;
+}
+
 enum OperationType{
     PUBLISH = 0;
     SUBSCRIBE = 1;

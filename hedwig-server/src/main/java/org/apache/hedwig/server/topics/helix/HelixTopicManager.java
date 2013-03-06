@@ -17,7 +17,12 @@
  */
 package org.apache.hedwig.server.topics.helix;
 
+import java.util.concurrent.ScheduledExecutorService;
+
 import org.apache.hedwig.server.common.ServerConfiguration;
+import org.apache.hedwig.server.common.TopicOpQueuer;
+import org.apache.hedwig.server.regions.HedwigHubClient;
+import org.apache.hedwig.server.regions.HedwigHubClientFactory;
 import org.apache.hedwig.server.topics.TopicManager;
 import org.apache.hedwig.server.topics.TopicOwnershipChangeListener;
 import org.apache.hedwig.util.Callback;
@@ -39,10 +44,26 @@ public class HelixTopicManager extends StateModelFactory<TopicStateModel> implem
     private final ServerConfiguration conf;
     private final InstanceConfig instanceConf;
     private HelixManager manager;
+    private final TopicOpQueuer queue;
+    private final HedwigHubClient client;
 
-    public HelixTopicManager(ServerConfiguration conf, InstanceConfig instanceConf) {
+    /**
+     * Topic Partition maintains the topics it already claimed for a partition.
+     */
+    class TopicPartition {
+
+        Set<ByteString>
+    }
+
+    public HelixTopicManager(ServerConfiguration conf, InstanceConfig instanceConf, ScheduledExecutorService scheduler,
+            HedwigHubClientFactory hubClientFactory) {
         this.conf = conf;
         this.instanceConf = instanceConf;
+        this.queue = new TopicOpQueuer(scheduler);
+        // establish a client to local hedwig cluster, we will use local hedwig cluster
+        // as a pub/sub commit destination
+        this.client = hubClientFactory.create(new HedwigSocketAddress("localhost", conf.getServerPort(), conf
+                .getSSLServerPort()));
     }
 
     InstanceConfig getInstanceConfig() {

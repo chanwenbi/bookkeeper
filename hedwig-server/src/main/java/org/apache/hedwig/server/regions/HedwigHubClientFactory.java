@@ -18,11 +18,10 @@
 package org.apache.hedwig.server.regions;
 
 import org.apache.commons.configuration.ConfigurationException;
-import org.jboss.netty.channel.socket.ClientSocketChannelFactory;
-
 import org.apache.hedwig.client.conf.ClientConfiguration;
 import org.apache.hedwig.server.common.ServerConfiguration;
 import org.apache.hedwig.util.HedwigSocketAddress;
+import org.jboss.netty.channel.socket.ClientSocketChannelFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,7 +48,7 @@ public class HedwigHubClientFactory {
      * @param hub
      *            The hub in another region to connect to.
      */
-    HedwigHubClient create(final HedwigSocketAddress hub) {
+    public HedwigHubClient create(final HedwigSocketAddress hub) {
         // Create a hub specific version of the client to use
         ClientConfiguration hubClientConfiguration = new ClientConfiguration() {
             @Override
