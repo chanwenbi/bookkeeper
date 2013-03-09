@@ -27,14 +27,14 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.apache.bookkeeper.util.ReflectionUtils;
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.lang.StringUtils;
-
-import com.google.protobuf.ByteString;
-import org.apache.bookkeeper.util.ReflectionUtils;
 import org.apache.hedwig.conf.AbstractConfiguration;
 import org.apache.hedwig.server.meta.MetadataManagerFactory;
 import org.apache.hedwig.util.HedwigSocketAddress;
+
+import com.google.protobuf.ByteString;
 
 public class ServerConfiguration extends AbstractConfiguration {
     public final static String REGION = "region";
@@ -85,12 +85,19 @@ public class ServerConfiguration extends AbstractConfiguration {
     // leveldb settings
     protected final static String LEVELDB_PERSISTENCE_ENABLED = "leveldb_persistence_enabled";
     protected final static String LEVELDB_PERSISTENCE_PATH = "leveldb_persistence_path";
+    protected final static String LEVELDB_PARTITIONDB_PATH = "leveldb_partitiondb_path";
+    protected final static String LEVELDB_SUBSCRIPTIONDB_PATH = "leveldb_subscriptiondb_path";
     protected final static String LEVELDB_BLOCK_SIZE = "leveldb_block_size";
     protected final static String LEVELDB_CACHE_SIZE = "leveldb_cache_size";
+    protected final static String LEVELDB_PARTITIONDB_CACHE_SIZE = "leveldb_partitiondb_cache_size";
+    protected final static String LEVELDB_SUBSCRIPTIONDB_CACHE_SIZE = "leveldb_subscriptiondb_cache_size";
     protected final static String LEVELDB_WRITE_BUFFER_SIZE = "leveldb_write_buffer_size";
+    protected final static String LEVELDB_PARTITIONDB_WRITE_BUFFER_SIZE = "leveldb_partitiondb_write_buffer_size";
+    protected final static String LEVELDB_SUBSCRIPTIONDB_WRITE_BUFFER_SIZE = "leveldb_subscriptiondb_write_buffer_size";
     protected final static String LEVELDB_MAX_OPEN_FILES = "leveldb_max_open_files";
     protected final static String LEVELDB_NUM_IO_WORKERS = "leveldb_num_io_workers";
-    
+    protected final static String LEVELDB_MAX_CACHED_SUBSCRIPTIONS = "leveldb_max_cached_subscriptions";
+
     private static ClassLoader defaultLoader;
     static {
         defaultLoader = Thread.currentThread().getContextClassLoader();
@@ -160,7 +167,7 @@ public class ServerConfiguration extends AbstractConfiguration {
 
     /**
      * Maximum number of messages to read ahead. Default is 10.
-     * 
+     *
      * @return int
      */
     public int getReadAheadCount() {
@@ -169,7 +176,7 @@ public class ServerConfiguration extends AbstractConfiguration {
 
     /**
      * Maximum number of bytes to read ahead. Default is 4MB.
-     * 
+     *
      * @return long
      */
     public long getReadAheadSizeBytes() {
@@ -179,7 +186,7 @@ public class ServerConfiguration extends AbstractConfiguration {
     /**
      * Maximum cache size. By default is the smallest of 2G or
      * half the heap size.
-     * 
+     *
      * @return long
      */
     public long getMaximumCacheSize() {
@@ -200,16 +207,16 @@ public class ServerConfiguration extends AbstractConfiguration {
 
     /**
      * After a scan of a log fails, how long before we retry (in msec)
-     * 
+     *
      * @return long
      */
     public long getScanBackoffPeriodMs() {
         return conf.getLong(SCAN_BACKOFF_MSEC, 1000);
     }
-    
+
     /**
      * Returns server port.
-     * 
+     *
      * @return int
      */
     public int getServerPort() {
@@ -218,7 +225,7 @@ public class ServerConfiguration extends AbstractConfiguration {
 
     /**
      * Returns SSL server port.
-     * 
+     *
      * @return int
      */
     public int getSSLServerPort() {
@@ -227,7 +234,7 @@ public class ServerConfiguration extends AbstractConfiguration {
 
     /**
      * Returns ZooKeeper path prefix.
-     * 
+     *
      * @return string
      */
     public String getZkPrefix() {
@@ -270,7 +277,7 @@ public class ServerConfiguration extends AbstractConfiguration {
 
     /**
      * Return ZooKeeper list of servers. Default is localhost.
-     * 
+     *
      * @return String
      */
     public String getZkHost() {
@@ -283,16 +290,16 @@ public class ServerConfiguration extends AbstractConfiguration {
 
     /**
      * Return ZooKeeper session timeout. Default is 2s.
-     * 
+     *
      * @return int
      */
     public int getZkTimeout() {
         return conf.getInt(ZK_TIMEOUT, 2000);
     }
 
-    /** 
+    /**
      * Returns true if read-ahead enabled. Default is true.
-     * 
+     *
      * @return boolean
      */
     public boolean getReadAheadEnabled() {
@@ -303,7 +310,7 @@ public class ServerConfiguration extends AbstractConfiguration {
 
     /**
      * Returns true if standalone. Default is false.
-     * 
+     *
      * @return boolean
      */
     public boolean isStandalone() {
@@ -311,8 +318,8 @@ public class ServerConfiguration extends AbstractConfiguration {
     }
 
     /**
-     * Returns list of regions. 
-     * 
+     * Returns list of regions.
+     *
      * @return List<String>
      */
     public List<String> getRegions() {
@@ -324,7 +331,7 @@ public class ServerConfiguration extends AbstractConfiguration {
 
     /**
      *  Returns the name of the SSL certificate if available as a resource.
-     * 
+     *
      * @return String
      */
     public String getCertName() {
@@ -333,7 +340,7 @@ public class ServerConfiguration extends AbstractConfiguration {
 
     /**
      * This is the path to the SSL certificate if it is available as a file.
-     * 
+     *
      * @return String
      */
     public String getCertPath() {
@@ -358,7 +365,7 @@ public class ServerConfiguration extends AbstractConfiguration {
     /**
      * Returns the password used for BookKeeper ledgers. Default
      * is the empty string.
-     * 
+     *
      * @return
      */
     public String getPassword() {
@@ -367,7 +374,7 @@ public class ServerConfiguration extends AbstractConfiguration {
 
     /**
      * Returns true if SSL is enabled. Default is false.
-     * 
+     *
      * @return boolean
      */
     public boolean isSSLEnabled() {
@@ -379,7 +386,7 @@ public class ServerConfiguration extends AbstractConfiguration {
      * information about consumed messages. A value greater than
      * one avoids persisting information about consumed messages
      * upon every consumed message. Default is 50.
-     * 
+     *
      * @return int
      */
     public int getConsumeInterval() {
@@ -390,7 +397,7 @@ public class ServerConfiguration extends AbstractConfiguration {
      * Returns the interval to release a topic. If this
      * parameter is greater than zero, then schedule a
      * task to release an owned topic. Default is 0 (never released).
-     * 
+     *
      * @return int
      */
     public int getRetentionSecs() {
@@ -399,7 +406,7 @@ public class ServerConfiguration extends AbstractConfiguration {
 
     /**
      * True if SSL is enabled across regions.
-     * 
+     *
      * @return boolean
      */
     public boolean isInterRegionSSLEnabled() {
@@ -407,10 +414,10 @@ public class ServerConfiguration extends AbstractConfiguration {
     }
 
     /**
-     * This parameter is used to determine how often we run the 
-     * SubscriptionManager's Messages Consumed timer task thread 
+     * This parameter is used to determine how often we run the
+     * SubscriptionManager's Messages Consumed timer task thread
      * (in milliseconds).
-     * 
+     *
      * @return int
      */
     public int getMessagesConsumedThreadRunInterval() {
@@ -421,7 +428,7 @@ public class ServerConfiguration extends AbstractConfiguration {
      * This parameter is used to determine how often we run a thread
      * to retry those failed remote subscriptions in asynchronous mode
      * (in milliseconds).
-     * 
+     *
      * @return int
      */
     public int getRetryRemoteSubscribeThreadRunInterval() {
@@ -432,7 +439,7 @@ public class ServerConfiguration extends AbstractConfiguration {
      * This parameter is for setting the default maximum number of messages which
      * can be delivered to a subscriber without being consumed.
      * we pause messages delivery to a subscriber when reaching the window size
-     * 
+     *
      * @return int
      */
     public int getDefaultMessageWindowSize() {
@@ -443,7 +450,7 @@ public class ServerConfiguration extends AbstractConfiguration {
      * This parameter is used when Bookkeeper is the persistence
      * store and indicates what the ensemble size is (i.e. how
      * many bookie servers to stripe the ledger entries across).
-     * 
+     *
      * @return int
      */
     public int getBkEnsembleSize() {
@@ -455,7 +462,7 @@ public class ServerConfiguration extends AbstractConfiguration {
      * This parameter is used when Bookkeeper is the persistence store
      * and indicates what the quorum size is (i.e. how many redundant
      * copies of each ledger entry is written).
-     * 
+     *
      * @return int
      */
     @Deprecated
@@ -610,31 +617,59 @@ public class ServerConfiguration extends AbstractConfiguration {
     public int getMetastoreMaxEntriesPerScan() {
         return conf.getInt(METASTORE_MAX_ENTRIES_PER_SCAN, 50);
     }
-    
+
     public String getLeveldbPersistencePath() {
     	return conf.getString(LEVELDB_PERSISTENCE_PATH, "/tmp/hub-leveldb");
     }
-    
+
+    public String getLeveldbPartitionDBPath() {
+        return conf.getString(LEVELDB_PARTITIONDB_PATH, "/tmp/hub-partitiondb");
+    }
+
+    public String getLeveldbSubscriptionDBPath() {
+        return conf.getString(LEVELDB_SUBSCRIPTIONDB_PATH, "/tmp/hub-subscriptiondb");
+    }
+
     public int getLeveldbBlockSize() {
     	return conf.getInt(LEVELDB_BLOCK_SIZE, 65536);
     }
-    
+
     public long getLeveldbCacheSize() {
     	return conf.getLong(LEVELDB_CACHE_SIZE, 536870912);
     }
-    
+
+    public long getLeveldbPartitionDBCacheSize() {
+        return conf.getLong(LEVELDB_PARTITIONDB_CACHE_SIZE, 16777216);
+    }
+
+    public long getLeveldbSubscriptionDBCacheSize() {
+        return conf.getLong(LEVELDB_SUBSCRIPTIONDB_CACHE_SIZE, 16777216);
+    }
+
     public int getLeveldbWriteBufferSize() {
     	return conf.getInt(LEVELDB_WRITE_BUFFER_SIZE, 67108864);
     }
-    
+
+    public int getLeveldbPartitionDBWriteBufferSize() {
+        return conf.getInt(LEVELDB_PARTITIONDB_WRITE_BUFFER_SIZE, 4194304);
+    }
+
+    public int getLeveldbSubscriptionDBWriteBufferSize() {
+        return conf.getInt(LEVELDB_SUBSCRIPTIONDB_WRITE_BUFFER_SIZE, 4194304);
+    }
+
+    public long getLeveldbMaxCachedSubscriptions() {
+        return conf.getLong(LEVELDB_MAX_CACHED_SUBSCRIPTIONS, 100000);
+    }
+
     public int getLeveldbMaxOpenFiles() {
     	return conf.getInt(LEVELDB_MAX_OPEN_FILES, 10000);
     }
-    
+
     public int getLeveldbNumIOWorkers() {
     	return conf.getInt(LEVELDB_NUM_IO_WORKERS, Runtime.getRuntime().availableProcessors());
     }
-    
+
     public boolean isLeveldbPersistenceEnabled() {
     	return conf.getBoolean(LEVELDB_PERSISTENCE_ENABLED, false);
     }

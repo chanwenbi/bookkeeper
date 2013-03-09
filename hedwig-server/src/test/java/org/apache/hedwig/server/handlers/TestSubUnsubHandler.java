@@ -92,6 +92,10 @@ public class TestSubUnsubHandler extends TestCase {
             }
 
             @Override
+            public void postStart() {
+            }
+
+            @Override
             public void stop() {
             }
 

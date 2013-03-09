@@ -17,13 +17,14 @@
  */
 package org.apache.hedwig.server.topics.helix;
 
-public interface TopicPartitionOwnershipListener {
+public interface Partitioner<T> {
 
-    public void becomeLeaderFromStandby(String topicPartition, long epoch);
-
-    public void becomeStandbyFromLeader(String topicPartition);
-
-    public void becomeStandbyFromOffline(String topicPartition);
-
-    public void becomeOfflineFromStandby(String topicPartition);
+    /**
+     * Get the specific partition that the given <code>key</code> belongs to.
+     * 
+     * @param key
+     *            Key.
+     * @return partition serving the given key.
+     */
+    public String getPartition(T key);
 }

@@ -109,10 +109,12 @@ public class HedwigClusterSimulator {
         echo("Starting participants in the cluster.");
         for (int i = 0; i < NUM_NODES; i++) {
             InstanceConfig instanceConf = INSTANCE_CONFIG_LIST.get(i);
+            /**
             HelixTopicManager tm = new HelixTopicManager(conf, instanceConf);
             TOPICMANAGER_LIST.add(tm);
             tm.start();
             echo("\t Started Topic Manager : " + instanceConf.getInstanceName());
+            **/
         }
     }
 
@@ -137,10 +139,12 @@ public class HedwigClusterSimulator {
                 + ". Partitions will move from old nodes to the new node.");
         admin.addInstance(HelixTopicManager.DEFAULT_CLUSTERNAME, instanceConfig);
         INSTANCE_CONFIG_LIST.add(instanceConfig);
+        /**
         HelixTopicManager tm = new HelixTopicManager(conf, instanceConfig);
         TOPICMANAGER_LIST.add(tm);
         admin.rebalance(HelixTopicManager.DEFAULT_CLUSTERNAME, HelixTopicManager.DEFAULT_NAMESPACE, NUM_REPLICAS);
         tm.start();
+        **/
     }
 
     static void rebalance() {
@@ -149,9 +153,11 @@ public class HedwigClusterSimulator {
 
     static void restartNode(InstanceConfig config) throws Exception {
         echo("Restarting " + config.getInstanceName() + ". Mastership will be transferred back.");
+        /**
         HelixTopicManager tm = new HelixTopicManager(conf, config);
         TOPICMANAGER_LIST.set(Integer.parseInt(config.getPort()) - START_PORT, tm);
         tm.start();
+        **/
     }
 
     static InstanceConfig stopNode() throws Exception {

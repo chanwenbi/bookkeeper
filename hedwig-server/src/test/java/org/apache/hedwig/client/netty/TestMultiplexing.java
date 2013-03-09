@@ -21,14 +21,8 @@ import java.io.File;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-
-import com.google.protobuf.ByteString;
-import org.apache.hedwig.client.api.MessageHandler;
-import org.apache.hedwig.client.conf.ClientConfiguration;
 import org.apache.hedwig.client.HedwigClient;
+import org.apache.hedwig.client.api.MessageHandler;
 import org.apache.hedwig.client.api.Publisher;
 import org.apache.hedwig.client.api.Subscriber;
 import org.apache.hedwig.protocol.PubSubProtocol.Message;
@@ -37,6 +31,11 @@ import org.apache.hedwig.protocol.PubSubProtocol.SubscribeRequest.CreateOrAttach
 import org.apache.hedwig.server.HedwigHubTestBase;
 import org.apache.hedwig.server.common.ServerConfiguration;
 import org.apache.hedwig.util.Callback;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+
+import com.google.protobuf.ByteString;
 
 public class TestMultiplexing extends HedwigHubTestBase {
 
@@ -313,7 +312,7 @@ public class TestMultiplexing extends HedwigHubTestBase {
         csHandler21.checkSecondRun();
     }
 
-    @Test(timeout=60000)
+    @Test(timeout = 60000)
     public void testCloseSubscription() throws Exception {
         ByteString topic1 = ByteString.copyFromUtf8("testCloseSubscription-1");
         ByteString topic2 = ByteString.copyFromUtf8("testCloseSubscription-2");
@@ -373,7 +372,7 @@ public class TestMultiplexing extends HedwigHubTestBase {
         csHandler21.checkSecondRun();
     }
 
-    @Test(timeout=60000)
+    @Test(timeout = 60000)
     public void testThrottle() throws Exception {
         ByteString topic1 = ByteString.copyFromUtf8("testThrottle-1");
         ByteString topic2 = ByteString.copyFromUtf8("testThrottle-2");
@@ -382,14 +381,10 @@ public class TestMultiplexing extends HedwigHubTestBase {
 
         final int X = DEFAULT_MSG_WINDOW_SIZE;
 
-        ThrottleMessageHandler csHandler11 =
-            new ThrottleMessageHandler(1, 3*X, false, X);
-        ThrottleMessageHandler csHandler12 =
-            new ThrottleMessageHandler(1, 3*X, true, X);
-        ThrottleMessageHandler csHandler21 =
-            new ThrottleMessageHandler(1, 3*X, true, X);
-        ThrottleMessageHandler csHandler22 =
-            new ThrottleMessageHandler(1, 3*X, false, X);
+        ThrottleMessageHandler csHandler11 = new ThrottleMessageHandler(1, 3 * X, false, X);
+        ThrottleMessageHandler csHandler12 = new ThrottleMessageHandler(1, 3 * X, true, X);
+        ThrottleMessageHandler csHandler21 = new ThrottleMessageHandler(1, 3 * X, true, X);
+        ThrottleMessageHandler csHandler22 = new ThrottleMessageHandler(1, 3 * X, false, X);
 
         subscriber.subscribe(topic1, subid1, CreateOrAttach.CREATE);
         subscriber.subscribe(topic1, subid2, CreateOrAttach.CREATE);
@@ -403,11 +398,9 @@ public class TestMultiplexing extends HedwigHubTestBase {
         subscriber.startDelivery(topic2, subid2, csHandler22);
 
         // publish
-        for (int i = 1; i<=3*X; i++) {
-            publisher.publish(topic1, Message.newBuilder().setBody(
-                                      ByteString.copyFromUtf8(String.valueOf(i))).build());
-            publisher.publish(topic2, Message.newBuilder().setBody(
-                                      ByteString.copyFromUtf8(String.valueOf(i))).build());
+        for (int i = 1; i <= 3 * X; i++) {
+            publisher.publish(topic1, Message.newBuilder().setBody(ByteString.copyFromUtf8(String.valueOf(i))).build());
+            publisher.publish(topic2, Message.newBuilder().setBody(ByteString.copyFromUtf8(String.valueOf(i))).build());
         }
 
         csHandler11.checkThrottle();
@@ -416,9 +409,8 @@ public class TestMultiplexing extends HedwigHubTestBase {
         csHandler22.checkThrottle();
 
         // consume messages to not throttle them
-        for (int i=1; i<=X; i++) {
-            MessageSeqId seqId =
-                MessageSeqId.newBuilder().setLocalComponent(i).build();
+        for (int i = 1; i <= X; i++) {
+            MessageSeqId seqId = MessageSeqId.newBuilder().setLocalComponent(i).build();
             subscriber.consume(topic1, subid2, seqId);
             subscriber.consume(topic2, subid1, seqId);
         }

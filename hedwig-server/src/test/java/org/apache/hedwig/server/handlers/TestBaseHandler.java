@@ -78,6 +78,10 @@ public class TestBaseHandler extends TestCase {
             }
 
             @Override
+            public void postStart() {
+            }
+
+            @Override
             public void stop() {
             }
 

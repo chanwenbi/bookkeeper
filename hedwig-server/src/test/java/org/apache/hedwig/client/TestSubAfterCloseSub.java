@@ -21,21 +21,20 @@ import java.io.IOException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import org.junit.Test;
-
-import com.google.protobuf.ByteString;
 import org.apache.hedwig.client.api.MessageHandler;
-import org.apache.hedwig.client.api.Subscriber;
-import org.apache.hedwig.client.HedwigClient;
 import org.apache.hedwig.client.api.Publisher;
+import org.apache.hedwig.client.api.Subscriber;
 import org.apache.hedwig.exceptions.PubSubException;
 import org.apache.hedwig.protocol.PubSubProtocol.Message;
 import org.apache.hedwig.protocol.PubSubProtocol.SubscribeRequest.CreateOrAttach;
 import org.apache.hedwig.server.HedwigHubTestBase;
-import org.apache.hedwig.server.netty.PubSubServer;
 import org.apache.hedwig.server.delivery.DeliveryManager;
 import org.apache.hedwig.server.delivery.FIFODeliveryManager;
+import org.apache.hedwig.server.netty.PubSubServer;
 import org.apache.hedwig.util.Callback;
+import org.junit.Test;
+
+import com.google.protobuf.ByteString;
 
 public class TestSubAfterCloseSub extends HedwigHubTestBase {
 
@@ -53,11 +52,11 @@ public class TestSubAfterCloseSub extends HedwigHubTestBase {
         }
     }
 
-    private void sleepDeliveryManager(final CountDownLatch wakeupLatch)
+    private void sleepDeliveryManager(ByteString topic, final CountDownLatch wakeupLatch)
             throws IOException {
         PubSubServer server = serversList.get(0);
         assertNotNull("There should be at least one pubsub server", server);
-        DeliveryManager dm = server.getDeliveryManager();
+        DeliveryManager dm = server.getDeliveryManager(topic);
         assertNotNull("Delivery manager should not be null once server has started", dm);
         assertTrue("Delivery manager is wrong type", dm instanceof FIFODeliveryManager);
         final FIFODeliveryManager fdm = (FIFODeliveryManager)dm;
@@ -108,7 +107,7 @@ public class TestSubAfterCloseSub extends HedwigHubTestBase {
 
         try {
             subscriber.subscribe(topic, subid, CreateOrAttach.CREATE_OR_ATTACH);
-            sleepDeliveryManager(wakeupLatch);
+            sleepDeliveryManager(topic, wakeupLatch);
             subscriber.asyncCloseSubscription(topic, subid, new Callback<Void>() {
                 @Override
                 public void operationFinished(Object ctx, Void resultOfOperation) {

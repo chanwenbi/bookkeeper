@@ -51,7 +51,7 @@ public class StandaloneSnitch extends AbstractSnitch {
             throws IOException {
         PersistenceManagerWithRangeScan underlyingPM;
         if (conf.isLeveldbPersistenceEnabled()) {
-            underlyingPM = new LeveldbPersistenceManager(conf, topicMgr);
+            underlyingPM = new LeveldbPersistenceManager(conf, topicMgr, scheduler);
         } else {
             underlyingPM = LocalDBPersistenceManager.instance();
         }

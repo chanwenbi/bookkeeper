@@ -18,6 +18,7 @@
 package org.apache.hedwig.server.regions;
 
 import org.apache.commons.configuration.ConfigurationException;
+import org.apache.hedwig.client.HedwigClient;
 import org.apache.hedwig.client.conf.ClientConfiguration;
 import org.apache.hedwig.server.common.ServerConfiguration;
 import org.apache.hedwig.util.HedwigSocketAddress;
@@ -69,5 +70,22 @@ public class HedwigHubClientFactory {
             throw new RuntimeException(msg);
         }
         return new HedwigHubClient(hubClientConfiguration, channelFactory);
+    }
+
+    public HedwigClient createNormalClient(final HedwigSocketAddress hub) {
+        ClientConfiguration hubClientConfiguration = new ClientConfiguration() {
+            @Override
+            protected HedwigSocketAddress getDefaultServerHedwigSocketAddress() {
+                return hub;
+            }
+        };
+        try {
+            hubClientConfiguration.addConf(this.clientConfiguration.getConf());
+        } catch (ConfigurationException e) {
+            String msg = "Configuration exception while loading the client configuration for the region manager.";
+            logger.error(msg);
+            throw new RuntimeException(msg);
+        }
+        return new HedwigClient(hubClientConfiguration, channelFactory);
     }
 }

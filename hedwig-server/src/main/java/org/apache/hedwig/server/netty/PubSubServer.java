@@ -46,6 +46,8 @@ import org.apache.hedwig.server.snitch.OneSnitchSeeker;
 import org.apache.hedwig.server.snitch.Snitch;
 import org.apache.hedwig.server.snitch.SnitchSeeker;
 import org.apache.hedwig.server.snitch.StandaloneSnitch;
+import org.apache.hedwig.server.snitch.helix.HelixSnitch;
+import org.apache.hedwig.server.snitch.helix.HelixSnitchSeeker;
 import org.apache.hedwig.server.ssl.SslServerContextFactory;
 import org.apache.hedwig.util.ConcurrencyUtils;
 import org.apache.hedwig.util.Either;
@@ -63,6 +65,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.protobuf.ByteString;
 
 public class PubSubServer {
 
@@ -79,18 +82,23 @@ public class PubSubServer {
 
     // Snitchs serving pub/sub logics
     SnitchSeeker snitchSeeker;
-    Snitch snitch;
 
     // JMX Beans
     NettyHandlerBean jmxNettyBean;
     PubSubServerBean jmxServerBean;
     final ThreadGroup tg;
 
-    protected Snitch instantiateSnitch() throws IOException {
+    protected SnitchSeeker instantiateSnitchSeeker() throws IOException {
         if (conf.isStandalone()) {
-            return new StandaloneSnitch(conf, clientConfiguration, clientChannelFactory);
+            Snitch snitch = new StandaloneSnitch(conf, clientConfiguration, clientChannelFactory);
+            snitch.start();
+            return new OneSnitchSeeker(snitch);
         } else {
-            return new BookKeeperSnitch(conf, clientConfiguration, clientChannelFactory);
+            Snitch topicSnitch = new HelixSnitch(conf, clientConfiguration, clientChannelFactory);
+            Snitch logSnitch = new BookKeeperSnitch(conf, clientConfiguration, clientChannelFactory);
+            logSnitch.start();
+            topicSnitch.start();
+            return new HelixSnitchSeeker(topicSnitch, logSnitch);
         }
     }
 
@@ -131,8 +139,8 @@ public class PubSubServer {
 
     public void shutdown() {
         // Stop the snitch
-        if (null != snitch) {
-            snitch.stop();
+        if (null != snitchSeeker) {
+            snitchSeeker.stop();
         }
 
         // Close and release the Netty channels and resources
@@ -161,11 +169,13 @@ public class PubSubServer {
             logger.warn("Failed to register with JMX", e);
             jmxServerBean = null;
         }
-        snitch.registerJMX(jmxServerBean);
+        // TODO: register JMX
+        // snitch.registerJMX(jmxServerBean);
     }
 
     protected void unregisterJMX() {
-        snitch.unregisterJMX();
+        // TODO: register jmx
+        // snitch.unregisterJMX();
         try {
             if (jmxNettyBean != null) {
                 HedwigMBeanRegistry.getInstance().unregister(jmxNettyBean);
@@ -235,9 +245,7 @@ public class PubSubServer {
                     clientChannelFactory = new NioClientSocketChannelFactory(Executors.newCachedThreadPool(), Executors
                             .newCachedThreadPool());
 
-                    snitch = instantiateSnitch();
-                    snitch.start();
-                    snitchSeeker = new OneSnitchSeeker(snitch);
+                    snitchSeeker = instantiateSnitchSeeker();
 
                     allChannels = new DefaultChannelGroup("hedwig");
                     // Initialize the Netty Handlers (used by the
@@ -254,6 +262,9 @@ public class PubSubServer {
                     }
                     // register jmx
                     registerJMX(subChannelMgr);
+
+                    // post start the snitch
+                    snitchSeeker.postStart();
                 } catch (Exception e) {
                     ConcurrencyUtils.put(queue, Either.right(e));
                     return;
@@ -280,8 +291,8 @@ public class PubSubServer {
     }
 
     @VisibleForTesting
-    public DeliveryManager getDeliveryManager() {
-        return snitch.getDeliveryManager();
+    public DeliveryManager getDeliveryManager(ByteString topic) {
+        return snitchSeeker.getSnitch(topic).getDeliveryManager();
     }
 
     /**

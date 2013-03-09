@@ -15,15 +15,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hedwig.server.topics.helix;
+package org.apache.hedwig.server.snitch.helix;
 
-public interface TopicPartitionOwnershipListener {
+import org.apache.hedwig.protocol.PubSubProtocol.InternalTxn;
+import org.apache.hedwig.util.Callback;
 
-    public void becomeLeaderFromStandby(String topicPartition, long epoch);
-
-    public void becomeStandbyFromLeader(String topicPartition);
-
-    public void becomeStandbyFromOffline(String topicPartition);
-
-    public void becomeOfflineFromStandby(String topicPartition);
+/**
+ * Transaction Log to interactive with transactions.
+ */
+public interface TxnLog {
+    /**
+     * Process a given transaction.
+     *
+     * @param txnBuilder
+     *            Txn Builder.
+     * @param callback
+     *            Callback instance of this txn request.
+     */
+    public void processTxn(InternalTxn.Builder txnBuilder, Callback<Void> callback);
 }

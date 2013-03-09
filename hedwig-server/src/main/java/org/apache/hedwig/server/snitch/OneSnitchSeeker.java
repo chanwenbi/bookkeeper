@@ -47,4 +47,19 @@ public class OneSnitchSeeker implements SnitchSeeker {
         }
     }
 
+    @Override
+    public void start() {
+        snitch.start();
+    }
+
+    @Override
+    public void stop() {
+        snitch.stop();
+    }
+
+    @Override
+    public void postStart() {
+        snitch.postStart();
+    }
+
 }

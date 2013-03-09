@@ -34,4 +34,11 @@ public interface SnitchSeeker extends SubChannelDisconnectedListener {
      * @return snitch serving this given topic.
      */
     public Snitch getSnitch(ByteString topic);
+
+    public void start();
+
+    public void stop();
+
+    public void postStart();
+
 }

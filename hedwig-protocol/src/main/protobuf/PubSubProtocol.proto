@@ -62,26 +62,44 @@ message MessageSeqId{
 }
 
 /**
- * Messages used for internal
+ * Txns used for internal
  */
-message InternalMessage {
+message InternalTxn {
     enum Type {
-        DATA = 0;
-        FENCE = 1;
+        FENCE = 0;
+        DATA = 1;
+        SUBSCRIPTION = 2;
     }
     required Type type = 1;
+    // identify the epoch for each updates
+    required uint64 epoch = 2;
+    // provide unique id for each updates.
+    required uint64 txnId = 3;
 
-    optional IDataMessage dataMsg = 11;
-    optional IFenceMessage fenceMsg = 12;
+    optional IFenceTxn fenceTxn= 11;
+    optional IDataTxn dataTxn = 12;
+    optional ISubscriptionTxn subTxn = 13;
 }
 
-message IDataMessage {
-    required bytes body = 1;
+message IDataTxn {
+    required bytes topic = 1;
+    required bytes body = 2;
 }
 
-message IFenceMessage {
+message IFenceTxn {
     required string hostname = 1;
-    required uint64 timestamp = 2;
+}
+
+message ISubscriptionTxn {
+    required bytes topic = 1;
+    required bytes subscriberId = 2;
+    enum SubscriptionOp {
+        UPDATE = 0;
+        DELETE = 1;
+    }
+    required SubscriptionOp op = 3;
+    required uint32 version = 4;
+    optional SubscriptionData subscriptionData = 5;
 }
 
 enum OperationType{
@@ -333,4 +351,8 @@ message HubInfoData {
 
 message HubLoadData {
     required uint64 numTopics = 2;
+}
+
+message PartitionData {
+    required uint64 epoch = 1;
 }

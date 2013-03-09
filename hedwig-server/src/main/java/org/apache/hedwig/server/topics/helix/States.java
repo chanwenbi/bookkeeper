@@ -19,15 +19,15 @@ package org.apache.hedwig.server.topics.helix;
 
 import org.apache.helix.model.StateModelDefinition;
 
-class States {
+public class States {
 
-    static final String STATE_MODEL_NAME = "hedwig";
+    public static final String STATE_MODEL_NAME = "hedwig";
 
-    static final String OFFLINE = "OFFLINE";
-    static final String LEADER = "LEADER";
-    static final String STANDBY = "STANDBY";
+    public static final String OFFLINE = "OFFLINE";
+    public static final String LEADER = "LEADER";
+    public static final String STANDBY = "STANDBY";
 
-    static StateModelDefinition defineTopicStateModel() {
+    public static StateModelDefinition defineTopicStateModel() {
         StateModelDefinition.Builder builder = new StateModelDefinition.Builder(STATE_MODEL_NAME);
         // Add states and their rank to indicate priority
         builder.addState(LEADER, 1);

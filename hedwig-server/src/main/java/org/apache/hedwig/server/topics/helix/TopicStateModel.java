@@ -22,6 +22,8 @@ import static org.apache.hedwig.server.topics.helix.States.OFFLINE;
 import static org.apache.hedwig.server.topics.helix.States.STANDBY;
 import static org.apache.hedwig.util.VarArgs.va;
 
+import org.apache.helix.ConfigScope;
+import org.apache.helix.ConfigScopeBuilder;
 import org.apache.helix.NotificationContext;
 import org.apache.helix.model.Message;
 import org.apache.helix.participant.statemachine.StateModel;
@@ -35,6 +37,9 @@ public class TopicStateModel extends StateModel {
 
     private static final Logger logger = LoggerFactory.getLogger(TopicStateModel.class);
 
+    private static final String FIELD_EPOCH = "epoch";
+    private static final long INITIAL_EPOCH = 0L;
+
     private final String instanceName;
     private final String partitionName;
     private final TopicPartitionOwnershipListener listener;
@@ -47,34 +52,49 @@ public class TopicStateModel extends StateModel {
 
     private static void logStateTransition(String instanceName, String partitionName, String from, String to) {
         logger.info("Instance {} : TopicPartition {} become {} from {}.", va(instanceName, partitionName, to, from));
-        System.out.println("Instance " + instanceName + " : TopicPartition " + partitionName + " become " + to
-                + " from " + from + ".");
     }
 
     @Transition(to = STANDBY, from = OFFLINE)
     public void onBecomeStandbyFromOffline(Message message, NotificationContext context) {
         logStateTransition(instanceName, partitionName, OFFLINE, STANDBY);
-        // nothing to do when transit from OFFLINE to STANDBY.
+        listener.becomeStandbyFromOffline(partitionName);
     }
 
     @Transition(to = LEADER, from = STANDBY)
     public void onBecomeLeaderFromStandby(Message message, NotificationContext context) {
         logStateTransition(instanceName, partitionName, STANDBY, LEADER);
         // claim the topic partition when it becomes leader.
-        listener.becomeTopicPartitionLeader(partitionName);
+        ConfigScopeBuilder builder = new ConfigScopeBuilder();
+        builder.forCluster(HelixTopicManager.DEFAULT_CLUSTERNAME).forResource(HelixTopicManager.DEFAULT_NAMESPACE)
+                .forPartition(partitionName);
+        ConfigScope scope = builder.build();
+        logger.info("{} : STANDBY -> LEADER : Access scope {} for epoch of partition {}.",
+                va(instanceName, scope, partitionName));
+        String epochStr = context.getManager().getConfigAccessor().get(scope, FIELD_EPOCH);
+        long epoch = INITIAL_EPOCH;
+        if (null != epochStr) {
+            try {
+                epoch = Long.parseLong(epochStr) + 1;
+            } catch (NumberFormatException nfe) {
+            }
+        }
+        context.getManager().getConfigAccessor().set(scope, FIELD_EPOCH, "" + epoch);
+        logger.info("{} : STANDBY -> LEADER : Bumping epoch to {} for partition {}.",
+                va(instanceName, epoch, partitionName));
+        listener.becomeLeaderFromStandby(partitionName, epoch);
     }
 
     @Transition(to = STANDBY, from = LEADER)
     public void onBecomeStandbyFromLeader(Message message, NotificationContext context) {
         logStateTransition(instanceName, partitionName, LEADER, STANDBY);
         // release the topic partition when it becomes standby
-        listener.becomeTopicPartitionStandby(partitionName);
+        listener.becomeStandbyFromLeader(partitionName);
     }
 
     @Transition(to = OFFLINE, from = STANDBY)
     public void onBecomeOfflineFromStandby(Message message, NotificationContext context) {
         logStateTransition(instanceName, partitionName, STANDBY, OFFLINE);
-        // nothing to do when transit from STANDBY to OFFLINE
+        listener.becomeOfflineFromStandby(partitionName);
     }
 
 }

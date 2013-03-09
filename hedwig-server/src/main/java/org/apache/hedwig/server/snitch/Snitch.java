@@ -43,6 +43,11 @@ public interface Snitch {
     public void start();
 
     /**
+     * Start after the hub server initialized.
+     */
+    public void postStart();
+
+    /**
      * Stop the <i>snitch<i>
      */
     public void stop();

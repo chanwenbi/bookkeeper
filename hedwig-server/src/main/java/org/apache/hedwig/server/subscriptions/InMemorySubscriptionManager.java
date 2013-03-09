@@ -20,10 +20,8 @@ package org.apache.hedwig.server.subscriptions;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.google.protobuf.ByteString;
-
-import org.apache.bookkeeper.versioning.Version;
 import org.apache.bookkeeper.util.OrderedSafeExecutor;
+import org.apache.bookkeeper.versioning.Version;
 import org.apache.hedwig.protocol.PubSubProtocol.SubscriptionData;
 import org.apache.hedwig.server.common.ServerConfiguration;
 import org.apache.hedwig.server.delivery.DeliveryManager;
@@ -31,10 +29,11 @@ import org.apache.hedwig.server.persistence.PersistenceManager;
 import org.apache.hedwig.server.topics.TopicManager;
 import org.apache.hedwig.util.Callback;
 
+import com.google.protobuf.ByteString;
+
 public class InMemorySubscriptionManager extends AbstractSubscriptionManager {
     // Backup for top2sub2seq
-    final ConcurrentHashMap<ByteString, Map<ByteString, InMemorySubscriptionState>> top2sub2seqBackup =
-        new ConcurrentHashMap<ByteString, Map<ByteString, InMemorySubscriptionState>>();
+    final ConcurrentHashMap<ByteString, TopicInfo> top2sub2seqBackup = new ConcurrentHashMap<ByteString, TopicInfo>();
 
     public InMemorySubscriptionManager(ServerConfiguration conf,
                                        TopicManager tm, PersistenceManager pm,
@@ -78,9 +77,9 @@ public class InMemorySubscriptionManager extends AbstractSubscriptionManager {
     @Override
     public void lostTopic(ByteString topic) {
         // Backup topic-sub2seq map for readSubscriptions
-        final Map<ByteString, InMemorySubscriptionState> sub2seq = top2sub2seq.get(topic);
-        if (null != sub2seq)
-            top2sub2seqBackup.put(topic, sub2seq);
+        final TopicInfo topicInfo = top2sub2seq.get(topic);
+        if (null != topicInfo)
+            top2sub2seqBackup.put(topic, topicInfo);
 
         if (logger.isDebugEnabled()) {
             logger.debug("InMemorySubscriptionManager is losing topic " + topic.toStringUtf8());
@@ -92,10 +91,10 @@ public class InMemorySubscriptionManager extends AbstractSubscriptionManager {
     protected void readSubscriptions(ByteString topic,
                                      Callback<Map<ByteString, InMemorySubscriptionState>> cb, Object ctx) {
         // Since we backed up in-memory information on lostTopic, we can just return that back
-        Map<ByteString, InMemorySubscriptionState> topicSubs = top2sub2seqBackup.remove(topic);
+        TopicInfo topicInfo = top2sub2seqBackup.remove(topic);
 
-        if (topicSubs != null) {
-            cb.operationFinished(ctx, topicSubs);
+        if (topicInfo != null) {
+            cb.operationFinished(ctx, topicInfo.sub2seq);
         } else {
             cb.operationFinished(ctx, new ConcurrentHashMap<ByteString, InMemorySubscriptionState>());
         }
@@ -106,14 +105,14 @@ public class InMemorySubscriptionManager extends AbstractSubscriptionManager {
     protected void readSubscriptionData(ByteString topic,
             ByteString subscriberId, Callback<InMemorySubscriptionState> cb, Object ctx) {
         // Since we backed up in-memory information on lostTopic, we can just return that back
-        Map<ByteString, InMemorySubscriptionState> sub2seqBackup = top2sub2seqBackup.get(topic);
-        if (sub2seqBackup == null) {
+        TopicInfo topicInfoBackup = top2sub2seqBackup.get(topic);
+        if (topicInfoBackup == null) {
             cb.operationFinished(ctx, new InMemorySubscriptionState(
                     SubscriptionData.getDefaultInstance(), Version.NEW));
             return;
         }
-        InMemorySubscriptionState subState = sub2seqBackup.remove(subscriberId);
-        
+        InMemorySubscriptionState subState = topicInfoBackup.sub2seq.remove(subscriberId);
+
         if (subState != null) {
             cb.operationFinished(ctx, subState);
         } else {

@@ -17,6 +17,8 @@
  */
 package org.apache.hedwig.server.persistence;
 
+import static org.fusesource.leveldbjni.JniDBFactory.factory;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.Map.Entry;
@@ -25,12 +27,6 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.google.protobuf.ByteString;
-import com.google.protobuf.InvalidProtocolBufferException;
 
 import org.apache.bookkeeper.util.OrderedSafeExecutor;
 import org.apache.bookkeeper.util.SafeRunnable;
@@ -44,7 +40,6 @@ import org.apache.hedwig.server.persistence.ScanCallback.ReasonForFinish;
 import org.apache.hedwig.server.topics.TopicManager;
 import org.apache.hedwig.server.topics.TopicOwnershipChangeListener;
 import org.apache.hedwig.util.Callback;
-
 import org.iq80.leveldb.CompressionType;
 import org.iq80.leveldb.DB;
 import org.iq80.leveldb.DBException;
@@ -53,12 +48,15 @@ import org.iq80.leveldb.Options;
 import org.iq80.leveldb.ReadOptions;
 import org.iq80.leveldb.WriteBatch;
 import org.iq80.leveldb.WriteOptions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import static org.fusesource.leveldbjni.JniDBFactory.factory;
+import com.google.protobuf.ByteString;
+import com.google.protobuf.InvalidProtocolBufferException;
 
 /**
  * This persistence manager uses leveldb to store messages.
- * 
+ *
  * TODO: 1) collect metrics; 2) benchmark it
  */
 public class LeveldbPersistenceManager implements PersistenceManagerWithRangeScan, TopicOwnershipChangeListener {
@@ -70,18 +68,33 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
     private static final byte SEP = '\001';
     private static final int NUM_DELETIONS_PER_BATCH = 32;
     private static final int MSG_KEY_SUFFIX_LEN = 1 + Long.SIZE;
-    private static final MessageSeqId START_SEQ_ID =
-    		MessageSeqId.newBuilder().setLocalComponent(0L).build();
+    private static final MessageSeqId START_SEQ_ID = MessageSeqId.newBuilder().setLocalComponent(0L).build();
 
-    private class TopicInfo implements Runnable {
+    protected class TopicInfo implements Runnable {
         final ByteString topic;
         volatile MessageSeqId lastSeqIdPushed = START_SEQ_ID;
         volatile long consumedSeqId = 0;
-        long seqIdUntilDeleted = 0; 
+        long seqIdUntilDeleted = 0;
         volatile int messageBound = UNLIMITED;
+        // context object passed from topic manager when acquired topic
+        volatile Object topicContext;
 
-        TopicInfo(ByteString topic) {
+        TopicInfo(ByteString topic, Object topicContext) {
             this.topic = topic;
+            this.topicContext = topicContext;
+        }
+
+        public Object getTopicContext() {
+            return this.topicContext;
+        }
+
+        public TopicInfo setTopicContext(Object topicContext) {
+            this.topicContext = topicContext;
+            return this;
+        }
+
+        public void setLastSeqIdPushed(MessageSeqId lastSeqIdPushed) {
+            this.lastSeqIdPushed = lastSeqIdPushed;
         }
 
         void takeFirstSeqIdAsConsumeSeqId(long seqId) {
@@ -107,13 +120,13 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
             } else {
                 if (lastSeqIdPushed.getLocalComponent() < seqId) {
                     lastSeqIdPushed = MessageSeqId.newBuilder()
-                        .addAllRemoteComponents(lastSeqIdPushed.getRemoteComponentsList())
-                        .setLocalComponent(seqId).build();
+                            .addAllRemoteComponents(lastSeqIdPushed.getRemoteComponentsList()).setLocalComponent(seqId)
+                            .build();
                 }
             }
         }
 
-        Message buildNextMessage(Message requestedMsg) {
+        public MessageSeqId buildNextMessageSeqId(Message requestedMsg) {
             long localSeqId = lastSeqIdPushed.getLocalComponent() + 1;
             MessageSeqId.Builder builder = MessageSeqId.newBuilder();
             if (requestedMsg.hasMsgId()) {
@@ -122,8 +135,11 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
                 builder.addAllRemoteComponents(lastSeqIdPushed.getRemoteComponentsList());
             }
             builder.setLocalComponent(localSeqId);
-            MessageSeqId seqId = builder.build();
-            return Message.newBuilder(requestedMsg).setMsgId(seqId).build();
+            return builder.build();
+        }
+
+        public Message buildMessage(Message msg, MessageSeqId seqId) {
+            return Message.newBuilder(msg).setMsgId(seqId).build();
         }
 
         byte[] serialize() {
@@ -133,13 +149,13 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
             System.arraycopy(seqidData, 0, data, Long.SIZE, seqidData.length);
             return data;
         }
-        
+
         TopicInfo deserialize(ByteString topic, byte[] data) throws InvalidProtocolBufferException {
-            TopicInfo ti = new TopicInfo(topic);
-            ti.consumedSeqId = bytes2Long(data, 0);
-            ti.seqIdUntilDeleted = ti.consumedSeqId;
-            ti.lastSeqIdPushed = MessageSeqId.parseFrom(ByteString.copyFrom(data, Long.SIZE, data.length - Long.SIZE));
-            return ti;
+            this.consumedSeqId = bytes2Long(data, 0);
+            this.seqIdUntilDeleted = this.consumedSeqId;
+            this.lastSeqIdPushed = MessageSeqId
+                    .parseFrom(ByteString.copyFrom(data, Long.SIZE, data.length - Long.SIZE));
+            return this;
         }
 
         @Override
@@ -172,42 +188,44 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
             } catch (DBException dbe) {
                 logger.warn("Failed to delete consumed entries for topic " + topic.toStringUtf8() + " : ", dbe);
             } catch (IOException ie) {
-            	logger.warn("Failed to delete consumed entries for topic " + topic.toStringUtf8() + " : ", ie);
+                logger.warn("Failed to delete consumed entries for topic " + topic.toStringUtf8() + " : ", ie);
             } finally {
                 if (null != batch) {
-                	try {
-                		batch.close();
-                	} catch (IOException ioe) {
-                	}
+                    try {
+                        batch.close();
+                    } catch (IOException ioe) {
+                    }
                 }
             }
         }
     }
 
-    private final OrderedSafeExecutor workerPool;
+    protected final OrderedSafeExecutor workerPool;
     private final ExecutorService consumeWorker;
 
-    final ConcurrentMap<ByteString, TopicInfo> topicInfos;
-    final DB msgDB;
-    final ReadOptions ro;
-    final WriteOptions wo;
+    protected final ConcurrentMap<ByteString, TopicInfo> topicInfos;
+    protected final DB msgDB;
+    protected final ReadOptions ro;
+    protected final WriteOptions wo;
+    protected final Options dbOptions;
 
-    public LeveldbPersistenceManager(ServerConfiguration cfg, TopicManager tm) throws IOException {
+    public LeveldbPersistenceManager(ServerConfiguration cfg, TopicManager tm, OrderedSafeExecutor ioPool)
+            throws IOException {
         topicInfos = new ConcurrentHashMap<ByteString, TopicInfo>();
 
         String dbPath = cfg.getLeveldbPersistencePath();
         File dbDir = new File(dbPath);
 
-        Options options = new Options();
-        options.blockSize(cfg.getLeveldbBlockSize());
-        options.cacheSize(cfg.getLeveldbCacheSize());
-        options.compressionType(CompressionType.SNAPPY);
-        options.createIfMissing(true);
-        options.writeBufferSize(cfg.getLeveldbWriteBufferSize());
-        options.maxOpenFiles(cfg.getLeveldbMaxOpenFiles());
+        dbOptions = new Options();
+        dbOptions.blockSize(cfg.getLeveldbBlockSize());
+        dbOptions.cacheSize(cfg.getLeveldbCacheSize());
+        dbOptions.compressionType(CompressionType.SNAPPY);
+        dbOptions.createIfMissing(true);
+        dbOptions.writeBufferSize(cfg.getLeveldbWriteBufferSize());
+        dbOptions.maxOpenFiles(cfg.getLeveldbMaxOpenFiles());
 
         try {
-            msgDB = factory.open(dbDir, options);
+            msgDB = factory.open(dbDir, dbOptions);
         } catch (DBException dbe) {
             throw new IOException("Failed to open leveldb at " + dbPath, dbe);
         }
@@ -220,7 +238,7 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
         ro.fillCache(false);
         wo = new WriteOptions();
 
-        workerPool = new OrderedSafeExecutor(cfg.getLeveldbNumIOWorkers());
+        workerPool = ioPool;
         consumeWorker = Executors.newSingleThreadExecutor(new ThreadFactory() {
             @Override
             public Thread newThread(Runnable r) {
@@ -244,6 +262,14 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
     public void stop() {
         workerPool.shutdown();
         consumeWorker.shutdown();
+    }
+
+    protected void submitByTopic(ByteString topic, SafeRunnable r) {
+        workerPool.submitOrdered(topic, r);
+    }
+
+    protected void submitByPartition(String partitionName, SafeRunnable r) {
+        workerPool.submitOrdered(partitionName, r);
     }
 
     private byte[] getMessageKey(ByteString topic, long seqid) {
@@ -285,8 +311,7 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
         return 0 == compareBytes(topic, 0, topic.length, key, 0, topic.length);
     }
 
-    private void dumpTopicInfo(ByteString topic, TopicInfo topicInfo)
-    throws DBException {
+    private void dumpTopicInfo(ByteString topic, TopicInfo topicInfo) throws DBException {
         msgDB.put(getTopicKey(topic), topicInfo.serialize());
     }
 
@@ -301,8 +326,7 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
             long numTopics = 0;
 
             if (!iter.hasNext()) {
-                logger.info("Finished initialized leveldb persistence manager : {} topics.",
-                            numTopics);
+                logger.info("Finished initialized leveldb persistence manager : {} topics.", numTopics);
                 return;
             }
             Entry<byte[], byte[]> entry = iter.next();
@@ -313,44 +337,44 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
                 TopicInfo ti;
                 long curSeqId;
                 if (isMsgKey) {
-                    ti = new TopicInfo(getTopicFromMessageKey(key));
-                    // no topic info, set consume seq id to the id prior to first id
+                    ti = new TopicInfo(getTopicFromMessageKey(key), null);
+                    // no topic info, set consume seq id to the id prior to
+                    // first id
                     curSeqId = getSeqIdFromMessageKey(key);
                     ti.consumedSeqId = ti.seqIdUntilDeleted = curSeqId - 1;
                 } else {
-                    ti = new TopicInfo(getTopicFromTopicKey(key));
+                    ti = new TopicInfo(getTopicFromTopicKey(key), null);
                     try {
-						ti.deserialize(ti.topic, data);
-					} catch (InvalidProtocolBufferException e) {
-						logger.warn("Failed to deserialize topic info for topic " + ti.topic.toStringUtf8(), e);
-					}
+                        ti.deserialize(ti.topic, data);
+                    } catch (InvalidProtocolBufferException e) {
+                        logger.warn("Failed to deserialize topic info for topic " + ti.topic.toStringUtf8(), e);
+                    }
                     curSeqId = INVALID_SEQ_ID;
                 }
                 entry = initializeTopicInfo(ti, curSeqId, iter);
                 ++numTopics;
                 topicInfos.put(ti.topic, ti);
                 if (numTopics % 10000 == 0) {
-                    logger.info("Preloaded {} topics.",
-                                numTopics);
+                    logger.info("Preloaded {} topics.", numTopics);
                 }
             }
-            logger.info("Finished initialized leveldb persistence manager : {} topics.",
-                        numTopics);
+            logger.info("Finished initialized leveldb persistence manager : {} topics.", numTopics);
         } finally {
             if (null != iter) {
                 try {
-					iter.close();
-				} catch (IOException e) {
-				}
+                    iter.close();
+                } catch (IOException e) {
+                }
             }
         }
     }
 
     /**
-     * Initialize currrent topic info and return next topic info. return null if there is no entries.
+     * Initialize currrent topic info and return next topic info. return null if
+     * there is no entries.
      */
     private Entry<byte[], byte[]> initializeTopicInfo(TopicInfo curTopicInfo, long lastSeqId, DBIterator iter)
-        throws DBException {
+            throws DBException {
         byte[] topicBytes = curTopicInfo.topic.toByteArray();
         boolean foundNewTopic = false;
         long firstSeqId = lastSeqId;
@@ -379,14 +403,17 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
 
     @Override
     public void acquiredTopic(ByteString topic, Callback<Void> callback, Object ctx) {
-        workerPool.submitOrdered(topic, new AcquireOp(topic, callback, ctx));
+        if (logger.isDebugEnabled()) {
+            logger.debug("{} trying to acquire topic {}.", getClass().getName(), topic.toStringUtf8());
+        }
+        submitByTopic(topic, new AcquireOp(topic, callback, ctx));
     }
 
     class AcquireOp extends SafeRunnable {
-    	final ByteString topic;
-    	final Callback<Void> cb;
-    	final Object ctx;
-    	
+        final ByteString topic;
+        final Callback<Void> cb;
+        final Object ctx;
+
         AcquireOp(ByteString topic, Callback<Void> cb, Object ctx) {
             this.topic = topic;
             this.cb = cb;
@@ -395,9 +422,12 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
 
         @Override
         public void safeRun() {
-            if (topicInfos.containsKey(topic)) {
+            TopicInfo ti = topicInfos.get(topic);
+            if (null != ti) {
+                ti.setTopicContext(ctx);
                 // Already acquired, do nothing
-                // most of acquire would return quickly, since we preload when initialize
+                // most of acquire would return quickly, since we preload when
+                // initialize
                 cb.operationFinished(ctx, null);
                 return;
             }
@@ -406,7 +436,7 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
             try {
                 iter = msgDB.iterator();
                 iter.seek(getTopicKey(topic));
-                TopicInfo ti = new TopicInfo(topic);
+                ti = new TopicInfo(topic, ctx);
                 if (iter.hasNext()) {
                     Entry<byte[], byte[]> entry = iter.next();
                     byte[] key = entry.getKey();
@@ -414,20 +444,24 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
                     boolean isMsgKey = isMessageKey(key);
                     long curSeqId;
                     if (isMsgKey) {
-                        // no topic info, set consume seq id to the id prior to first id
+                        // no topic info, set consume seq id to the id prior to
+                        // first id
                         curSeqId = getSeqIdFromMessageKey(key);
                         ti.consumedSeqId = ti.seqIdUntilDeleted = curSeqId - 1;
                     } else {
                         try {
-							ti.deserialize(topic, data);
-						} catch (InvalidProtocolBufferException e) {
-							logger.warn("Failed to deserialize topic info for topic " + topic.toStringUtf8(), e);
-						}
+                            ti.deserialize(topic, data);
+                        } catch (InvalidProtocolBufferException e) {
+                            logger.warn("Failed to deserialize topic info for topic " + topic.toStringUtf8(), e);
+                        }
                         curSeqId = INVALID_SEQ_ID;
                     }
                     initializeTopicInfo(ti, curSeqId, iter);
                 }
                 topicInfos.put(topic, ti);
+                if (logger.isDebugEnabled()) {
+                    logger.debug("{} claimed ownership for topic {}.", getClass().getName(), topic.toStringUtf8());
+                }
                 cb.operationFinished(ctx, null);
             } catch (DBException dbe) {
                 cb.operationFailed(ctx, new PubSubException.ServiceDownException(dbe));
@@ -435,9 +469,9 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
             } finally {
                 if (null != iter) {
                     try {
-						iter.close();
-					} catch (IOException e) {
-					}
+                        iter.close();
+                    } catch (IOException e) {
+                    }
                 }
             }
         }
@@ -445,15 +479,15 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
 
     @Override
     public void lostTopic(ByteString topic) {
-    	workerPool.submitOrdered(topic, new ReleaseOp(topic));
+        submitByTopic(topic, new ReleaseOp(topic));
     }
 
-    class ReleaseOp extends SafeRunnable {
-    	
-    	final ByteString topic;
+    protected class ReleaseOp extends SafeRunnable {
+
+        protected final ByteString topic;
 
         public ReleaseOp(ByteString topic) {
-        	this.topic = topic;
+            this.topic = topic;
         }
 
         @Override
@@ -464,9 +498,9 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
             }
             // update topic state to msg db
             try {
-                dumpTopicInfo(topic, topicInfo); 
+                dumpTopicInfo(topic, topicInfo);
             } catch (DBException dbe) {
-                // we could not 
+                // we could not
                 logger.error("Failed to release topic ownership for topic " + topic.toStringUtf8(), dbe);
             }
         }
@@ -474,7 +508,23 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
 
     @Override
     public void persistMessage(PersistRequest request) {
-    	workerPool.submitOrdered(request.topic, new PersistOp(request));
+        submitByTopic(request.topic, new PersistOp(request));
+    }
+
+    protected void doPersistMessage(ByteString topic, MessageSeqId msgId, Message msg,
+            Callback<MessageSeqId> callback, Object ctx) {
+        // put the persist request to queue
+        try {
+            msgDB.put(getMessageKey(topic, msgId.getLocalComponent()), msg.toByteArray());
+            callback.operationFinished(ctx, msgId);
+            return;
+        } catch (DBException dbe) {
+            callback.operationFailed(ctx, new PubSubException.ServiceDownException(dbe));
+            // we don't need to give up the topic, since the seqid only
+            // changed
+            // after a message is persisted.
+            return;
+        }
     }
 
     class PersistOp extends SafeRunnable {
@@ -483,7 +533,7 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
         final ByteString topic;
 
         PersistOp(PersistRequest request) {
-        	this.topic = request.topic;
+            this.topic = request.topic;
             this.request = request;
         }
 
@@ -492,25 +542,13 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
             final TopicInfo topicInfo = topicInfos.get(request.topic);
             if (null == topicInfo) {
                 request.getCallback().operationFailed(request.ctx,
-                    new PubSubException.ServerNotResponsibleForTopicException(""));
+                        new PubSubException.ServerNotResponsibleForTopicException(""));
                 return;
             }
-            Message msgToSerialize = topicInfo.buildNextMessage(request.message);
-            MessageSeqId msgId = msgToSerialize.getMsgId();
-            // put the persist request to queue 
-            try {
-                msgDB.put(getMessageKey(request.topic, msgId.getLocalComponent()),
-                          msgToSerialize.toByteArray());
-                topicInfo.lastSeqIdPushed = msgId;
-                request.getCallback().operationFinished(request.ctx, msgId);
-                return;
-            } catch (DBException dbe) {
-                request.getCallback().operationFailed(request.ctx,
-                    new PubSubException.ServiceDownException(dbe));
-                // we don't need to give up the topic, since the seqid only changed
-                // after a message is persisted.
-                return;
-            }
+            MessageSeqId msgId = topicInfo.buildNextMessageSeqId(request.message);
+            Message msgToSerialize = topicInfo.buildMessage(request.message, msgId);
+            topicInfo.lastSeqIdPushed = msgId;
+            doPersistMessage(topic, msgId, msgToSerialize, request.getCallback(), request.getCtx());
         }
     }
 
@@ -521,7 +559,7 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
 
     @Override
     public void scanMessages(RangeScanRequest request) {
-    	workerPool.submitOrdered(request.topic, new RangeScanOp(request));
+        submitByTopic(request.topic, new RangeScanOp(request));
     }
 
     class RangeScanOp extends SafeRunnable {
@@ -536,7 +574,7 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
 
         @Override
         public void safeRun() {
-            TopicInfo topicInfo = topicInfos.get(topic); 
+            TopicInfo topicInfo = topicInfos.get(topic);
             if (null == topicInfo) {
                 request.callback.scanFailed(request.ctx, new PubSubException.ServerNotResponsibleForTopicException(""));
                 return;
@@ -553,9 +591,8 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
 
         private void issueEmptyMsg(long seqid) {
             // callback with a empty string.
-        	MessageSeqId.Builder msgIdBuilder = MessageSeqId.newBuilder().setLocalComponent(seqid);
-            Message msg = Message.newBuilder().setMsgId(msgIdBuilder)
-            		.setBody(ByteString.EMPTY).build();
+            MessageSeqId.Builder msgIdBuilder = MessageSeqId.newBuilder().setLocalComponent(seqid);
+            Message msg = Message.newBuilder().setMsgId(msgIdBuilder).setBody(ByteString.EMPTY).build();
             request.callback.messageScanned(request.ctx, msg);
         }
 
@@ -568,8 +605,8 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
             }
 
             if (logger.isDebugEnabled()) {
-                logger.debug("Issuing a leveldb scan for topic {} from seqid: {} to seqid: {}.",
-                             new Object[] { topic, startSeqId, correctedEndSeqId });
+                logger.debug("Issuing a leveldb scan for topic {} from seqid: {} to seqid: {}.", new Object[] { topic,
+                        startSeqId, correctedEndSeqId });
             }
 
             DBIterator iter = null;
@@ -589,11 +626,12 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
                     if (readSeqid == seqid) {
                         Message msg;
                         try {
-                            msg = Message.parseFrom(value); 
+                            msg = Message.parseFrom(value);
                         } catch (IOException e) {
-                            logger.error("Unreadable message found for topic: " + topic.toStringUtf8()
-                                         + ", seqid: " + seqid + " : ", e);
-                            // issue an empty message instead of hanging here, since data already corrupted.
+                            logger.error("Unreadable message found for topic: " + topic.toStringUtf8() + ", seqid: "
+                                    + seqid + " : ", e);
+                            // issue an empty message instead of hanging here,
+                            // since data already corrupted.
                             issueEmptyMsg(seqid);
                             return;
                         }
@@ -608,7 +646,7 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
                         break;
                     }
                 }
-                issueEmptyMsgs(seqid, correctedEndSeqId); 
+                issueEmptyMsgs(seqid, correctedEndSeqId);
                 request.callback.scanFinished(request.ctx, ReasonForFinish.NO_MORE_MESSAGES);
                 return;
             } catch (DBException dbe) {
@@ -617,11 +655,11 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
                 return;
             } finally {
                 if (null != iter) {
-                	try {
-                		iter.close();
-                	} catch (IOException ie) {
-                		logger.warn("Failed to close leveldb iterator : ", ie);
-                	}
+                    try {
+                        iter.close();
+                    } catch (IOException ie) {
+                        logger.warn("Failed to close leveldb iterator : ", ie);
+                    }
                 }
             }
         }
@@ -643,6 +681,7 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
     class ConsumeUntilOp extends SafeRunnable {
         private final long seqId;
         final ByteString topic;
+
         public ConsumeUntilOp(ByteString topic, long seqId) {
             this.topic = topic;
             this.seqId = seqId;
@@ -664,8 +703,7 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
 
     @Override
     public void consumedUntil(ByteString topic, Long seqId) {
-        workerPool.submitOrdered(topic, new ConsumeUntilOp(topic,
-            Math.max(seqId, getMinSeqIdForTopic(topicInfos.get(topic)))));
+        submitByTopic(topic, new ConsumeUntilOp(topic, Math.max(seqId, getMinSeqIdForTopic(topicInfos.get(topic)))));
     }
 
     @Override
@@ -674,18 +712,19 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
         if (topicInfo == null || topicInfo.messageBound == UNLIMITED) {
             return;
         }
-        workerPool.submitOrdered(topic, new ConsumeUntilOp(topic, getMinSeqIdForTopic(topicInfo)));
+        submitByTopic(topic, new ConsumeUntilOp(topic, getMinSeqIdForTopic(topicInfo)));
     }
 
     @Override
-    public MessageSeqId getCurrentSeqIdForTopic(ByteString topic)
-        throws ServerNotResponsibleForTopicException {
+    public MessageSeqId getCurrentSeqIdForTopic(ByteString topic) throws ServerNotResponsibleForTopicException {
         TopicInfo topicInfo = topicInfos.get(topic);
         if (null == topicInfo) {
             throw new PubSubException.ServerNotResponsibleForTopicException("");
         }
-        // TODO: if it was used in-memory mode, it should return the last consumed seq id
-        // return MessageSeqId.newBuilder().setLocalComponent(topicInfo.consumeSeqId).build();
+        // TODO: if it was used in-memory mode, it should return the last
+        // consumed seq id
+        // return
+        // MessageSeqId.newBuilder().setLocalComponent(topicInfo.consumeSeqId).build();
         return topicInfo.lastSeqIdPushed;
     }
 
@@ -694,21 +733,22 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
         return Math.max(seqId + skipAmount, getMinSeqIdForTopic(topicInfos.get(topic)));
     }
 
-	@Override
-	public void setMessageBound(ByteString topic, Integer bound) {
-		TopicInfo topicInfo = topicInfos.get(topic);
-		if (null != topicInfo) {
-			topicInfo.messageBound = bound;
-		}
-	}
+    @Override
+    public void setMessageBound(ByteString topic, Integer bound) {
+        TopicInfo topicInfo = topicInfos.get(topic);
+        if (null != topicInfo) {
+            topicInfo.messageBound = bound;
+        }
+    }
 
-	@Override
-	public void clearMessageBound(ByteString topic) {
-		setMessageBound(topic, UNLIMITED);
-	}
+    @Override
+    public void clearMessageBound(ByteString topic) {
+        setMessageBound(topic, UNLIMITED);
+    }
 
     /**
-     * the caller should ensure <code>b</code> has enough space to hold a <i>long</i> numer.
+     * the caller should ensure <code>b</code> has enough space to hold a
+     * <i>long</i> numer.
      */
     private static void long2Bytes(long val, byte[] b, int offset) {
         for (int i = Long.SIZE - 1; i > 0; i--) {
@@ -727,8 +767,7 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
         return l;
     }
 
-    private static int compareBytes(byte[] buf1, int off1, int len1,
-                                    byte[] buf2, int off2, int len2) {
+    private static int compareBytes(byte[] buf1, int off1, int len1, byte[] buf2, int off2, int len2) {
         if (buf1 == buf2 && off1 == off2 && len1 == len2) {
             return 0;
         }

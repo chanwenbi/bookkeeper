@@ -35,7 +35,8 @@ import org.apache.hedwig.protocol.PubSubProtocol.Message;
 import org.apache.hedwig.server.LoggingExceptionHandler;
 import org.apache.hedwig.server.PubSubServerStandAloneTestBase;
 import org.apache.hedwig.server.common.ServerConfiguration;
-import org.apache.hedwig.server.snitch.Snitch;
+import org.apache.hedwig.server.snitch.OneSnitchSeeker;
+import org.apache.hedwig.server.snitch.SnitchSeeker;
 import org.apache.hedwig.server.snitch.StandaloneSnitch;
 import org.apache.hedwig.server.topics.AbstractTopicManager;
 import org.apache.hedwig.server.topics.TopicManager;
@@ -92,13 +93,13 @@ public class TestPubSubServer extends PubSubServerStandAloneTestBase {
         }, new ClientConfiguration(), uncaughtExceptionHandler) {
 
             @Override
-            protected Snitch instantiateSnitch() throws IOException {
-                return new StandaloneSnitch(conf, clientConfiguration, clientChannelFactory) {
+            protected SnitchSeeker instantiateSnitchSeeker() throws IOException {
+                return new OneSnitchSeeker(new StandaloneSnitch(conf, clientConfiguration, clientChannelFactory) {
                     @Override
                     public TopicManager instantiateTopicManager(OrderedSafeExecutor scheduler) throws IOException {
                         return instantiator.instantiateTopicManager();
                     }
-                };
+                });
             }
 
         };

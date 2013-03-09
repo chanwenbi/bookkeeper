@@ -207,4 +207,9 @@ public abstract class AbstractSnitch implements Snitch {
             ((ReadAheadCache) pm).unregisterJMX();
         }
     }
+
+    @Override
+    public void postStart() {
+        // do nothing for most of cases.
+    }
 }
