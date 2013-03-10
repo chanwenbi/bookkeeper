@@ -19,10 +19,9 @@ package org.apache.hedwig.server.handlers;
 
 import java.util.HashSet;
 import java.util.Set;
-import java.util.concurrent.Executors;
-import org.junit.Test;
 
-import com.google.protobuf.ByteString;
+import junit.framework.TestCase;
+
 import org.apache.bookkeeper.util.OrderedSafeExecutor;
 import org.apache.hedwig.StubCallback;
 import org.apache.hedwig.client.data.TopicSubscriber;
@@ -35,27 +34,36 @@ import org.apache.hedwig.protocol.PubSubProtocol.PubSubRequest;
 import org.apache.hedwig.protocol.PubSubProtocol.PubSubResponse;
 import org.apache.hedwig.protocol.PubSubProtocol.StatusCode;
 import org.apache.hedwig.protocol.PubSubProtocol.SubscribeRequest;
+import org.apache.hedwig.protocol.PubSubProtocol.SubscribeRequest.CreateOrAttach;
 import org.apache.hedwig.protocol.PubSubProtocol.SubscriptionData;
 import org.apache.hedwig.protocol.PubSubProtocol.UnsubscribeRequest;
-import org.apache.hedwig.protocol.PubSubProtocol.SubscribeRequest.CreateOrAttach;
 import org.apache.hedwig.server.common.ServerConfiguration;
 import org.apache.hedwig.server.delivery.ChannelEndPoint;
+import org.apache.hedwig.server.delivery.DeliveryManager;
 import org.apache.hedwig.server.delivery.StubDeliveryManager;
 import org.apache.hedwig.server.delivery.StubDeliveryManager.StartServingRequest;
+import org.apache.hedwig.server.handlers.SubscriptionChannelManager.SubChannelDisconnectedListener;
+import org.apache.hedwig.server.jmx.HedwigMBeanInfo;
 import org.apache.hedwig.server.netty.WriteRecordingChannel;
 import org.apache.hedwig.server.persistence.LocalDBPersistenceManager;
 import org.apache.hedwig.server.persistence.PersistenceManager;
+import org.apache.hedwig.server.snitch.OneSnitchSeeker;
+import org.apache.hedwig.server.snitch.Snitch;
+import org.apache.hedwig.server.snitch.SnitchSeeker;
 import org.apache.hedwig.server.subscriptions.AllToAllTopologyFilter;
 import org.apache.hedwig.server.subscriptions.StubSubscriptionManager;
+import org.apache.hedwig.server.subscriptions.SubscriptionManager;
 import org.apache.hedwig.server.topics.TopicManager;
 import org.apache.hedwig.server.topics.TrivialOwnAllTopicManager;
 import org.apache.hedwig.util.ConcurrencyUtils;
+import org.junit.Test;
 
-import junit.framework.TestCase;
+import com.google.protobuf.ByteString;
 
 public class TestSubUnsubHandler extends TestCase {
 
     SubscribeHandler sh;
+    Snitch snitch;
     StubDeliveryManager dm;
     StubSubscriptionManager sm;
     SubscriptionChannelManager subChannelMgr;
@@ -71,15 +79,60 @@ public class TestSubUnsubHandler extends TestCase {
     protected void setUp() throws Exception {
         super.setUp();
 
-        ServerConfiguration conf = new ServerConfiguration();
+        final ServerConfiguration conf = new ServerConfiguration();
         OrderedSafeExecutor executor = new OrderedSafeExecutor(conf.getNumTopicQueuerThreads());
-
-        TopicManager tm = new TrivialOwnAllTopicManager(conf, executor);
+        final TopicManager tm = new TrivialOwnAllTopicManager(conf, executor);
         dm = new StubDeliveryManager();
-        PersistenceManager pm = LocalDBPersistenceManager.instance();
+        final PersistenceManager pm = LocalDBPersistenceManager.instance();
         sm = new StubSubscriptionManager(tm, pm, dm, conf, executor);
+        snitch = new Snitch() {
+
+            @Override
+            public void start() {
+            }
+
+            @Override
+            public void stop() {
+            }
+
+            @Override
+            public TopicManager getTopicManager() {
+                return tm;
+            }
+
+            @Override
+            public PersistenceManager getPersistenceManager() {
+                return pm;
+            }
+
+            @Override
+            public SubscriptionManager getSubscriptionManager() {
+                return sm;
+            }
+
+            @Override
+            public DeliveryManager getDeliveryManager() {
+                return dm;
+            }
+
+            @Override
+            public SubChannelDisconnectedListener getSubChannelDisconnectedListener() {
+                return null;
+            }
+
+            @Override
+            public void registerJMX(HedwigMBeanInfo parent) {
+            }
+
+            @Override
+            public void unregisterJMX() {
+            }
+
+        };
+        SnitchSeeker seeker = new OneSnitchSeeker(snitch);
+
         subChannelMgr = new SubscriptionChannelManager();
-        sh = new SubscribeHandler(conf, tm, dm, pm, sm, subChannelMgr);
+        sh = new SubscribeHandler(conf, seeker, subChannelMgr);
         channel = new WriteRecordingChannel();
 
         subscriberId = ByteString.copyFromUtf8("subId");
@@ -88,12 +141,13 @@ public class TestSubUnsubHandler extends TestCase {
         pubSubRequestPrototype = PubSubRequest.newBuilder().setProtocolVersion(ProtocolVersion.VERSION_ONE).setType(
                                      OperationType.SUBSCRIBE).setTxnId(0).setTopic(topic).setSubscribeRequest(subRequestPrototype).build();
 
-        ush = new UnsubscribeHandler(conf, tm, sm, dm, subChannelMgr);
+        ush = new UnsubscribeHandler(conf, seeker, subChannelMgr);
     }
 
     @Test(timeout=60000)
     public void testNoSubscribeRequest() {
-        sh.handleRequestAtOwner(PubSubRequest.newBuilder(pubSubRequestPrototype).clearSubscribeRequest().build(),
+        sh.handleRequestAtOwner(snitch, PubSubRequest.newBuilder(pubSubRequestPrototype).clearSubscribeRequest()
+                .build(),
                                 channel);
         assertEquals(StatusCode.MALFORMED_REQUEST, ((PubSubResponse) channel.getMessagesWritten().get(0))
                      .getStatusCode());
@@ -105,7 +159,7 @@ public class TestSubUnsubHandler extends TestCase {
         sm.acquiredTopic(topic, callback, null);
         assertNull(ConcurrencyUtils.take(callback.queue).right());
 
-        sh.handleRequestAtOwner(pubSubRequestPrototype, channel);
+        sh.handleRequestAtOwner(snitch, pubSubRequestPrototype, channel);
         assertEquals(StatusCode.SUCCESS, ((PubSubResponse) channel.getMessagesWritten().get(0)).getStatusCode());
 
         // make sure the channel was put in the maps
@@ -138,19 +192,19 @@ public class TestSubUnsubHandler extends TestCase {
 
         // trying to subscribe again should throw an error
         WriteRecordingChannel dupChannel = new WriteRecordingChannel();
-        sh.handleRequestAtOwner(pubSubRequestPrototype, dupChannel);
+        sh.handleRequestAtOwner(snitch, pubSubRequestPrototype, dupChannel);
         assertEquals(StatusCode.TOPIC_BUSY, ((PubSubResponse) dupChannel.getMessagesWritten().get(0)).getStatusCode());
 
         // after disconnecting the channel, subscribe should work again
         subChannelMgr.channelDisconnected(channel);
 
         dupChannel = new WriteRecordingChannel();
-        sh.handleRequestAtOwner(pubSubRequestPrototype, dupChannel);
+        sh.handleRequestAtOwner(snitch, pubSubRequestPrototype, dupChannel);
         assertEquals(StatusCode.SUCCESS, ((PubSubResponse) dupChannel.getMessagesWritten().get(0)).getStatusCode());
 
         // test unsubscribe
         channel = new WriteRecordingChannel();
-        ush.handleRequestAtOwner(pubSubRequestPrototype, channel);
+        ush.handleRequestAtOwner(snitch, pubSubRequestPrototype, channel);
         assertEquals(StatusCode.MALFORMED_REQUEST, ((PubSubResponse) channel.getMessagesWritten().get(0))
                      .getStatusCode());
 
@@ -159,7 +213,7 @@ public class TestSubUnsubHandler extends TestCase {
         channel = new WriteRecordingChannel();
         dm.lastRequest.clear();
 
-        ush.handleRequestAtOwner(unsubRequest, channel);
+        ush.handleRequestAtOwner(snitch, unsubRequest, channel);
         assertEquals(StatusCode.SUCCESS, ((PubSubResponse) channel.getMessagesWritten().get(0)).getStatusCode());
 
         // make sure delivery has been stopped

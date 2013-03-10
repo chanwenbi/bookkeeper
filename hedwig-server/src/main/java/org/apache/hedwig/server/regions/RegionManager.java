@@ -27,11 +27,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.apache.zookeeper.ZooKeeper;
-
-import com.google.protobuf.ByteString;
 import org.apache.bookkeeper.util.OrderedSafeExecutor;
 import org.apache.hedwig.client.api.MessageHandler;
 import org.apache.hedwig.client.exceptions.AlreadyStartDeliveryException;
@@ -50,6 +45,10 @@ import org.apache.hedwig.server.subscriptions.SubscriptionEventListener;
 import org.apache.hedwig.util.Callback;
 import org.apache.hedwig.util.CallbackUtils;
 import org.apache.hedwig.util.HedwigSocketAddress;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.protobuf.ByteString;
 
 public class RegionManager implements SubscriptionEventListener {
 
@@ -129,7 +128,7 @@ public class RegionManager implements SubscriptionEventListener {
 
     }
 
-    public RegionManager(final PersistenceManager pm, final ServerConfiguration cfg, final ZooKeeper zk,
+    public RegionManager(final PersistenceManager pm, final ServerConfiguration cfg,
                          OrderedSafeExecutor scheduler, HedwigHubClientFactory hubClientFactory) {
         this.pm = pm;
         mySubId = ByteString.copyFromUtf8(SubscriptionStateUtils.HUB_SUBSCRIBER_PREFIX + cfg.getMyRegion());
@@ -156,7 +155,7 @@ public class RegionManager implements SubscriptionEventListener {
             topics.add(topic);
         }
     }
-    
+
     /**
      * Do remote subscribe for a specified topic.
      *
@@ -284,8 +283,8 @@ public class RegionManager implements SubscriptionEventListener {
         queue.pushAndMaybeRun(topic, queue.new AsynchronousOp<Void>(topic, cb, null) {
             @Override
             public void run() {
-                Callback<Void> postCb = synchronous ? cb : CallbackUtils.logger(LOGGER, 
-                        "[" + myRegion + "] all cross-region subscriptions succeeded", 
+                Callback<Void> postCb = synchronous ? cb : CallbackUtils.logger(LOGGER,
+                        "[" + myRegion + "] all cross-region subscriptions succeeded",
                         "[" + myRegion + "] at least one cross-region subscription failed");
                 final Callback<Void> mcb = CallbackUtils.multiCallback(clients.size(), postCb, ctx);
                 for (final HedwigHubClient client : clients) {

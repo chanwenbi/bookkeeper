@@ -17,10 +17,9 @@
  */
 package org.apache.hedwig.server.handlers;
 
-import org.apache.hedwig.protocol.PubSubProtocol;
-import org.jboss.netty.channel.Channel;
 import org.apache.bookkeeper.util.MathUtils;
 import org.apache.hedwig.exceptions.PubSubException;
+import org.apache.hedwig.protocol.PubSubProtocol;
 import org.apache.hedwig.protocol.PubSubProtocol.Message;
 import org.apache.hedwig.protocol.PubSubProtocol.OperationType;
 import org.apache.hedwig.protocol.PubSubProtocol.PubSubRequest;
@@ -30,23 +29,22 @@ import org.apache.hedwig.server.netty.ServerStats;
 import org.apache.hedwig.server.netty.ServerStats.OpStats;
 import org.apache.hedwig.server.netty.UmbrellaHandler;
 import org.apache.hedwig.server.persistence.PersistRequest;
-import org.apache.hedwig.server.persistence.PersistenceManager;
-import org.apache.hedwig.server.topics.TopicManager;
+import org.apache.hedwig.server.snitch.Snitch;
+import org.apache.hedwig.server.snitch.SnitchSeeker;
 import org.apache.hedwig.util.Callback;
+import org.jboss.netty.channel.Channel;
 
 public class PublishHandler extends BaseHandler {
 
-    private PersistenceManager persistenceMgr;
     private final OpStats pubStats;
 
-    public PublishHandler(TopicManager topicMgr, PersistenceManager persistenceMgr, ServerConfiguration cfg) {
-        super(topicMgr, cfg);
-        this.persistenceMgr = persistenceMgr;
+    public PublishHandler(ServerConfiguration cfg, SnitchSeeker snitchSeeker) {
+        super(cfg, snitchSeeker);
         this.pubStats = ServerStats.getInstance().getOpStats(OperationType.PUBLISH);
     }
 
     @Override
-    public void handleRequestAtOwner(final PubSubRequest request, final Channel channel) {
+    public void handleRequestAtOwner(final Snitch snitch, final PubSubRequest request, final Channel channel) {
         if (!request.hasPublishRequest()) {
             UmbrellaHandler.sendErrorResponseToMalformedRequest(channel, request.getTxnId(),
                     "Missing publish request data");
@@ -73,7 +71,7 @@ public class PublishHandler extends BaseHandler {
             }
         }, null);
 
-        persistenceMgr.persistMessage(persistRequest);
+        snitch.getPersistenceManager().persistMessage(persistRequest);
     }
 
     private static PubSubProtocol.PubSubResponse getSuccessResponse(long txnId, PubSubProtocol.MessageSeqId publishedMessageSeqId) {

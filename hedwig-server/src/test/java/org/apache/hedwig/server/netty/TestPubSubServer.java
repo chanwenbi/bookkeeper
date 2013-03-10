@@ -22,31 +22,32 @@ import java.lang.Thread.UncaughtExceptionHandler;
 import java.net.InetSocketAddress;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.concurrent.Executors;
 import java.util.concurrent.SynchronousQueue;
 
+import org.apache.bookkeeper.test.PortManager;
 import org.apache.bookkeeper.util.OrderedSafeExecutor;
 import org.apache.commons.configuration.ConfigurationException;
+import org.apache.hedwig.client.HedwigClient;
+import org.apache.hedwig.client.api.Publisher;
+import org.apache.hedwig.client.conf.ClientConfiguration;
+import org.apache.hedwig.exceptions.PubSubException;
+import org.apache.hedwig.protocol.PubSubProtocol.Message;
+import org.apache.hedwig.server.LoggingExceptionHandler;
+import org.apache.hedwig.server.PubSubServerStandAloneTestBase;
+import org.apache.hedwig.server.common.ServerConfiguration;
+import org.apache.hedwig.server.snitch.Snitch;
+import org.apache.hedwig.server.snitch.StandaloneSnitch;
+import org.apache.hedwig.server.topics.AbstractTopicManager;
+import org.apache.hedwig.server.topics.TopicManager;
+import org.apache.hedwig.util.Callback;
+import org.apache.hedwig.util.HedwigSocketAddress;
+import org.apache.hedwig.zookeeper.SafeAsyncZKCallback;
 import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.Watcher;
 import org.apache.zookeeper.ZooKeeper;
 import org.junit.Test;
 
-import org.apache.bookkeeper.test.PortManager;
 import com.google.protobuf.ByteString;
-import org.apache.hedwig.client.conf.ClientConfiguration;
-import org.apache.hedwig.client.HedwigClient;
-import org.apache.hedwig.client.api.Publisher;
-import org.apache.hedwig.exceptions.PubSubException;
-import org.apache.hedwig.protocol.PubSubProtocol.Message;
-import org.apache.hedwig.server.PubSubServerStandAloneTestBase;
-import org.apache.hedwig.server.common.ServerConfiguration;
-import org.apache.hedwig.server.topics.AbstractTopicManager;
-import org.apache.hedwig.server.topics.TopicManager;
-import org.apache.hedwig.server.LoggingExceptionHandler;
-import org.apache.hedwig.util.Callback;
-import org.apache.hedwig.util.HedwigSocketAddress;
-import org.apache.hedwig.zookeeper.SafeAsyncZKCallback;
 
 public class TestPubSubServer extends PubSubServerStandAloneTestBase {
 
@@ -91,9 +92,15 @@ public class TestPubSubServer extends PubSubServerStandAloneTestBase {
         }, new ClientConfiguration(), uncaughtExceptionHandler) {
 
             @Override
-            protected TopicManager instantiateTopicManager() throws IOException {
-                return instantiator.instantiateTopicManager();
+            protected Snitch instantiateSnitch() throws IOException {
+                return new StandaloneSnitch(conf, clientConfiguration, clientChannelFactory) {
+                    @Override
+                    public TopicManager instantiateTopicManager(OrderedSafeExecutor scheduler) throws IOException {
+                        return instantiator.instantiateTopicManager();
+                    }
+                };
             }
+
         };
         server.start();
         return server;

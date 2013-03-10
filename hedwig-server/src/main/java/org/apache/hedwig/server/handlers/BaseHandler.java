@@ -17,31 +17,39 @@
  */
 package org.apache.hedwig.server.handlers;
 
-import org.jboss.netty.channel.Channel;
-
 import org.apache.hedwig.exceptions.PubSubException;
 import org.apache.hedwig.exceptions.PubSubException.ServerNotResponsibleForTopicException;
 import org.apache.hedwig.protocol.PubSubProtocol.PubSubRequest;
 import org.apache.hedwig.protoextensions.PubSubResponseUtils;
 import org.apache.hedwig.server.common.ServerConfiguration;
 import org.apache.hedwig.server.netty.ServerStats;
-import org.apache.hedwig.server.topics.TopicManager;
+import org.apache.hedwig.server.snitch.Snitch;
+import org.apache.hedwig.server.snitch.SnitchSeeker;
 import org.apache.hedwig.util.Callback;
 import org.apache.hedwig.util.HedwigSocketAddress;
+import org.jboss.netty.channel.Channel;
 
 public abstract class BaseHandler implements Handler {
 
-    protected TopicManager topicMgr;
+    protected SnitchSeeker seeker;
     protected ServerConfiguration cfg;
 
-    protected BaseHandler(TopicManager tm, ServerConfiguration cfg) {
-        this.topicMgr = tm;
+    protected BaseHandler(ServerConfiguration cfg, SnitchSeeker seeker) {
         this.cfg = cfg;
+        this.seeker = seeker;
     }
 
 
+    @Override
     public void handleRequest(final PubSubRequest request, final Channel channel) {
-        topicMgr.getOwner(request.getTopic(), request.getShouldClaim(),
+        final Snitch snitch = seeker.getSnitch(request.getTopic());
+        if (null == snitch) {
+            channel.write(PubSubResponseUtils.getResponseForException(new ServerNotResponsibleForTopicException(""),
+                    request.getTxnId()));
+            ServerStats.getInstance().getOpStats(request.getType()).incrementFailedOps();
+            return;
+        }
+        snitch.getTopicManager().getOwner(request.getTopic(), request.getShouldClaim(),
         new Callback<HedwigSocketAddress>() {
             @Override
             public void operationFailed(Object ctx, PubSubException exception) {
@@ -57,11 +65,11 @@ public abstract class BaseHandler implements Handler {
                     ServerStats.getInstance().incrementRequestsRedirect();
                     return;
                 }
-                handleRequestAtOwner(request, channel);
+                        handleRequestAtOwner(snitch, request, channel);
             }
         }, null);
     }
 
-    public abstract void handleRequestAtOwner(PubSubRequest request, Channel channel);
+    public abstract void handleRequestAtOwner(Snitch snitch, PubSubRequest request, Channel channel);
 
 }

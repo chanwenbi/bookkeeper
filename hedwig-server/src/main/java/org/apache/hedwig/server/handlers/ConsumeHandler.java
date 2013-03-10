@@ -17,24 +17,22 @@
  */
 package org.apache.hedwig.server.handlers;
 
-import org.jboss.netty.channel.Channel;
-
 import org.apache.hedwig.exceptions.PubSubException;
 import org.apache.hedwig.protocol.PubSubProtocol.ConsumeRequest;
 import org.apache.hedwig.protocol.PubSubProtocol.OperationType;
 import org.apache.hedwig.protocol.PubSubProtocol.PubSubRequest;
 import org.apache.hedwig.server.common.ServerConfiguration;
 import org.apache.hedwig.server.netty.ServerStats;
-import org.apache.hedwig.server.netty.UmbrellaHandler;
 import org.apache.hedwig.server.netty.ServerStats.OpStats;
-import org.apache.hedwig.server.subscriptions.SubscriptionManager;
-import org.apache.hedwig.server.topics.TopicManager;
+import org.apache.hedwig.server.netty.UmbrellaHandler;
+import org.apache.hedwig.server.snitch.Snitch;
+import org.apache.hedwig.server.snitch.SnitchSeeker;
 import org.apache.hedwig.util.Callback;
+import org.jboss.netty.channel.Channel;
 
 public class ConsumeHandler extends BaseHandler {
 
-    SubscriptionManager sm;
-    Callback<Void> noopCallback = new NoopCallback<Void>();
+    final Callback<Void> noopCallback = new NoopCallback<Void>();
     final OpStats consumeStats = ServerStats.getInstance().getOpStats(OperationType.CONSUME);
 
     class NoopCallback<T> implements Callback<T> {
@@ -43,6 +41,7 @@ public class ConsumeHandler extends BaseHandler {
             consumeStats.incrementFailedOps();
         }
 
+        @Override
         public void operationFinished(Object ctx, T resultOfOperation) {
             // we don't collect consume process time
             consumeStats.updateLatency(0);
@@ -50,7 +49,7 @@ public class ConsumeHandler extends BaseHandler {
     }
 
     @Override
-    public void handleRequestAtOwner(PubSubRequest request, Channel channel) {
+    public void handleRequestAtOwner(final Snitch snitch, PubSubRequest request, Channel channel) {
         if (!request.hasConsumeRequest()) {
             UmbrellaHandler.sendErrorResponseToMalformedRequest(channel, request.getTxnId(),
                     "Missing consume request data");
@@ -60,13 +59,11 @@ public class ConsumeHandler extends BaseHandler {
 
         ConsumeRequest consumeRequest = request.getConsumeRequest();
 
-        sm.setConsumeSeqIdForSubscriber(request.getTopic(), consumeRequest.getSubscriberId(),
-                                        consumeRequest.getMsgId(), noopCallback, null);
-
+        snitch.getSubscriptionManager().setConsumeSeqIdForSubscriber(request.getTopic(),
+                consumeRequest.getSubscriberId(), consumeRequest.getMsgId(), noopCallback, null);
     }
 
-    public ConsumeHandler(TopicManager tm, SubscriptionManager sm, ServerConfiguration cfg) {
-        super(tm, cfg);
-        this.sm = sm;
+    public ConsumeHandler(ServerConfiguration cfg, SnitchSeeker seeker) {
+        super(cfg, seeker);
     }
 }

@@ -17,14 +17,6 @@
  */
 package org.apache.hedwig.server.handlers;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.jboss.netty.channel.Channel;
-import org.jboss.netty.channel.ChannelFuture;
-import org.jboss.netty.channel.ChannelFutureListener;
-
-import com.google.protobuf.ByteString;
-
 import org.apache.bookkeeper.util.MathUtils;
 import org.apache.bookkeeper.util.ReflectionUtils;
 import org.apache.hedwig.client.data.TopicSubscriber;
@@ -43,43 +35,37 @@ import org.apache.hedwig.protoextensions.PubSubResponseUtils;
 import org.apache.hedwig.protoextensions.SubscriptionStateUtils;
 import org.apache.hedwig.server.common.ServerConfiguration;
 import org.apache.hedwig.server.delivery.ChannelEndPoint;
-import org.apache.hedwig.server.delivery.DeliveryManager;
 import org.apache.hedwig.server.netty.ServerStats;
 import org.apache.hedwig.server.netty.ServerStats.OpStats;
 import org.apache.hedwig.server.netty.UmbrellaHandler;
-import org.apache.hedwig.server.persistence.PersistenceManager;
-import org.apache.hedwig.server.subscriptions.SubscriptionManager;
+import org.apache.hedwig.server.snitch.Snitch;
+import org.apache.hedwig.server.snitch.SnitchSeeker;
 import org.apache.hedwig.server.subscriptions.AllToAllTopologyFilter;
-import org.apache.hedwig.server.topics.TopicManager;
 import org.apache.hedwig.util.Callback;
-import static org.apache.hedwig.util.VarArgs.va;
+import org.jboss.netty.channel.Channel;
+import org.jboss.netty.channel.ChannelFutureListener;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.protobuf.ByteString;
 
 public class SubscribeHandler extends BaseHandler {
     static Logger logger = LoggerFactory.getLogger(SubscribeHandler.class);
 
-    private final DeliveryManager deliveryMgr;
-    private final PersistenceManager persistenceMgr;
-    private final SubscriptionManager subMgr;
     private final SubscriptionChannelManager subChannelMgr;
 
     // op stats
     private final OpStats subStats;
 
-    public SubscribeHandler(ServerConfiguration cfg, TopicManager topicMgr,
-                            DeliveryManager deliveryManager,
-                            PersistenceManager persistenceMgr,
-                            SubscriptionManager subMgr,
+    public SubscribeHandler(ServerConfiguration cfg, SnitchSeeker seeker,
                             SubscriptionChannelManager subChannelMgr) {
-        super(topicMgr, cfg);
-        this.deliveryMgr = deliveryManager;
-        this.persistenceMgr = persistenceMgr;
-        this.subMgr = subMgr;
+        super(cfg, seeker);
         this.subChannelMgr = subChannelMgr;
         subStats = ServerStats.getInstance().getOpStats(OperationType.SUBSCRIBE);
     }
 
     @Override
-    public void handleRequestAtOwner(final PubSubRequest request, final Channel channel) {
+    public void handleRequestAtOwner(final Snitch snitch, final PubSubRequest request, final Channel channel) {
 
         if (!request.hasSubscribeRequest()) {
             UmbrellaHandler.sendErrorResponseToMalformedRequest(channel, request.getTxnId(),
@@ -92,7 +78,7 @@ public class SubscribeHandler extends BaseHandler {
 
         MessageSeqId seqId;
         try {
-            seqId = persistenceMgr.getCurrentSeqIdForTopic(topic);
+            seqId = snitch.getPersistenceManager().getCurrentSeqIdForTopic(topic);
         } catch (ServerNotResponsibleForTopicException e) {
             channel.write(PubSubResponseUtils.getResponseForException(e, request.getTxnId())).addListener(
                 ChannelFutureListener.CLOSE);
@@ -109,7 +95,8 @@ public class SubscribeHandler extends BaseHandler {
         MessageSeqId lastSeqIdPublished = MessageSeqId.newBuilder(seqId).setLocalComponent(seqId.getLocalComponent()).build();
 
         final long requestTime = MathUtils.now();
-        subMgr.serveSubscribeRequest(topic, subRequest, lastSeqIdPublished, new Callback<SubscriptionData>() {
+        snitch.getSubscriptionManager().serveSubscribeRequest(topic, subRequest, lastSeqIdPublished,
+                new Callback<SubscriptionData>() {
 
             @Override
             public void operationFailed(Object ctx, PubSubException exception) {
@@ -190,7 +177,7 @@ public class SubscribeHandler extends BaseHandler {
                 MessageSeqId lastConsumedSeqId = subData.getState().getMsgId();
                 MessageSeqId seqIdToStartFrom = MessageSeqId.newBuilder(lastConsumedSeqId).setLocalComponent(
                                                     lastConsumedSeqId.getLocalComponent() + 1).build();
-                deliveryMgr.startServingSubscription(topic, subscriberId,
+                snitch.getDeliveryManager().startServingSubscription(topic, subscriberId,
                         subData.getPreferences(), seqIdToStartFrom, new ChannelEndPoint(channel), filter,
                         new Callback<Void>() {
                             @Override

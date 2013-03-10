@@ -18,31 +18,40 @@
 package org.apache.hedwig.server.handlers;
 
 import java.util.List;
-import junit.framework.TestCase;
 
-import org.jboss.netty.channel.Channel;
-import org.junit.Before;
-import org.junit.Test;
+import junit.framework.TestCase;
 
 import org.apache.hedwig.protocol.PubSubProtocol.PubSubRequest;
 import org.apache.hedwig.protocol.PubSubProtocol.PubSubResponse;
 import org.apache.hedwig.protocol.PubSubProtocol.StatusCode;
 import org.apache.hedwig.server.common.ServerConfiguration;
+import org.apache.hedwig.server.delivery.DeliveryManager;
+import org.apache.hedwig.server.handlers.SubscriptionChannelManager.SubChannelDisconnectedListener;
+import org.apache.hedwig.server.jmx.HedwigMBeanInfo;
 import org.apache.hedwig.server.netty.WriteRecordingChannel;
+import org.apache.hedwig.server.persistence.PersistenceManager;
+import org.apache.hedwig.server.snitch.OneSnitchSeeker;
+import org.apache.hedwig.server.snitch.Snitch;
+import org.apache.hedwig.server.snitch.SnitchSeeker;
+import org.apache.hedwig.server.subscriptions.SubscriptionManager;
 import org.apache.hedwig.server.topics.StubTopicManager;
 import org.apache.hedwig.server.topics.TopicManager;
+import org.jboss.netty.channel.Channel;
+import org.junit.Before;
+import org.junit.Test;
 
 public class TestBaseHandler extends TestCase {
 
     MyBaseHandler handler;
     StubTopicManager tm;
+    Snitch snitch;
     PubSubRequest request = PubSubRequest.getDefaultInstance();
     WriteRecordingChannel channel = new WriteRecordingChannel();
 
     protected class MyBaseHandler extends BaseHandler {
 
-        public MyBaseHandler(TopicManager tm, ServerConfiguration conf) {
-            super(tm, conf);
+        public MyBaseHandler(ServerConfiguration conf, SnitchSeeker seeker) {
+            super(conf, seeker);
         }
 
         PubSubRequest request;
@@ -52,7 +61,7 @@ public class TestBaseHandler extends TestCase {
         }
 
         @Override
-        public void handleRequestAtOwner(PubSubRequest request, Channel channel) {
+        public void handleRequestAtOwner(Snitch snitch, PubSubRequest request, Channel channel) {
             this.request = request;
         }
 
@@ -63,7 +72,49 @@ public class TestBaseHandler extends TestCase {
     public void setUp() throws Exception {
         ServerConfiguration conf = new ServerConfiguration();
         tm = new StubTopicManager(conf);
-        handler = new MyBaseHandler(tm, conf);
+        snitch = new Snitch() {
+            @Override
+            public void start() {
+            }
+
+            @Override
+            public void stop() {
+            }
+
+            @Override
+            public TopicManager getTopicManager() {
+                return tm;
+            }
+
+            @Override
+            public PersistenceManager getPersistenceManager() {
+                return null;
+            }
+
+            @Override
+            public SubscriptionManager getSubscriptionManager() {
+                return null;
+            }
+
+            @Override
+            public DeliveryManager getDeliveryManager() {
+                return null;
+            }
+
+            @Override
+            public SubChannelDisconnectedListener getSubChannelDisconnectedListener() {
+                return null;
+            }
+
+            @Override
+            public void registerJMX(HedwigMBeanInfo parent) {
+            }
+
+            @Override
+            public void unregisterJMX() {
+            }
+        };
+        handler = new MyBaseHandler(conf, new OneSnitchSeeker(snitch));
         request = PubSubRequest.getDefaultInstance();
         channel = new WriteRecordingChannel();
     }
