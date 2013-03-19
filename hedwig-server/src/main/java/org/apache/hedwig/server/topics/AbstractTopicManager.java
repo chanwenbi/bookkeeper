@@ -35,6 +35,7 @@ import org.apache.bookkeeper.util.OrderedSafeExecutor;
 import org.apache.hedwig.exceptions.PubSubException;
 import org.apache.hedwig.server.common.ServerConfiguration;
 import org.apache.hedwig.server.common.TopicOpQueuer;
+import org.apache.hedwig.server.common.TopicOpQueuer.TopicQueue;
 import org.apache.hedwig.util.Callback;
 import org.apache.hedwig.util.CallbackUtils;
 import org.apache.hedwig.util.HedwigSocketAddress;
@@ -67,24 +68,24 @@ public abstract class AbstractTopicManager implements TopicManager {
         }
 
         public void popAndRunNextsWithException(ByteString topic, PubSubException exception) {
-            Queue<Runnable> ops;
+            TopicQueue queue;
             synchronized (this) {
-                ops = topic2ops.get(topic);
-                if (null == ops) {
+                queue = topic2ops.get(topic);
+                if (null == queue) {
                     return;
                 }
             }
-            synchronized (ops) {
-                if (!ops.isEmpty()) {
-                    Runnable op = ops.remove();
+            synchronized (queue) {
+                if (!queue.ops.isEmpty()) {
+                    Runnable op = queue.ops.remove();
                     // if get owner op is failed
                     if (op instanceof GetOwnerOp) {
                         // failed the following get owner ops
-                        while (!ops.isEmpty()) {
-                            Runnable r = ops.peek();    
+                        while (!queue.ops.isEmpty()) {
+                            Runnable r = queue.ops.peek();    
                             if (r instanceof GetOwnerOp) {
                                 ((GetOwnerOp)r).failOriginalCallback(exception);
-                                ops.remove();
+                                queue.ops.remove();
                             } else if (r instanceof ReleaseOp) {
                                 scheduler.unsafeSubmitOrdered(topic, r);
                                 break;
@@ -93,36 +94,41 @@ public abstract class AbstractTopicManager implements TopicManager {
                     } else {
                         // for release op, it failed which means the ownership doesn't release
                         // we have to execute following request.
-                        if (!ops.isEmpty()) {
-                            scheduler.unsafeSubmitOrdered(topic, ops.peek());
+                        if (!queue.ops.isEmpty()) {
+                            scheduler.unsafeSubmitOrdered(topic, queue.ops.peek());
                         }
+                    }
+                    if (queue.ops.isEmpty()) {
+                        // remove the topic queue here and mark it as removed.
+                        queue.removed = true;
+                        topic2ops.remove(topic, queue);
                     }
                 }
             }
         }
 
         public void popAndRunNextsWithResult(ByteString topic, Object result) {
-            Queue<Runnable> ops;
+            TopicQueue queue;
             synchronized (this) {
-                ops = topic2ops.get(topic);
-                if (null == ops) {
+                queue = topic2ops.get(topic);
+                if (null == queue) {
                     return;
                 }
             }
-            synchronized (ops) {
-                if (!ops.isEmpty()) {
-                    Runnable op = ops.remove();
+            synchronized (queue) {
+                if (!queue.ops.isEmpty()) {
+                    Runnable op = queue.ops.remove();
                     // if get owner op is failed
                     if (op instanceof GetOwnerOp) {
                         // failed the following get owner ops
-                        while (!ops.isEmpty()) {
-                            Runnable r = ops.peek();    
+                        while (!queue.ops.isEmpty()) {
+                            Runnable r = queue.ops.peek();    
                             if (r instanceof GetOwnerOp) {
                                 HedwigSocketAddress owner = (HedwigSocketAddress)result;
                                 // if topic ownership is not itself, redirects all pending requests
                                 if (!owner.equals(addr)) {
                                     ((GetOwnerOp)r).succeedOriginalCallback(owner);
-                                    ops.remove();
+                                    queue.ops.remove();
                                 } else {
                                     scheduler.unsafeSubmitOrdered(topic, r);
                                     break;
@@ -135,9 +141,14 @@ public abstract class AbstractTopicManager implements TopicManager {
                     } else {
                         // for release op, it succeed which means the ownership isn't itself
                         // we have to execute following request.
-                        if (!ops.isEmpty()) {
-                            scheduler.unsafeSubmitOrdered(topic, ops.peek());
+                        if (!queue.ops.isEmpty()) {
+                            scheduler.unsafeSubmitOrdered(topic, queue.ops.peek());
                         }
+                    }
+                    if (queue.ops.isEmpty()) {
+                        // remove the topic queue here and mark it as removed.
+                        queue.removed = true;
+                        topic2ops.remove(topic, queue);
                     }
                 }
             }
