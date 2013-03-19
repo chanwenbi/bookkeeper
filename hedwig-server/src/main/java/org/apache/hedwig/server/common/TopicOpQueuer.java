@@ -28,11 +28,22 @@ import org.apache.hedwig.exceptions.PubSubException;
 import org.apache.hedwig.util.Callback;
 
 public class TopicOpQueuer {
+
+    /**
+     * A Placeholder for a queue of topic operations.
+     */
+    protected class TopicQueue {
+        // flag indicating that the queue is removed
+        boolean removed = false;
+        // Queue of items
+        Queue<Runnable> ops = new LinkedList<Runnable>();
+    }
+
     /**
      * Map from topic to the queue of operations for that topic.
      */
-    protected ConcurrentHashMap<ByteString, Queue<Runnable>> topic2ops =
-        new ConcurrentHashMap<ByteString, Queue<Runnable>>();
+    protected ConcurrentHashMap<ByteString, TopicQueue> topic2ops =
+        new ConcurrentHashMap<ByteString, TopicQueue>();
 
     protected final OrderedSafeExecutor scheduler;
 
@@ -90,40 +101,44 @@ public class TopicOpQueuer {
     public void popAndRunNext(ByteString topic) {
         // since we used concurrent hash map, we could
         // get the queue without synchronized whole queue map
-        Queue<Runnable> ops = topic2ops.get(topic);
-        assert null != ops;
-        synchronized (ops) {
-            if (!ops.isEmpty())
-                ops.remove();
-            if (!ops.isEmpty()) {
+        TopicQueue queue = topic2ops.get(topic);
+        assert null != queue;
+        synchronized (queue) {
+            assert !queue.removed
+            if (!queue.ops.isEmpty())
+                queue.ops.remove();
+            if (!queue.ops.isEmpty()) {
                 scheduler.unsafeSubmitOrdered(topic, ops.peek());
             } else {
-                // its unsafe to remove topic queue here
-                // since some other threads may already get ops queue
-                // remove it may cause some problems
-                // need to think a better solution for it.
-                // topic2ops.remove(topic, ops);
+                // remove the topic queue here and mark it as removed.
+                queue.removed = true;
+                topic2ops.remove(topic, queue);
             }
         }
     }
 
     public void pushAndMaybeRun(ByteString topic, Op op) {
         int size;
-        Queue<Runnable> ops = topic2ops.get(topic);
-        if (null == ops) {
-            Queue<Runnable> newOps = new LinkedList<Runnable>();
-            Queue<Runnable> oldOps = topic2ops.putIfAbsent(topic, newOps);
-            if (null == oldOps) {
+        TopicQueue queue = topic2ops.get(topic);
+        if (null == queue) {
+            TopicQueue newQueue = new TopicQueue();
+            TopicQueue oldQueue = topic2ops.putIfAbsent(topic, newQueue);
+            if (null == oldQueue) {
                 // no queue associated with the topic
-                ops = newOps;
+                queue = newQueue;
             } else {
                 // someone already put the queue
-                ops = oldOps;
+                queue = oldQueue;
             }
         }
-        synchronized (ops) {
-            ops.add(op);
-            size = ops.size();
+        synchronized (queue) {
+            if (queue.removed) {
+                // some one removed the queue at the time it waits
+                // for the lock of this queue.
+            } else {
+                queue.ops.add(op);
+                size = queue.ops.size();
+            }
         }
         if (size == 1)
             op.run();
