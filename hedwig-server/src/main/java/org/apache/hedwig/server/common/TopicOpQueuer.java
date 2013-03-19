@@ -32,11 +32,11 @@ public class TopicOpQueuer {
     /**
      * A Placeholder for a queue of topic operations.
      */
-    protected class TopicQueue {
+    public static class TopicQueue {
         // flag indicating that the queue is removed
-        boolean removed = false;
+        public boolean removed = false;
         // Queue of items
-        Queue<Runnable> ops = new LinkedList<Runnable>();
+        public final Queue<Runnable> ops = new LinkedList<Runnable>();
     }
 
     /**
@@ -104,11 +104,11 @@ public class TopicOpQueuer {
         TopicQueue queue = topic2ops.get(topic);
         assert null != queue;
         synchronized (queue) {
-            assert !queue.removed
+            assert !queue.removed;
             if (!queue.ops.isEmpty())
                 queue.ops.remove();
             if (!queue.ops.isEmpty()) {
-                scheduler.unsafeSubmitOrdered(topic, ops.peek());
+                scheduler.unsafeSubmitOrdered(topic, queue.ops.peek());
             } else {
                 // remove the topic queue here and mark it as removed.
                 queue.removed = true;
@@ -119,29 +119,34 @@ public class TopicOpQueuer {
 
     public void pushAndMaybeRun(ByteString topic, Op op) {
         int size;
-        TopicQueue queue = topic2ops.get(topic);
-        if (null == queue) {
-            TopicQueue newQueue = new TopicQueue();
-            TopicQueue oldQueue = topic2ops.putIfAbsent(topic, newQueue);
-            if (null == oldQueue) {
-                // no queue associated with the topic
-                queue = newQueue;
-            } else {
-                // someone already put the queue
-                queue = oldQueue;
+        boolean done = false;
+        while (!done) {
+            TopicQueue queue = topic2ops.get(topic);
+            if (null == queue) {
+                TopicQueue newQueue = new TopicQueue();
+                TopicQueue oldQueue = topic2ops.putIfAbsent(topic, newQueue);
+                if (null == oldQueue) {
+                    // no queue associated with the topic
+                    queue = newQueue;
+                } else {
+                    // someone already put the queue
+                    queue = oldQueue;
+                }
             }
-        }
-        synchronized (queue) {
-            if (queue.removed) {
-                // some one removed the queue at the time it waits
+            synchronized (queue) {
+                // check removed flag in case some one removed the queue at the time it waits
                 // for the lock of this queue.
-            } else {
-                queue.ops.add(op);
-                size = queue.ops.size();
+                if (!queue.removed) {
+                    queue.ops.add(op);
+                    size = queue.ops.size();
+                    done = true;
+                } else {
+                    continue;
+                }
             }
+            if (size == 1)
+                op.run();
         }
-        if (size == 1)
-            op.run();
     }
 
 }
