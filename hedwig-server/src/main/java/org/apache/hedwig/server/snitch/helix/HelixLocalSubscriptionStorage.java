@@ -77,7 +77,7 @@ public class HelixLocalSubscriptionStorage implements SubscriptionDataManager {
                         .setOp(ISubscriptionTxn.SubscriptionOp.UPDATE)
                         .setSubscriptionData(SubscriptionData.getDefaultInstance()).setVersion(-1).build();
             }
-            return ISubscriptionTxn.parseFrom(subscriptionKey);
+            return ISubscriptionTxn.parseFrom(data);
         }
 
     };
