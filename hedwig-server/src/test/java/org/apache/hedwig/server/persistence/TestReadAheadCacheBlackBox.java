@@ -21,9 +21,6 @@ import junit.framework.Test;
 import junit.framework.TestSuite;
 
 import org.apache.hedwig.server.common.ServerConfiguration;
-import org.apache.hedwig.server.persistence.LocalDBPersistenceManager;
-import org.apache.hedwig.server.persistence.PersistenceManager;
-import org.apache.hedwig.server.persistence.ReadAheadCache;
 
 public class TestReadAheadCacheBlackBox extends TestPersistenceManagerBlackBox {
 
@@ -34,17 +31,17 @@ public class TestReadAheadCacheBlackBox extends TestPersistenceManagerBlackBox {
     }
 
     @Override
-    long getExpectedSeqId(int numPublished) {
+    protected long getExpectedSeqId(int numPublished) {
         return numPublished;
     }
 
     @Override
-    long getLowestSeqId() {
+    protected long getLowestSeqId() {
         return 1;
     }
 
     @Override
-    PersistenceManager instantiatePersistenceManager() {
+    protected PersistenceManager instantiatePersistenceManager() {
         return new ReadAheadCache(LocalDBPersistenceManager.instance(), new ServerConfiguration()).start();
     }
 

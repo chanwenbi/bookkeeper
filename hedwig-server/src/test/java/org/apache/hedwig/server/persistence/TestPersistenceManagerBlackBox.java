@@ -25,33 +25,37 @@ import java.util.concurrent.TimeUnit;
 
 import junit.framework.TestCase;
 
-import org.apache.hedwig.protocol.PubSubProtocol;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.junit.Test;
-
-import com.google.protobuf.ByteString;
 import org.apache.hedwig.HelperMethods;
 import org.apache.hedwig.exceptions.PubSubException;
+import org.apache.hedwig.protocol.PubSubProtocol;
 import org.apache.hedwig.protocol.PubSubProtocol.Message;
 import org.apache.hedwig.server.topics.TopicOwnershipChangeListener;
 import org.apache.hedwig.util.Callback;
+import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.protobuf.ByteString;
 
 public abstract class TestPersistenceManagerBlackBox extends TestCase {
+
+    static Logger logger = LoggerFactory.getLogger(TestPersistenceManagerBlackBox.class);
+
     protected PersistenceManager persistenceManager;
     protected int NUM_MESSAGES_TO_TEST = 5;
     protected int NUM_TOPICS_TO_TEST = 5;
-    static Logger logger = LoggerFactory.getLogger(TestPersistenceManagerBlackBox.class);
-    TestCallback testCallback = new TestCallback();
 
-    RuntimeException failureException;
+    protected TestCallback testCallback = new TestCallback();
+    protected RuntimeException failureException;
 
-    class TestCallback implements Callback<PubSubProtocol.MessageSeqId> {
+    protected class TestCallback implements Callback<PubSubProtocol.MessageSeqId> {
 
+        @Override
         public void operationFailed(Object ctx, PubSubException exception) {
             throw (failureException = new RuntimeException(exception));
         }
 
+        @Override
         @SuppressWarnings("unchecked")
         public void operationFinished(Object ctx, PubSubProtocol.MessageSeqId resultOfOperation) {
             LinkedBlockingQueue<Boolean> statusQueue = (LinkedBlockingQueue<Boolean>) ctx;
@@ -63,13 +67,14 @@ public abstract class TestPersistenceManagerBlackBox extends TestCase {
         }
     }
 
-    class RangeScanVerifierListener implements ScanCallback {
+    protected class RangeScanVerifierListener implements ScanCallback {
         List<Message> pubMsgs;
 
         public RangeScanVerifierListener(List<Message> pubMsgs) {
             this.pubMsgs = pubMsgs;
         }
 
+        @Override
         public void messageScanned(Object ctx, Message recvMessage) {
             if (pubMsgs.isEmpty()) {
                 throw (failureException = new RuntimeException("Message received when none expected"));
@@ -82,10 +87,12 @@ public abstract class TestPersistenceManagerBlackBox extends TestCase {
             pubMsgs.remove(0);
         }
 
+        @Override
         public void scanFailed(Object ctx, Exception exception) {
             throw (failureException = new RuntimeException(exception));
         }
 
+        @Override
         @SuppressWarnings("unchecked")
         public void scanFinished(Object ctx, ReasonForFinish reason) {
             if (reason != ReasonForFinish.NO_MORE_MESSAGES) {
@@ -101,7 +108,7 @@ public abstract class TestPersistenceManagerBlackBox extends TestCase {
 
     }
 
-    class PointScanVerifierListener implements ScanCallback {
+    protected class PointScanVerifierListener implements ScanCallback {
         List<Message> pubMsgs;
         ByteString topic;
 
@@ -110,6 +117,7 @@ public abstract class TestPersistenceManagerBlackBox extends TestCase {
             this.pubMsgs = pubMsgs;
         }
 
+        @Override
         @SuppressWarnings("unchecked")
         public void messageScanned(Object ctx, Message recvMessage) {
 
@@ -135,17 +143,19 @@ public abstract class TestPersistenceManagerBlackBox extends TestCase {
 
         }
 
+        @Override
         public void scanFailed(Object ctx, Exception exception) {
             throw (failureException = new RuntimeException(exception));
         }
 
+        @Override
         public void scanFinished(Object ctx, ReasonForFinish reason) {
 
         }
 
     }
 
-    class ScanVerifier implements Runnable {
+    protected class ScanVerifier implements Runnable {
         List<Message> pubMsgs;
         ByteString topic;
         LinkedBlockingQueue<Boolean> statusQueue = new LinkedBlockingQueue<Boolean>();
@@ -155,6 +165,7 @@ public abstract class TestPersistenceManagerBlackBox extends TestCase {
             this.pubMsgs = pubMsgs;
         }
 
+        @Override
         public void run() {
             // start the scan
             try {
@@ -186,7 +197,7 @@ public abstract class TestPersistenceManagerBlackBox extends TestCase {
         }
     }
 
-    class Publisher implements Runnable {
+    protected class Publisher implements Runnable {
         List<Message> pubMsgs;
         ByteString topic;
 
@@ -195,6 +206,7 @@ public abstract class TestPersistenceManagerBlackBox extends TestCase {
             this.topic = topic;
         }
 
+        @Override
         public void run() {
             LinkedBlockingQueue<Boolean> statusQueue = new LinkedBlockingQueue<Boolean>();
 
@@ -223,9 +235,9 @@ public abstract class TestPersistenceManagerBlackBox extends TestCase {
         logger.info("Persistence Manager test setup finished");
     }
 
-    abstract long getLowestSeqId();
+    protected abstract long getLowestSeqId();
 
-    abstract PersistenceManager instantiatePersistenceManager() throws Exception;
+    protected abstract PersistenceManager instantiatePersistenceManager() throws Exception;
 
     @Override
     protected void tearDown() throws Exception {
@@ -303,6 +315,6 @@ public abstract class TestPersistenceManagerBlackBox extends TestCase {
 
     }
 
-    abstract long getExpectedSeqId(int numPublished);
+    protected abstract long getExpectedSeqId(int numPublished);
 
 }

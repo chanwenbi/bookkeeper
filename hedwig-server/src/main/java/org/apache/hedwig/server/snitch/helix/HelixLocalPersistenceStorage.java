@@ -108,6 +108,12 @@ public class HelixLocalPersistenceStorage extends LeveldbPersistenceManager impl
 
         @Override
         public void safeRun() {
+            final TopicInfo topicInfo = topicInfos.get(topic);
+            if (null == topicInfo) {
+                callback.operationFailed(ctx, new PubSubException.ServerNotResponsibleForTopicException(""));
+                return;
+            }
+            topicInfo.setLastSeqIdPushed(msgId);
             doPersistMessage(topic, msgId, msg, callback, ctx);
         }
 

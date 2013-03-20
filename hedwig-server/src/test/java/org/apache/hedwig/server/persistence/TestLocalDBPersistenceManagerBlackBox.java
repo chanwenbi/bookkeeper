@@ -20,9 +20,6 @@ package org.apache.hedwig.server.persistence;
 import junit.framework.Test;
 import junit.framework.TestSuite;
 
-import org.apache.hedwig.server.persistence.LocalDBPersistenceManager;
-import org.apache.hedwig.server.persistence.PersistenceManager;
-
 public class TestLocalDBPersistenceManagerBlackBox extends TestPersistenceManagerBlackBox {
 
     @Override
@@ -32,17 +29,17 @@ public class TestLocalDBPersistenceManagerBlackBox extends TestPersistenceManage
     }
 
     @Override
-    long getLowestSeqId() {
+    protected long getLowestSeqId() {
         return 1;
     }
 
     @Override
-    PersistenceManager instantiatePersistenceManager() {
+    protected PersistenceManager instantiatePersistenceManager() {
         return LocalDBPersistenceManager.instance();
     }
 
     @Override
-    public long getExpectedSeqId(int numPublished) {
+    protected long getExpectedSeqId(int numPublished) {
         return numPublished;
     }
 

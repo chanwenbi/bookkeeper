@@ -94,7 +94,9 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
         }
 
         public void setLastSeqIdPushed(MessageSeqId lastSeqIdPushed) {
-            this.lastSeqIdPushed = lastSeqIdPushed;
+            if (lastSeqIdPushed.getLocalComponent() > this.lastSeqIdPushed.getLocalComponent()) {
+                this.lastSeqIdPushed = lastSeqIdPushed;
+            }
         }
 
         void takeFirstSeqIdAsConsumeSeqId(long seqId) {

@@ -58,18 +58,18 @@ public class TestLeveldbPersistenceManagerBlackBox extends TestPersistenceManage
     }
 
     @Override
-    long getLowestSeqId() {
+    protected long getLowestSeqId() {
         return 1;
     }
 
     @Override
-    PersistenceManager instantiatePersistenceManager() throws Exception {
+    protected PersistenceManager instantiatePersistenceManager() throws Exception {
         OrderedSafeExecutor scheduler = new OrderedSafeExecutor(conf.getNumTopicQueuerThreads());
         return new LeveldbPersistenceManager(conf, new TrivialOwnAllTopicManager(conf, scheduler), scheduler);
     }
 
     @Override
-    long getExpectedSeqId(int numPublished) {
+    protected long getExpectedSeqId(int numPublished) {
         return numPublished;
     }
 

@@ -17,18 +17,15 @@
  */
 package org.apache.hedwig.server.persistence;
 
-import java.util.concurrent.Executors;
-
 import junit.framework.Test;
 import junit.framework.TestSuite;
-
-import org.junit.After;
-import org.junit.Before;
 
 import org.apache.bookkeeper.util.OrderedSafeExecutor;
 import org.apache.hedwig.server.common.ServerConfiguration;
 import org.apache.hedwig.server.meta.MetadataManagerFactory;
 import org.apache.hedwig.server.topics.TrivialOwnAllTopicManager;
+import org.junit.After;
+import org.junit.Before;
 
 public class TestBookKeeperPersistenceManagerBlackBox extends TestPersistenceManagerBlackBox {
     BookKeeperTestBase bktb;
@@ -57,12 +54,12 @@ public class TestBookKeeperPersistenceManagerBlackBox extends TestPersistenceMan
     }
 
     @Override
-    long getLowestSeqId() {
+    protected long getLowestSeqId() {
         return 1;
     }
 
     @Override
-    PersistenceManager instantiatePersistenceManager() throws Exception {
+    protected PersistenceManager instantiatePersistenceManager() throws Exception {
         ServerConfiguration conf = new ServerConfiguration();
 
         OrderedSafeExecutor scheduler = new OrderedSafeExecutor(conf.getNumTopicQueuerThreads());
