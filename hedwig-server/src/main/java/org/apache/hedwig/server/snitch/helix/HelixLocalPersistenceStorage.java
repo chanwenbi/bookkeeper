@@ -17,6 +17,7 @@
  */
 package org.apache.hedwig.server.snitch.helix;
 
+import static com.google.common.base.Charsets.UTF_8;
 import static org.fusesource.leveldbjni.JniDBFactory.factory;
 
 import java.io.File;
@@ -133,7 +134,7 @@ public class HelixLocalPersistenceStorage extends LeveldbPersistenceManager impl
             @Override
             public void safeRun() {
                 try {
-                    partitionDB.put(partitionName.getBytes(), partitionData.toByteArray(), pDbWo);
+                    partitionDB.put(partitionName.getBytes(UTF_8), partitionData.toByteArray(), pDbWo);
                     callback.operationFinished(ctx, null);
                 } catch (DBException dbe) {
                     callback.operationFailed(ctx, PubSubException.create(StatusCode.SERVICE_DOWN,
@@ -151,7 +152,7 @@ public class HelixLocalPersistenceStorage extends LeveldbPersistenceManager impl
             @Override
             public void safeRun() {
                 try {
-                    byte[] data = partitionDB.get(partitionName.getBytes());
+                    byte[] data = partitionDB.get(partitionName.getBytes(UTF_8));
                     if (null == data) {
                         callback.operationFinished(ctx, null);
                         return;

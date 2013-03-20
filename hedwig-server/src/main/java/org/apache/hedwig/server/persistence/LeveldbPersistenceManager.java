@@ -72,14 +72,14 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
 
     protected class TopicInfo implements Runnable {
         final ByteString topic;
-        volatile MessageSeqId lastSeqIdPushed = START_SEQ_ID;
+        protected volatile MessageSeqId lastSeqIdPushed = START_SEQ_ID;
         volatile long consumedSeqId = 0;
         long seqIdUntilDeleted = 0;
         volatile int messageBound = UNLIMITED;
         // context object passed from topic manager when acquired topic
         volatile Object topicContext;
 
-        TopicInfo(ByteString topic, Object topicContext) {
+        protected TopicInfo(ByteString topic, Object topicContext) {
             this.topic = topic;
             this.topicContext = topicContext;
         }
@@ -129,12 +129,16 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
         }
 
         public MessageSeqId buildNextMessageSeqId(Message requestedMsg) {
-            long localSeqId = lastSeqIdPushed.getLocalComponent() + 1;
+            return buildNextMessageSeqId(requestedMsg, lastSeqIdPushed);
+        }
+
+        public MessageSeqId buildNextMessageSeqId(Message requestedMsg, MessageSeqId seqid) {
+            long localSeqId = seqid.getLocalComponent() + 1;
             MessageSeqId.Builder builder = MessageSeqId.newBuilder();
             if (requestedMsg.hasMsgId()) {
-                MessageIdUtils.takeRegionMaximum(builder, lastSeqIdPushed, requestedMsg.getMsgId());
+                MessageIdUtils.takeRegionMaximum(builder, seqid, requestedMsg.getMsgId());
             } else {
-                builder.addAllRemoteComponents(lastSeqIdPushed.getRemoteComponentsList());
+                builder.addAllRemoteComponents(seqid.getRemoteComponentsList());
             }
             builder.setLocalComponent(localSeqId);
             return builder.build();
@@ -339,13 +343,13 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
                 TopicInfo ti;
                 long curSeqId;
                 if (isMsgKey) {
-                    ti = new TopicInfo(getTopicFromMessageKey(key), null);
+                    ti = createTopicInfo(getTopicFromMessageKey(key), null);
                     // no topic info, set consume seq id to the id prior to
                     // first id
                     curSeqId = getSeqIdFromMessageKey(key);
                     ti.consumedSeqId = ti.seqIdUntilDeleted = curSeqId - 1;
                 } else {
-                    ti = new TopicInfo(getTopicFromTopicKey(key), null);
+                    ti = createTopicInfo(getTopicFromTopicKey(key), null);
                     try {
                         ti.deserialize(ti.topic, data);
                     } catch (InvalidProtocolBufferException e) {
@@ -411,6 +415,10 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
         submitByTopic(topic, new AcquireOp(topic, callback, ctx));
     }
 
+    protected TopicInfo createTopicInfo(ByteString topic, Object ctx) {
+        return new TopicInfo(topic, ctx);
+    }
+
     class AcquireOp extends SafeRunnable {
         final ByteString topic;
         final Callback<Void> cb;
@@ -438,7 +446,7 @@ public class LeveldbPersistenceManager implements PersistenceManagerWithRangeSca
             try {
                 iter = msgDB.iterator();
                 iter.seek(getTopicKey(topic));
-                ti = new TopicInfo(topic, ctx);
+                ti = createTopicInfo(topic, ctx);
                 if (iter.hasNext()) {
                     Entry<byte[], byte[]> entry = iter.next();
                     byte[] key = entry.getKey();

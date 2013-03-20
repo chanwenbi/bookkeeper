@@ -81,7 +81,7 @@ public class PubSubServer {
     ChannelGroup allChannels;
 
     // Snitchs serving pub/sub logics
-    SnitchSeeker snitchSeeker;
+    protected SnitchSeeker snitchSeeker;
 
     // JMX Beans
     NettyHandlerBean jmxNettyBean;

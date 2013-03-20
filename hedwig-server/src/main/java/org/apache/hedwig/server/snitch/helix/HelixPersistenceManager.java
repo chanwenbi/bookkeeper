@@ -27,6 +27,7 @@ import org.apache.hedwig.protocol.PubSubProtocol.InternalTxn;
 import org.apache.hedwig.protocol.PubSubProtocol.Message;
 import org.apache.hedwig.protocol.PubSubProtocol.MessageSeqId;
 import org.apache.hedwig.protocol.PubSubProtocol.StatusCode;
+import org.apache.hedwig.protoextensions.MessageIdUtils;
 import org.apache.hedwig.server.common.ServerConfiguration;
 import org.apache.hedwig.server.persistence.PersistRequest;
 import org.apache.hedwig.server.topics.helix.HelixTopicManager;
@@ -44,6 +45,29 @@ public class HelixPersistenceManager extends HelixLocalPersistenceStorage {
         super(cfg, tm, ioPool);
     }
 
+    class HelixTopicInfo extends TopicInfo {
+
+        volatile MessageSeqId lastSeqIdPublished = null;
+
+        HelixTopicInfo(ByteString topic, Object topicContext) {
+            super(topic, topicContext);
+        }
+
+        MessageSeqId getLastPublishedSeqId() {
+            if (null == lastSeqIdPublished) {
+                lastSeqIdPublished = lastSeqIdPushed;
+            }
+            return lastSeqIdPublished;
+        }
+
+        void setLastPublishedSeqId(MessageSeqId seqid) {
+            if (seqid.getLocalComponent() > lastSeqIdPublished.getLocalComponent()) {
+                this.lastSeqIdPublished = seqid;
+            }
+        }
+
+    }
+
     class HelixPersistOp extends SafeRunnable {
         final PersistRequest request;
         final ByteString topic;
@@ -55,16 +79,21 @@ public class HelixPersistenceManager extends HelixLocalPersistenceStorage {
 
         @Override
         public void safeRun() {
-            final TopicInfo topicInfo = topicInfos.get(topic);
+            final HelixTopicInfo topicInfo = (HelixTopicInfo) topicInfos.get(topic);
             final Object topicContext;
             if (null == topicInfo || !((topicContext = topicInfo.getTopicContext()) instanceof TxnLog)) {
                 request.getCallback().operationFailed(request.getCtx(),
                         PubSubException.create(StatusCode.NOT_RESPONSIBLE_FOR_TOPIC, ""));
                 return;
             }
-            final MessageSeqId msgId = topicInfo.buildNextMessageSeqId(request.getMessage());
+            final MessageSeqId msgId = topicInfo.buildNextMessageSeqId(request.getMessage(),
+                    topicInfo.getLastPublishedSeqId());
             Message msgToSerialize = topicInfo.buildMessage(request.getMessage(), msgId);
-            topicInfo.setLastSeqIdPushed(msgId);
+            topicInfo.setLastPublishedSeqId(msgId);
+            if (logger.isDebugEnabled()) {
+                logger.debug("Publish message {} to partition log for topic {}",
+                        MessageIdUtils.msgIdToReadableString(msgId), topic.toStringUtf8());
+            }
             TxnLog txnLog = (TxnLog) topicContext;
             IDataTxn.Builder dataTxn = IDataTxn.newBuilder().setTopic(topic).setBody(msgToSerialize.toByteString());
             InternalTxn.Builder txn = InternalTxn.newBuilder().setDataTxn(dataTxn).setType(InternalTxn.Type.DATA);
@@ -81,6 +110,11 @@ public class HelixPersistenceManager extends HelixLocalPersistenceStorage {
 
             });
         }
+    }
+
+    @Override
+    protected TopicInfo createTopicInfo(ByteString topic, Object ctx) {
+        return new HelixTopicInfo(topic, ctx);
     }
 
     @Override

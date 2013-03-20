@@ -297,6 +297,7 @@ public class HelixTopicManager extends StateModelFactory<TopicStateModel> implem
         public void deliver(ByteString topic, ByteString subscriber, Message msg, Callback<Void> cb, Object ctx) {
             // only accept message when I am in a state stricter than BOOTSTAPPED
             if (!state.stricterThan(State.BOOTSTAPPED)) {
+                logger.debug("Ignore received messages since partition {} is not bootstrapped yet.", partitionName);
                 return;
             }
             InternalTxn itxn;
@@ -619,7 +620,7 @@ public class HelixTopicManager extends StateModelFactory<TopicStateModel> implem
             Object ctx) {
         final String partition = partitioner.getPartition(hedwigTopic);
         // quick check this hub server owned partitions
-        if (partitions.contains(partition)) {
+        if (partitions.containsKey(partition)) {
             realGetOwner(partition, hedwigTopic, cb, ctx);
             return;
         }
@@ -939,11 +940,10 @@ public class HelixTopicManager extends StateModelFactory<TopicStateModel> implem
         if (null == partition) {
             partition = new TopicPartition(topicPartition);
             TopicPartition oldPartition = partitions.putIfAbsent(topicPartition, partition);
-            if (null != oldPartition) {
-                partition = oldPartition;
+            if (null == oldPartition) {
+                doBecomeStandbyFromOffline(topicPartition);
             }
         }
-        doBecomeStandbyFromOffline(topicPartition);
     }
 
     /**
