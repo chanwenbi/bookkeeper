@@ -28,6 +28,9 @@ import java.nio.ByteBuffer;
 import java.nio.BufferUnderflowException;
 import java.nio.channels.FileChannel;
 
+import static com.google.common.base.Charsets.UTF_8;
+import com.google.common.annotations.VisibleForTesting;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,7 +65,7 @@ class FileInfo {
     /**
      * The fingerprint of a ledger index file
      */
-    static final public int signature = ByteBuffer.wrap("BKLE".getBytes()).getInt();
+    static final public int signature = ByteBuffer.wrap("BKLE".getBytes(UTF_8)).getInt();
     static final public int headerVersion = 0;
 
     static final long START_OF_DATA = 1024;
@@ -332,6 +335,11 @@ class FileInfo {
 
     synchronized public void use() {
         useCount++;
+    }
+
+    @VisibleForTesting
+    synchronized int getUseCount() {
+        return useCount;
     }
 
     synchronized public void release() {

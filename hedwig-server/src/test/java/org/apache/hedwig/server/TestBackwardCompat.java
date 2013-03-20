@@ -434,6 +434,7 @@ public class TestBackwardCompat extends TestCase {
             assertEquals("Should be expected message with " + x, x, expected.get());
             subscriber.stopDelivery(topic, subid);
             subscriber.closeSubscription(topic, subid);
+            Thread.sleep(1000); // give server time to run disconnect logic (BOOKKEEPER-513)
         }
 
         void subscribe(ByteString topic, ByteString subscriberId) throws Exception {
@@ -450,6 +451,7 @@ public class TestBackwardCompat extends TestCase {
 
         void closeSubscription(ByteString topic, ByteString subscriberId) throws Exception {
             subscriber.closeSubscription(topic, subscriberId);
+            Thread.sleep(1000); // give server time to run disconnect logic (BOOKKEEPER-513)
         }
 
         void receiveInts(ByteString topic, ByteString subscriberId, int start, int num) throws Exception {
@@ -872,7 +874,7 @@ public class TestBackwardCompat extends TestCase {
      * 1) message bound doesn't take effects on 4.0.0 server.
      * 2) message bound take effects on both 4.1.0 and current server
      */
-    @Test
+    @Test(timeout=60000)
     public void testMessageBoundCompat() throws Exception {
         ByteString topic = ByteString.copyFromUtf8("testMessageBoundCompat");
         ByteString subid = ByteString.copyFromUtf8("mysub");
@@ -945,7 +947,7 @@ public class TestBackwardCompat extends TestCase {
      * 2) current client could talk with 4.1.0 server,
      *    but no message seq id would be returned
      */
-    @Test
+    @Test(timeout=60000)
     public void testPublishCompat410() throws Exception {
         ByteString topic = ByteString.copyFromUtf8("TestPublishCompat410");
         ByteString data = ByteString.copyFromUtf8("testdata");
@@ -996,7 +998,7 @@ public class TestBackwardCompat extends TestCase {
      *
      * A current server could read subscription data recorded by 4.1.0 server.
      */
-    @Test
+    @Test(timeout=60000)
     public void testSubscriptionDataCompat410() throws Exception {
         ByteString topic = ByteString.copyFromUtf8("TestCompat410");
         ByteString sub410 = ByteString.copyFromUtf8("sub410");
@@ -1016,6 +1018,7 @@ public class TestBackwardCompat extends TestCase {
         Client410 c410 = new Client410("localhost:"+port+":"+sslPort);
         c410.subscribe(topic, sub410);
         c410.closeSubscription(topic, sub410);
+        Thread.sleep(1000); // give server time to run disconnect logic (BOOKKEEPER-513)
 
         ClientCurrent ccur = new ClientCurrent("localhost:"+port+":"+sslPort);
         ccur.subscribe(topic, subcur);
@@ -1058,7 +1061,7 @@ public class TestBackwardCompat extends TestCase {
      *
      * A 4.1.0 client could not update message bound, while current could do it.
      */
-    @Test
+    @Test(timeout=60000)
     public void testUpdateMessageBoundCompat410() throws Exception {
         ByteString topic = ByteString.copyFromUtf8("TestUpdateMessageBoundCompat410");
         ByteString subid = ByteString.copyFromUtf8("mysub");
@@ -1091,16 +1094,22 @@ public class TestBackwardCompat extends TestCase {
         Client410 c410 = new Client410("localhost:"+port+":"+sslPort);
         c410.subscribe(topic, subid, options20v410);
         c410.closeSubscription(topic, subid);
+        Thread.sleep(1000); // give server time to run disconnect logic (BOOKKEEPER-513)
+
         c410.sendXExpectLastY(topic, subid, 50, 20);
 
         c410.subscribe(topic, subid, options5v410);
         c410.closeSubscription(topic, subid);
+        Thread.sleep(1000); // give server time to run disconnect logic (BOOKKEEPER-513)
+
         // the message bound isn't updated.
         c410.sendXExpectLastY(topic, subid, 50, 20);
 
         ClientCurrent ccur = new ClientCurrent("localhost:"+port+":"+sslPort);
         ccur.subscribe(topic, subid, options5cur);
         ccur.closeSubscription(topic, subid);
+        Thread.sleep(1000); // give server time to run disconnect logic (BOOKKEEPER-513)
+
         // the message bound should be updated.
         c410.sendXExpectLastY(topic, subid, 50, 5);
 
@@ -1119,7 +1128,7 @@ public class TestBackwardCompat extends TestCase {
      *
      * A current client running message filter would fail on 4.1.0 hub servers.
      */
-    @Test
+    @Test(timeout=60000)
     public void testClientMessageFilterCompat410() throws Exception {
         ByteString topic = ByteString.copyFromUtf8("TestUpdateMessageBoundCompat410");
         ByteString subid = ByteString.copyFromUtf8("mysub");
@@ -1160,7 +1169,7 @@ public class TestBackwardCompat extends TestCase {
      * Server side throttling does't work when current client connects to old version
      * server.
      */
-    @Test
+    @Test(timeout=60000)
     public void testServerSideThrottleCompat410() throws Exception {
         ByteString topic = ByteString.copyFromUtf8("TestServerSideThrottleCompat410");
         ByteString subid = ByteString.copyFromUtf8("mysub");

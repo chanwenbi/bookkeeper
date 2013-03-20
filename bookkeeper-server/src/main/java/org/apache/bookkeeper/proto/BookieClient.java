@@ -42,6 +42,9 @@ import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.buffer.ChannelBuffers;
 import org.jboss.netty.channel.socket.ClientSocketChannelFactory;
 import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+
+import static com.google.common.base.Charsets.UTF_8;
 
 /**
  * Implements the client-side part of the BookKeeper protocol.
@@ -58,21 +61,33 @@ public class BookieClient {
     ConcurrentHashMap<InetSocketAddress, PerChannelBookieClient> channels = new ConcurrentHashMap<InetSocketAddress, PerChannelBookieClient>();
 
     private final ClientConfiguration conf;
+    private volatile boolean closed;
+    private ReentrantReadWriteLock closeLock;
 
     public BookieClient(ClientConfiguration conf, ClientSocketChannelFactory channelFactory, OrderedSafeExecutor executor) {
         this.conf = conf;
         this.channelFactory = channelFactory;
         this.executor = executor;
+        this.closed = false;
+        this.closeLock = new ReentrantReadWriteLock();
     }
 
     public PerChannelBookieClient lookupClient(InetSocketAddress addr) {
         PerChannelBookieClient channel = channels.get(addr);
 
         if (channel == null) {
-            channel = new PerChannelBookieClient(conf, executor, channelFactory, addr, totalBytesOutstanding);
-            PerChannelBookieClient prevChannel = channels.putIfAbsent(addr, channel);
-            if (prevChannel != null) {
-                channel = prevChannel;
+            closeLock.readLock().lock();
+            try {
+                if (closed) {
+                    return null;
+                }
+                channel = new PerChannelBookieClient(conf, executor, channelFactory, addr, totalBytesOutstanding);
+                PerChannelBookieClient prevChannel = channels.putIfAbsent(addr, channel);
+                if (prevChannel != null) {
+                    channel = prevChannel;
+                }
+            } finally {
+                closeLock.readLock().unlock();
             }
         }
 
@@ -95,7 +110,7 @@ public class BookieClient {
                 @Override
                 public void safeRun() {
                     for (PerChannelBookieClient c : clients) {
-                        c.close();
+                        c.disconnect();
                     }
                 }
             });
@@ -104,6 +119,11 @@ public class BookieClient {
     public void addEntry(final InetSocketAddress addr, final long ledgerId, final byte[] masterKey, final long entryId,
             final ChannelBuffer toSend, final WriteCallback cb, final Object ctx, final int options) {
         final PerChannelBookieClient client = lookupClient(addr);
+        if (client == null) {
+            cb.writeComplete(BKException.Code.BookieHandleNotAvailableException,
+                             ledgerId, entryId, addr, ctx);
+            return;
+        }
 
         client.connectIfNeededAndDoOp(new GenericCallback<Void>() {
             @Override
@@ -129,6 +149,11 @@ public class BookieClient {
                                         final ReadEntryCallback cb,
                                         final Object ctx) {
         final PerChannelBookieClient client = lookupClient(addr);
+        if (client == null) {
+            cb.readEntryComplete(BKException.Code.BookieHandleNotAvailableException,
+                                 ledgerId, entryId, null, ctx);
+            return;
+        }
 
         client.connectIfNeededAndDoOp(new GenericCallback<Void>() {
             @Override
@@ -150,6 +175,11 @@ public class BookieClient {
     public void readEntry(final InetSocketAddress addr, final long ledgerId, final long entryId,
                           final ReadEntryCallback cb, final Object ctx) {
         final PerChannelBookieClient client = lookupClient(addr);
+        if (client == null) {
+            cb.readEntryComplete(BKException.Code.BookieHandleNotAvailableException,
+                                 ledgerId, entryId, null, ctx);
+            return;
+        }
 
         client.connectIfNeededAndDoOp(new GenericCallback<Void>() {
             @Override
@@ -169,8 +199,14 @@ public class BookieClient {
     }
 
     public void close() {
-        for (PerChannelBookieClient channel: channels.values()) {
-            channel.close();
+        closeLock.writeLock().lock();
+        try {
+            closed = true;
+            for (PerChannelBookieClient channel: channels.values()) {
+                channel.close();
+            }
+        } finally {
+            closeLock.writeLock().unlock();
         }
     }
 
@@ -221,7 +257,7 @@ public class BookieClient {
             }
         };
         Counter counter = new Counter();
-        byte hello[] = "hello".getBytes();
+        byte hello[] = "hello".getBytes(UTF_8);
         long ledger = Long.parseLong(args[2]);
         ClientSocketChannelFactory channelFactory = new NioClientSocketChannelFactory(Executors.newCachedThreadPool(), Executors
                 .newCachedThreadPool());

@@ -6,6 +6,58 @@ Trunk (unreleased changes)
 
     IMPROVEMENTS:
 
+  Backward compatible changes:
+
+    BUGFIXES:
+
+      BOOKKEEPER-579: TestSubAfterCloseSub was put in a wrong package (sijie via ivank)
+
+      bookkeeper-server:
+
+        BOOKKEEPER-567: ReadOnlyBookieTest hangs on shutdown (sijie via ivank)
+
+        BOOKKEEPER-549: Documentation missed for readOnlyMode support (ivank)
+
+        BOOKKEEPER-548: Document about periodic ledger checker configuration (ivank)
+
+        BOOKKEEPER-561: Findbugs report errors with openjdk (ivank via umamahesh)
+
+        BOOKKEEPER-554: fd leaking when move ledger index file (sijie, ivank via sijie)
+
+        BOOKKEEPER-568: NPE during GC with HierarchicalLedgerManager (Matteo via sijie)
+
+        BOOKKEEPER-569: Critical performance bug in InterleavedLedgerStorage (ivank via fpj)
+
+        BOOKKEEPER-559: Fix occasional failure in AuditorBookieTest (ivank via umamahesh)
+
+    IMPROVEMENTS:
+
+      BOOKKEEPER-555: Make BookieServer use Netty rather than a custom IO server (ivank)
+
+      BOOKKEEPER-526: multiple threads for delivery manager (sijie via ivank)
+
+      BOOKKEEPER-544: Modify hedwig server tests to allow client testcases to start/stop them as part of their tests (mridul via ivank)
+
+      BOOKKEEPER-312: Implementation of JMS provider (mridul via ivank)
+
+      BOOKKEEPER-556: BookieServerMXBean#getServerState makes no sense (ivank via sijie)
+
+      BOOKKEEPER-574: Extend the bookkeeper shell to get a list of available bookies (ivank via umamahesh)
+
+      BOOKKEEPER-576: Bookie client should use netty Decoder/Encoder (ivank via sijie)
+
+      BOOKKEEPER-585: Auditor logs noisily when a ledger has been deleted (ivank via sijie)
+
+      BOOKKEEPER-573: Script to start a bookkeeper cluster (ivank via sijie)
+
+Release 4.2.0 - 2013-01-14
+
+  Non-backward compatible changes:
+
+    BUGFIXES:
+
+    IMPROVEMENTS:
+
       bookkeeper-server:
 
         BOOKKEEPER-203: improve ledger manager interface to remove zookeeper dependency on metadata operations. (sijie via ivank)
@@ -36,6 +88,12 @@ Trunk (unreleased changes)
 
       BOOKKEEPER-483: precommit tests only check toplevel rat file, not the one for submodules. (ivank via fpj)
 
+      BOOKKEEPER-533: TestSubAfterCloseSub fails strangely in tests (ivank via fpj)
+
+      BOOKKEEPER-480: Fix javac warnings (ivank via sijie)
+
+      BOOKKEEPER-481: Fix javadoc warnings (ivank via sijie)
+
       bookkeeper-server:
 
         BOOKKEEPER-183: Provide tools to read/check data files in bookie server (sijie via ivank)
@@ -54,7 +112,7 @@ Trunk (unreleased changes)
 
         BOOKKEEPER-294: Not able to start the bookkeeper before the ZK session timeout. (rakeshr via ivank)
 
-	BOOKKEEPER-327: System.currentTimeMillis usage in BookKeeper (uma via fpj)
+        BOOKKEEPER-327: System.currentTimeMillis usage in BookKeeper (uma via fpj)
 
         BOOKKEEPER-349: Entry logger should close all the chennels which are there in Map, instead of closing only current channel. (umamaheswararao via sijie)
 
@@ -62,7 +120,7 @@ Trunk (unreleased changes)
 
         BOOKKEEPER-372: Check service name in bookie start/stop script. (nijel via ivank)
 
- 	BOOKKEEPER-354: [BOOKKEEPER-296] [Documentation] Modify the bookkeeper start script and document the bookkeeper stop command in bookkeeperConfig.xml (Kiran BC via ivank)
+        BOOKKEEPER-354: [BOOKKEEPER-296] [Documentation] Modify the bookkeeper start script and document the bookkeeper stop command in bookkeeperConfig.xml (Kiran BC via ivank)
  
         BOOKKEEPER-378: ReplicationWorker may not get ZK watcher notification on UnderReplication ledger lock deletion. (umamaheswararao & ivank via ivank)
 
@@ -104,7 +162,7 @@ Trunk (unreleased changes)
 
         BOOKKEEPER-416: LedgerChecker returns underreplicated fragments for an closed ledger with no entries (ivank)
 
-	BOOKKEEPER-425: Cleanup Bookie id generation (ivank via fpj)
+        BOOKKEEPER-425: Cleanup Bookie id generation (ivank via fpj)
 
         BOOKKEEPER-430: Remove manual bookie registration from overview (fpj via ivank)
 
@@ -112,9 +170,9 @@ Trunk (unreleased changes)
 
         BOOKKEEPER-460: LedgerDeleteTest checks wrong place for log file (Fangmin Lv via ivank)
 
-	BOOKKEEPER-477: In ReadOnlyBookieTest, we should wait for the bookie to die before asserting on it (ivank via fpj)
+        BOOKKEEPER-477: In ReadOnlyBookieTest, we should wait for the bookie to die before asserting on it (ivank via fpj)
 
-	BOOKKEEPER-485: TestFencing hung (ivank via fpj)
+        BOOKKEEPER-485: TestFencing hung (ivank via fpj)
 
         BOOKKEEPER-351: asyncAddEntry should not throw an exception (Matteo Merli via sijie)
 
@@ -124,15 +182,15 @@ Trunk (unreleased changes)
 
         BOOKKEEPER-347: Provide mechanism to detect r-o bookie by the bookie clients (Vinay via ivank)
 
-	BOOKKEEPER-475: BookieRecoveryTest#testSyncBookieRecoveryToRandomBookiesCheckForDupes() iterates too much (ivank via fpj)
+        BOOKKEEPER-475: BookieRecoveryTest#testSyncBookieRecoveryToRandomBookiesCheckForDupes() iterates too much (ivank via fpj)
 
-	BOOKKEEPER-431: Duplicate definition of COOKIES_NODE (uma via fpj)
+        BOOKKEEPER-431: Duplicate definition of COOKIES_NODE (uma via fpj)
 
-	BOOKKEEPER-474:  BookieReadWriteTest#testShutdown doesn't make sense (ivank via fpj)
+        BOOKKEEPER-474:  BookieReadWriteTest#testShutdown doesn't make sense (ivank via fpj)
 
-	BOOKKEEPER-465: CreateNewLog may overwrite lastLogId with smaller value (yixue, fpj via fpj)
+        BOOKKEEPER-465: CreateNewLog may overwrite lastLogId with smaller value (yixue, fpj via fpj)
 
-	BOOKKEEPER-498: BookieRecoveryTest.tearDown NPE (fpj)
+        BOOKKEEPER-498: BookieRecoveryTest.tearDown NPE (fpj)
 
         BOOKKEEPER-497: GcLedgersTest has a potential race (ivank via sijie)
 
@@ -153,9 +211,26 @@ Trunk (unreleased changes)
         BOOKKEEPER-520: BookieFailureTest hangs on precommit build (ivank via sijie)
 
         BOOKKEEPER-447: Bookie can fail to recover if index pages flushed before ledger flush acknowledged (ivank via sijie)
-	BOOKKEEPER-520: BookieFailureTest hangs on precommit build (sijie via fpj, jira reopened)
 
-	BOOKKEEPER-514: TestDeadLock hanging sometimes (ivank, sijie via fpj)
+        BOOKKEEPER-520: BookieFailureTest hangs on precommit build (sijie via fpj, jira reopened)
+
+        BOOKKEEPER-514: TestDeadLock hanging sometimes (ivank, sijie via fpj)
+
+        BOOKKEEPER-524: Bookie journal filesystem gets full after SyncThread is terminated with exception (Matteo, fpj via sijie)
+
+        BOOKKEEPER-355: Ledger recovery will mark ledger as closed with -1, in case of slow bookie is added to ensemble during recovery add (ivank)
+
+        BOOKKEEPER-534: Flakeyness in AuditorBookieTest (umamahesh via ivank)
+
+        BOOKKEEPER-542: Remove trailing spaces in IndexCorruptionTest (fpj via ivank)
+
+        BOOKKEEPER-530: data might be lost during compaction. (ivank)
+
+        BOOKKEEPER-538: Race condition in BookKeeper#close (ivank via fpj)
+
+        BOOKKEEPER-408: BookieReadWriteTest will enter the endless loop and will not leave out (ivank)
+
+        BOOKKEEPER-504: Fix findbugs warning in PendingReadOp (fpj via ivank)
 
       hedwig-protocol:
 
@@ -183,6 +258,10 @@ Trunk (unreleased changes)
 
         BOOKKEEPER-470: Possible infinite loop in simple.SubscribeReconnectCallback (sijie via ivank)
 
+        BOOKKEEPER-55: SubscribeReconnectRetryTask might retry subscription endlessly when another subscription is already successfully created previously (sijie via ivank)
+
+        BOOKKEEPER-513: TestMessageFilter fails periodically (ivank)
+
       hedwig-server:
 
         BOOKKEEPER-302: No more messages delivered when hub server scans messages over two ledgers. (sijie via ivank)
@@ -207,6 +286,22 @@ Trunk (unreleased changes)
 
 	BOOKKEEPER-458:  Annoy BKReadException error when changing ledger. (jiannan via fpj)
 
+        BOOKKEEPER-507: Race condition happens if closeSubscription and subscribe happened at the same time (in multiplexed client). (sijie via ivank)
+
+	BOOKKEEPER-532: AbstractSubscriptionManager#AcquireOp read subscriptions every time even it already owned the topic. (sijie via fpj)
+
+        BOOKKEEPER-531: Cache thread should wait until old entries are collected (sijie via ivank)
+
+        BOOKKEEPER-529: stopServingSubscriber in delivery manager should remove stub callbacks in ReadAheadCache (sijie via ivank)
+
+        BOOKKEEPER-543: Read zk host list in a wrong way in hedwig server (Fangmin via sijie)
+
+        BOOKKEEPER-540: #stopServingSubscriber when channel is disconnected. (Fangmin via sijie)
+
+        BOOKKEEPER-539: ClientNotSubscribedException & doesn't receive enough messages in TestThrottlingDelivery#testServerSideThrottle (sijie)
+
+        BOOKKEEPER-503: The test case of TestThrottlingDelivery#testServerSideThrottle failed sometimes (jiannan & sijie via ivank)
+
     IMPROVEMENTS:
 
       BOOKKEEPER-467: Allocate ports for testing dynamically (ivank)
@@ -218,6 +313,10 @@ Trunk (unreleased changes)
       BOOKKEEPER-491: Hedwig doc for configuration (fpj, sijie via fpj)
 
       BOOKKEEPER-495: Revise BK config doc (fpj, ivank via fpj)
+
+      BOOKKEEPER-523: Every test should have a timeout (ivank, sijie via fpj)
+
+      BOOKKEEPER-541: Add guava to notice file (ivank via fpj)
 
       bookkeeper-server:
 
@@ -277,6 +376,14 @@ Trunk (unreleased changes)
 
         BOOKKEEPER-463: Refactor garbage collection code for ease to plugin different GC algorithm. (Fangmin, ivank, fpj via sijie)
 
+        BOOKKEEPER-409: Integration Test - Perform bookie rereplication cycle by Auditor-RW processes (rakeshr via ivank)
+
+        BOOKKEEPER-293: Periodic checking of ledger replication status (ivank)
+
+        BOOKKEEPER-472: Provide an option to start Autorecovery along with Bookie Servers (umamahesh via ivank)
+
+        BOOKKEEPER-341: add documentation for bookkeeper ledger manager interface. (sijie via ivank)
+
       hedwig-server:
 
         BOOKKEEPER-250: Need a ledger manager like interface to manage metadata operations in Hedwig (sijie via ivank)
@@ -322,6 +429,10 @@ Trunk (unreleased changes)
         BOOKKEEPER-342: add documentation for hedwig metadata manager interface. (sijie, ivank via sijie)
 
         BOOKKEEPER-522: TestHedwigHub is failing silently on Jenkins (ivank via sijie)
+
+        BOOKKEEPER-262: Implement a meta store based hedwig metadata manager. (jiannan via ivank)
+
+        BOOKKEEPER-310: Changes in hedwig server to support JMS spec (ivank via sijie)
 
       hedwig-client:
 
@@ -479,10 +590,6 @@ Release 4.1.0 - 2012-06-07
 
         BOOKKEEPER-288: NOTICE files don't have the correct year (ivank via sijie)
 
-        BOOKKEEPER-408: BookieReadWriteTest will enter the endless loop and will not leave out (ivank)
-
-	BOOKKEEPER-504: Fix findbugs warning in PendingReadOp (fpj via ivank)
-
       hedwig-client/
 
         BOOKKEEPER-217: NPE in hedwig client when enable DEBUG (sijie via ivank)
@@ -557,8 +664,6 @@ Release 4.1.0 - 2012-06-07
 
 	BOOKKEEPER-270: Review documentation on bookie cookie (ivank via fpj)
 
-        BOOKKEEPER-341: add documentation for bookkeeper ledger manager interface. (sijie via ivank)
-
       hedwig-server/
 
         BOOKKEEPER-77: Add a console client for hedwig (Sijie Guo via ivank)
@@ -570,8 +675,6 @@ Release 4.1.0 - 2012-06-07
         BOOKKEEPER-97: collect pub/sub/consume statistics on hub server (sijie via ivank)
 
 	BOOKKEEPER-269: Review documentation for hedwig console client (sijie via fpj)
-
-        BOOKKEEPER-262: Implement a meta store based hedwig metadata manager. (jiannan via ivank)
 
       hedwig-client/
 

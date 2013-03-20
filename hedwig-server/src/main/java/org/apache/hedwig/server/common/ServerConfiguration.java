@@ -28,6 +28,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 import org.apache.commons.configuration.ConfigurationException;
+import org.apache.commons.lang.StringUtils;
 
 import com.google.protobuf.ByteString;
 import org.apache.bookkeeper.util.ReflectionUtils;
@@ -41,6 +42,7 @@ public class ServerConfiguration extends AbstractConfiguration {
     protected final static String READAHEAD_COUNT = "readahead_count";
     protected final static String READAHEAD_SIZE = "readahead_size";
     protected final static String CACHE_SIZE = "cache_size";
+    protected final static String CACHE_ENTRY_TTL = "cache_entry_ttl";
     protected final static String SCAN_BACKOFF_MSEC = "scan_backoff_ms";
     protected final static String SERVER_PORT = "server_port";
     protected final static String SSL_SERVER_PORT = "ssl_server_port";
@@ -68,6 +70,7 @@ public class ServerConfiguration extends AbstractConfiguration {
         "default_message_window_size";
     protected final static String NUM_READAHEAD_CACHE_THREADS = "num_readahead_cache_threads";
     protected final static String NUM_TOPIC_QUEUER_THREADS = "num_topic_queuer_threads";
+    protected final static String NUM_DELIVERY_THREADS = "num_delivery_threads";
 
     protected final static String MAX_ENTRIES_PER_LEDGER = "max_entries_per_ledger";
 
@@ -176,6 +179,17 @@ public class ServerConfiguration extends AbstractConfiguration {
     }
 
     /**
+     * Cache Entry TTL. By default is 0, cache entry will not be evicted
+     * until the cache is fullfilled or the messages are already consumed.
+     * The TTL is only checked when trying adding a new entry into the cache.
+     *
+     * @return cache entry ttl.
+     */
+    public long getCacheEntryTTL() {
+        return conf.getLong(CACHE_ENTRY_TTL, 0L);
+    }
+
+    /**
      * After a scan of a log fails, how long before we retry (in msec)
      * 
      * @return long
@@ -251,7 +265,11 @@ public class ServerConfiguration extends AbstractConfiguration {
      * @return String
      */
     public String getZkHost() {
-        return conf.getString(ZK_HOST, "localhost");
+        List<Object> servers = conf.getList(ZK_HOST, null);
+        if (null == servers || 0 == servers.size()) {
+            return "localhost";
+        }
+        return StringUtils.join(servers, ",");
     }
 
     /**
@@ -522,6 +540,15 @@ public class ServerConfiguration extends AbstractConfiguration {
      */
     public int getNumTopicQueuerThreads() {
         return conf.getInt(NUM_TOPIC_QUEUER_THREADS, Runtime.getRuntime().availableProcessors());
+    }
+
+    /**
+     * Get number of delivery threads
+     *
+     * @return number of delivery threads.
+     */
+    public int getNumDeliveryThreads() {
+        return conf.getInt(NUM_DELIVERY_THREADS, Runtime.getRuntime().availableProcessors());
     }
 
     /**

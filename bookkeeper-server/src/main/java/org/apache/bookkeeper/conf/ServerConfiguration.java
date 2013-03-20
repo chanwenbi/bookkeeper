@@ -63,6 +63,8 @@ public class ServerConfiguration extends AbstractConfiguration {
     //Disk utilization
     protected final static String DISK_USAGE_THRESHOLD = "diskUsageThreshold";
     protected final static String DISK_CHECK_INTERVAL = "diskCheckInterval";
+    protected final static String AUDITOR_PERIODIC_CHECK_INTERVAL = "auditorPeriodicCheckInterval";
+    protected final static String AUTO_RECOVERY_DAEMON_ENABLED = "autoRecoveryDaemonEnabled";
 
     /**
      * Construct a default configuration object
@@ -350,9 +352,7 @@ public class ServerConfiguration extends AbstractConfiguration {
      */
     public File[] getLedgerDirs() {
         String[] ledgerDirNames = getLedgerDirNames();
-        if (null == ledgerDirNames) {
-            return null;
-        }
+
         File[] ledgerDirs = new File[ledgerDirNames.length];
         for (int i = 0; i < ledgerDirNames.length; i++) {
             ledgerDirs[i] = new File(ledgerDirNames[i]);
@@ -584,9 +584,11 @@ public class ServerConfiguration extends AbstractConfiguration {
     }
 
     /**
-     * Set the ReadOnlyModeEnabled status
+     * Set whether the bookie is able to go into read-only mode.
+     * If this is set to false, the bookie will shutdown on encountering
+     * an error condition.
      * 
-     * @param enabled enables read-only mode.
+     * @param enabled whether to enable read-only mode.
      * 
      * @return ServerConfiguration 
      */
@@ -596,7 +598,7 @@ public class ServerConfiguration extends AbstractConfiguration {
     }
 
     /**
-     * Get ReadOnlyModeEnabled status
+     * Get whether read-only mode is enabled. The default is false.
      * 
      * @return boolean
      */
@@ -645,5 +647,49 @@ public class ServerConfiguration extends AbstractConfiguration {
      */
     public int getDiskCheckInterval() {
         return getInt(DISK_CHECK_INTERVAL, 10 * 1000);
+    }
+
+    /**
+     * Set the regularity at which the auditor will run a check
+     * of all ledgers. This should not be run very often, and at most,
+     * once a day. Setting this to 0 will completely disable the periodic
+     * check.
+     *
+     * @param interval The interval in seconds. e.g. 86400 = 1 day, 604800 = 1 week
+     */
+    public void setAuditorPeriodicCheckInterval(long interval) {
+        setProperty(AUDITOR_PERIODIC_CHECK_INTERVAL, interval);
+    }
+
+    /**
+     * Get the regularity at which the auditor checks all ledgers.
+     * @return The interval in seconds. Default is 604800 (1 week).
+     */
+    public long getAuditorPeriodicCheckInterval() {
+        return getLong(AUDITOR_PERIODIC_CHECK_INTERVAL, 604800);
+    }
+
+    /**
+     * Sets that whether the auto-recovery service can start along with Bookie
+     * server itself or not
+     *
+     * @param enabled
+     *            - true if need to start auto-recovery service. Otherwise
+     *            false.
+     * @return ServerConfiguration
+     */
+    public ServerConfiguration setAutoRecoveryDaemonEnabled(boolean enabled) {
+        setProperty(AUTO_RECOVERY_DAEMON_ENABLED, enabled);
+        return this;
+    }
+
+    /**
+     * Get whether the Bookie itself can start auto-recovery service also or not
+     *
+     * @return true - if Bookie should start auto-recovery service along with
+     *         it. false otherwise.
+     */
+    public boolean isAutoRecoveryDaemonEnabled() {
+        return getBoolean(AUTO_RECOVERY_DAEMON_ENABLED, false);
     }
 }

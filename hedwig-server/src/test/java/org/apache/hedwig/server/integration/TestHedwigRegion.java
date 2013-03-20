@@ -103,13 +103,7 @@ public class TestHedwigRegion extends HedwigRegionTestBase {
         super.setUp();
     }
 
-    @Override
-    @After
-    public void tearDown() throws Exception {
-        super.tearDown();
-    }
-
-    @Test
+    @Test(timeout=60000)
     public void testMultiRegionSubscribeAndConsume() throws Exception {
         int batchSize = 10;
         // Subscribe to topics for clients in all regions
@@ -152,7 +146,7 @@ public class TestHedwigRegion extends HedwigRegionTestBase {
      *
      * @throws Exception
      */
-    @Test
+    @Test(timeout=60000)
     public void testSubscribeAndConsumeWhenARegionDown() throws Exception {
         int batchSize = 10;
 
@@ -217,7 +211,7 @@ public class TestHedwigRegion extends HedwigRegionTestBase {
      *
      * @throws Exception
      */
-    @Test
+    @Test(timeout=60000)
     public void testAttachExistingSubscriptionsWhenARegionDown() throws Exception {
         int batchSize = 10;
         

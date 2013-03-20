@@ -45,6 +45,7 @@ import org.apache.bookkeeper.proto.BookieProtocol;
 import org.apache.bookkeeper.proto.DataFormats.LedgerMetadataFormat.State;
 import org.apache.bookkeeper.util.SafeRunnable;
 
+import static com.google.common.base.Charsets.UTF_8;
 import com.google.common.util.concurrent.RateLimiter;
 
 import org.slf4j.Logger;
@@ -645,33 +646,16 @@ public class LedgerHandle {
 
     }
 
-    void handleBookieFailure(final InetSocketAddress addr, final int bookieIndex) {
+    ArrayList<InetSocketAddress> replaceBookieInMetadata(final InetSocketAddress addr, final int bookieIndex)
+            throws BKException.BKNotEnoughBookiesException {
         InetSocketAddress newBookie;
-
-        LOG.debug("Handling failure of bookie: {} index: {}", addr, bookieIndex);
+        LOG.info("Handling failure of bookie: {} index: {}", addr, bookieIndex);
         final ArrayList<InetSocketAddress> newEnsemble = new ArrayList<InetSocketAddress>();
-        blockAddCompletions.incrementAndGet();
         final long newEnsembleStartEntry = lastAddConfirmed + 1;
 
         // avoid parallel ensemble changes to same ensemble.
         synchronized (metadata) {
-            if (!metadata.currentEnsemble.get(bookieIndex).equals(addr)) {
-                // ensemble has already changed, failure of this addr is immaterial
-                LOG.warn("Write did not succeed to {}, bookieIndex {}, but we have already fixed it.",
-                         addr, bookieIndex);
-                blockAddCompletions.decrementAndGet();
-                return;
-            }
-
-            try {
-                newBookie = bk.bookieWatcher
-                        .getAdditionalBookie(metadata.currentEnsemble);
-            } catch (BKNotEnoughBookiesException e) {
-                LOG.error("Could not get additional bookie to "
-                        + "remake ensemble, closing ledger: " + ledgerId);
-                handleUnrecoverableErrorDuringAdd(e.getCode());
-                return;
-            }
+            newBookie = bk.bookieWatcher.getAdditionalBookie(metadata.currentEnsemble);
 
             newEnsemble.addAll(metadata.currentEnsemble);
             newEnsemble.set(bookieIndex, newBookie);
@@ -684,10 +668,34 @@ public class LedgerHandle {
 
             metadata.addEnsemble(newEnsembleStartEntry, newEnsemble);
         }
+        return newEnsemble;
+    }
 
-        EnsembleInfo ensembleInfo = new EnsembleInfo(newEnsemble, bookieIndex,
-                addr);
-        writeLedgerConfig(new ChangeEnsembleCb(ensembleInfo));
+    void handleBookieFailure(final InetSocketAddress addr, final int bookieIndex) {
+        blockAddCompletions.incrementAndGet();
+
+        synchronized (metadata) {
+            if (!metadata.currentEnsemble.get(bookieIndex).equals(addr)) {
+                // ensemble has already changed, failure of this addr is immaterial
+                LOG.warn("Write did not succeed to {}, bookieIndex {}, but we have already fixed it.",
+                         addr, bookieIndex);
+                blockAddCompletions.decrementAndGet();
+                return;
+            }
+
+            try {
+                ArrayList<InetSocketAddress> newEnsemble = replaceBookieInMetadata(addr, bookieIndex);
+
+                EnsembleInfo ensembleInfo = new EnsembleInfo(newEnsemble, bookieIndex,
+                                                             addr);
+                writeLedgerConfig(new ChangeEnsembleCb(ensembleInfo));
+            } catch (BKException.BKNotEnoughBookiesException e) {
+                LOG.error("Could not get additional bookie to "
+                          + "remake ensemble, closing ledger: " + ledgerId);
+                handleUnrecoverableErrorDuringAdd(e.getCode());
+                return;
+            }
+        }
     }
 
     // Contains newly reformed ensemble, bookieIndex, failedBookieAddress
@@ -764,9 +772,9 @@ public class LedgerHandle {
                             + "while changing ensemble to: "
                             + ensembleInfo.newEnsemble
                             + ", old meta data is \n"
-                            + new String(metadata.serialize())
+                            + new String(metadata.serialize(), UTF_8)
                             + "\n, new meta data is \n"
-                            + new String(newMeta.serialize())
+                            + new String(newMeta.serialize(), UTF_8)
                             + "\n ,closing ledger");
                     handleUnrecoverableErrorDuringAdd(rc);
                 }
@@ -804,9 +812,9 @@ public class LedgerHandle {
                             + "while changing ensemble to: "
                             + ensembleInfo.newEnsemble
                             + ", old meta data is \n"
-                            + new String(metadata.serialize())
+                            + new String(metadata.serialize(), UTF_8)
                             + "\n, new meta data is \n"
-                            + new String(newMeta.serialize()));
+                            + new String(newMeta.serialize(), UTF_8));
                     writeLedgerConfig(new ChangeEnsembleCb(ensembleInfo));
                 }
             } else {
@@ -819,7 +827,7 @@ public class LedgerHandle {
 
     };
 
-    private void unsetSuccessAndSendWriteRequest(final int bookieIndex) {
+    void unsetSuccessAndSendWriteRequest(final int bookieIndex) {
         for (PendingAddOp pendingAddOp : pendingAddOps) {
             pendingAddOp.unsetSuccessAndSendWriteRequest(bookieIndex);
         }

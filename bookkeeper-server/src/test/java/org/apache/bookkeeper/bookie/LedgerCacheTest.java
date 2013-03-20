@@ -282,6 +282,8 @@ public class LedgerCacheTest extends TestCase {
         ledgerStorage.flush();
         File after = newFileInfo.getLf();
 
+        assertEquals("Reference counting for the file info should be zero.", 0, newFileInfo.getUseCount());
+
         assertFalse("After flush index file should be changed", before.equals(after));
         // Verify written entries
         Assert.assertArrayEquals(generateEntry(1, 1).array(), ledgerStorage.getEntry(1, 1).array());
@@ -342,6 +344,27 @@ public class LedgerCacheTest extends TestCase {
                 LOG.info("Shouldn't have received IOException", ioe);
                 fail("Shouldn't throw IOException, should say that entry is not found");
             }
+        }
+    }
+
+
+    /**
+     * {@link https://issues.apache.org/jira/browse/BOOKKEEPER-524}
+     * Checks that getLedgerEntryPage does not throw an NPE in the
+     * case getFromTable returns a null ledger entry page reference.
+     * This NPE might kill the sync thread leaving a bookie with no
+     * sync thread running.
+     *
+     * @throws IOException
+     */
+    @Test(timeout=30000)
+    public void testSyncThreadNPE() throws IOException {
+        newLedgerCache();
+        try {
+            ((LedgerCacheImpl) ledgerCache).getLedgerEntryPage(0L, 0L, true);
+        } catch (Exception e) {
+            LOG.error("Exception when trying to get a ledger entry page", e);
+            fail("Shouldn't have thrown an exception");
         }
     }
 

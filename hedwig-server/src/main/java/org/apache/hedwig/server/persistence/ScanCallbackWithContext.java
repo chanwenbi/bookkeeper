@@ -34,4 +34,21 @@ public class ScanCallbackWithContext {
         return ctx;
     }
 
+    @Override
+    public boolean equals(Object other) {
+        if (!(other instanceof ScanCallbackWithContext)) {
+            return false;
+        }
+        ScanCallbackWithContext otherCb =
+            (ScanCallbackWithContext) other;
+        // Ensure that it was same callback & same ctx
+        return scanCallback == otherCb.scanCallback &&
+               ctx == otherCb.ctx;
+    }
+
+    @Override
+    public int hashCode() {
+        return scanCallback.hashCode();
+    }
+
 }

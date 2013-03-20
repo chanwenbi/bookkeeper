@@ -29,6 +29,8 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.Arrays;
 
+import static com.google.common.base.Charsets.UTF_8;
+
 import org.apache.bookkeeper.versioning.Version;
 import com.google.protobuf.TextFormat;
 import com.google.protobuf.ByteString;
@@ -244,7 +246,7 @@ public class LedgerMetadata {
         s.append(VERSION_KEY).append(tSplitter).append(CURRENT_METADATA_FORMAT_VERSION).append(lSplitter);
         s.append(TextFormat.printToString(builder.build()));
         LOG.debug("Serialized config: {}", s);
-        return s.toString().getBytes();
+        return s.toString().getBytes(UTF_8);
     }
 
     private byte[] serializeVersion1() {
@@ -268,7 +270,7 @@ public class LedgerMetadata {
 
         LOG.debug("Serialized config: {}", s);
 
-        return s.toString().getBytes();
+        return s.toString().getBytes(UTF_8);
     }
 
     /**
@@ -286,7 +288,7 @@ public class LedgerMetadata {
         LedgerMetadata lc = new LedgerMetadata();
         lc.version = version;
 
-        String config = new String(bytes);
+        String config = new String(bytes, UTF_8);
 
         LOG.debug("Parsing Config: {}", config);
         BufferedReader reader = new BufferedReader(new StringReader(config));
@@ -437,20 +439,23 @@ public class LedgerMetadata {
             Version.Occurred.AFTER == version.compare(newMeta.version)) {
             return false;
         }
-        // ensemble size should be same
-        if (ensembles.size() != newMeta.ensembles.size()) {
-            return false;
-        }
-        // ensemble distribution should be same
-        // we don't check the detail ensemble, since new bookie will be set
-        // using recovery tool.
-        Iterator<Long> keyIter = ensembles.keySet().iterator();
-        Iterator<Long> newMetaKeyIter = newMeta.ensembles.keySet().iterator();
-        for (int i=0; i<ensembles.size(); i++) {
-            Long curKey = keyIter.next();
-            Long newMetaKey = newMetaKeyIter.next();
-            if (!curKey.equals(newMetaKey)) {
+        // if ledger is closed, we can just take the new ensembles
+        if (newMeta.state != LedgerMetadataFormat.State.CLOSED) {
+            // ensemble size should be same
+            if (ensembles.size() != newMeta.ensembles.size()) {
                 return false;
+            }
+            // ensemble distribution should be same
+            // we don't check the detail ensemble, since new bookie will be set
+            // using recovery tool.
+            Iterator<Long> keyIter = ensembles.keySet().iterator();
+            Iterator<Long> newMetaKeyIter = newMeta.ensembles.keySet().iterator();
+            for (int i=0; i<ensembles.size(); i++) {
+                Long curKey = keyIter.next();
+                Long newMetaKey = newMetaKeyIter.next();
+                if (!curKey.equals(newMetaKey)) {
+                    return false;
+                }
             }
         }
         /*

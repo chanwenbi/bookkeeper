@@ -18,6 +18,7 @@
 package org.apache.hedwig.client.netty.impl.simple;
 
 import java.net.InetSocketAddress;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -28,13 +29,14 @@ import org.jboss.netty.channel.ChannelFactory;
 import org.jboss.netty.channel.ChannelFuture;
 import org.jboss.netty.channel.ChannelFutureListener;
 
+import org.apache.hedwig.exceptions.PubSubException;
 import org.apache.hedwig.client.api.MessageHandler;
 import org.apache.hedwig.client.conf.ClientConfiguration;
 import org.apache.hedwig.client.data.TopicSubscriber;
+import org.apache.hedwig.client.data.PubSubData;
 import org.apache.hedwig.client.exceptions.AlreadyStartDeliveryException;
 import org.apache.hedwig.client.exceptions.NoResponseHandlerException;
 import org.apache.hedwig.client.handlers.SubscribeResponseHandler;
-
 import org.apache.hedwig.client.netty.CleanupChannelMap;
 import org.apache.hedwig.client.netty.HChannel;
 import org.apache.hedwig.client.netty.NetUtils;
@@ -44,10 +46,11 @@ import org.apache.hedwig.client.netty.impl.HChannelHandler;
 import org.apache.hedwig.client.netty.impl.HChannelImpl;
 import org.apache.hedwig.exceptions.PubSubException.ClientNotSubscribedException;
 import org.apache.hedwig.exceptions.PubSubException.ServiceDownException;
-import org.apache.hedwig.filter.ClientMessageFilter;
+import org.apache.hedwig.exceptions.PubSubException.TopicBusyException;
 import org.apache.hedwig.protocol.PubSubProtocol.ResponseBody;
-import org.apache.hedwig.protoextensions.SubscriptionStateUtils;
+import org.apache.hedwig.protocol.PubSubProtocol.OperationType;
 import org.apache.hedwig.util.Callback;
+import org.apache.hedwig.util.Either;
 import static org.apache.hedwig.util.VarArgs.va;
 
 /**
@@ -82,6 +85,46 @@ public class SimpleHChannelManager extends AbstractHChannelManager {
     }
 
     @Override
+    public void submitOp(final PubSubData pubSubData) {
+        /**
+         * In the simple hchannel implementation that if a client closes a subscription
+         * and tries to attach to it immediately, it could get a TOPIC_BUSY response. This
+         * is because, a subscription is closed simply by closing the channel, and the hub
+         * side may not have been notified of the channel disconnection event by the time
+         * the new subscription request comes in. To solve this, retry up to 5 times.
+         * {@link https://issues.apache.org/jira/browse/BOOKKEEPER-513}
+         */
+        if (OperationType.SUBSCRIBE.equals(pubSubData.operationType)) {
+            final Callback<ResponseBody> origCb = pubSubData.getCallback();
+            final AtomicInteger retries = new AtomicInteger(5);
+            final Callback<ResponseBody> wrapperCb
+                = new Callback<ResponseBody>() {
+                @Override
+                public void operationFinished(Object ctx,
+                                              ResponseBody resultOfOperation) {
+                    origCb.operationFinished(ctx, resultOfOperation);
+                }
+
+                @Override
+                public void operationFailed(Object ctx, PubSubException exception) {
+                    if (exception instanceof ServiceDownException
+                        && exception.getCause() instanceof TopicBusyException
+                        && retries.decrementAndGet() > 0) {
+                        logger.warn("TOPIC_DOWN from server using simple channel scheme."
+                                    + "This could be due to the channel disconnection from a close"
+                                    + " not having been triggered on the server side. Retrying");
+                        SimpleHChannelManager.super.submitOp(pubSubData);
+                        return;
+                    }
+                    origCb.operationFailed(ctx, exception);
+                }
+            };
+            pubSubData.setCallback(wrapperCb);
+        }
+        super.submitOp(pubSubData);
+    }
+
+    @Override
     protected ClientChannelPipelineFactory getSubscriptionChannelPipelineFactory() {
         return subscriptionChannelPipelineFactory;
     }
@@ -103,12 +146,18 @@ public class SimpleHChannelManager extends AbstractHChannelManager {
                                 getSubscriptionChannelPipelineFactory());
     }
 
-    protected HChannel storeSubscriptionChannel(TopicSubscriber topicSubscriber,
-                                                Channel channel) {
+    protected Either<Boolean, HChannel> storeSubscriptionChannel(
+        TopicSubscriber topicSubscriber, PubSubData txn, Channel channel) {
         InetSocketAddress host = NetUtils.getHostFromChannel(channel);
         HChannel newHChannel = new HChannelImpl(host, channel, this,
                                                 getSubscriptionChannelPipelineFactory());
-        return topicSubscriber2Channel.addChannel(topicSubscriber, newHChannel);
+        boolean replaced = topicSubscriber2Channel.replaceChannel(
+            topicSubscriber, txn.getOriginalChannelForResubscribe(), newHChannel);
+        if (replaced) {
+            return Either.of(replaced, newHChannel);
+        } else {
+            return Either.of(replaced, null);
+        }
     }
 
     @Override

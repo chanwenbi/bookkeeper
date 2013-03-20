@@ -194,7 +194,7 @@ public class TestPubSubClient extends PubSubServerStandAloneTestBase {
         super.tearDown();
     }
 
-    @Test
+    @Test(timeout=60000)
     public void testSyncPublish() throws Exception {
         boolean publishSuccess = true;
         try {
@@ -206,7 +206,7 @@ public class TestPubSubClient extends PubSubServerStandAloneTestBase {
         assertTrue(publishSuccess);
     }
 
-    @Test
+    @Test(timeout=60000)
     public void testSyncPublishWithResponse() throws Exception {
         ByteString topic = ByteString.copyFromUtf8("testSyncPublishWithResponse");
         ByteString subid = ByteString.copyFromUtf8("mysubid");
@@ -261,14 +261,14 @@ public class TestPubSubClient extends PubSubServerStandAloneTestBase {
         }
     }
 
-    @Test
+    @Test(timeout=60000)
     public void testAsyncPublish() throws Exception {
         publisher.asyncPublish(ByteString.copyFromUtf8("myAsyncTopic"), Message.newBuilder().setBody(
                                    ByteString.copyFromUtf8("Hello Async World!")).build(), new TestCallback(), null);
         assertTrue(queue.take());
     }
 
-    @Test
+    @Test(timeout=60000)
     public void testAsyncPublishWithResponse() throws Exception {
         ByteString topic = ByteString.copyFromUtf8("testAsyncPublishWithResponse");
         ByteString subid = ByteString.copyFromUtf8("mysubid");
@@ -341,7 +341,7 @@ public class TestPubSubClient extends PubSubServerStandAloneTestBase {
         }
     }
 
-    @Test
+    @Test(timeout=60000)
     public void testMultipleAsyncPublish() throws Exception {
         ByteString topic1 = ByteString.copyFromUtf8("myFirstTopic");
         ByteString topic2 = ByteString.copyFromUtf8("myNewTopic");
@@ -357,7 +357,7 @@ public class TestPubSubClient extends PubSubServerStandAloneTestBase {
         assertTrue(queue.take());
     }
 
-    @Test
+    @Test(timeout=60000)
     public void testSyncSubscribe() throws Exception {
         boolean subscribeSuccess = true;
         try {
@@ -368,14 +368,14 @@ public class TestPubSubClient extends PubSubServerStandAloneTestBase {
         assertTrue(subscribeSuccess);
     }
 
-    @Test
+    @Test(timeout=60000)
     public void testAsyncSubscribe() throws Exception {
         subscriber.asyncSubscribe(ByteString.copyFromUtf8("myAsyncSubscribeTopic"), ByteString.copyFromUtf8("1"),
                                   CreateOrAttach.CREATE_OR_ATTACH, new TestCallback(), null);
         assertTrue(queue.take());
     }
 
-    @Test
+    @Test(timeout=60000)
     public void testStartDeliveryAfterCloseSub() throws Exception {
         ByteString topic = ByteString.copyFromUtf8("testStartDeliveryAfterCloseSub");
         ByteString subid = ByteString.copyFromUtf8("mysubid");
@@ -402,7 +402,7 @@ public class TestPubSubClient extends PubSubServerStandAloneTestBase {
         assertTrue(consumeQueue.take());
     }
 
-    @Test
+    @Test(timeout=60000)
     public void testSubscribeAndConsume() throws Exception {
         ByteString topic = ByteString.copyFromUtf8("myConsumeTopic");
         ByteString subscriberId = ByteString.copyFromUtf8("1");
@@ -436,7 +436,7 @@ public class TestPubSubClient extends PubSubServerStandAloneTestBase {
         assertTrue(consumeQueue.take());
     }
 
-    @Test
+    @Test(timeout=60000)
     public void testAsyncSubscribeAndUnsubscribe() throws Exception {
         ByteString topic = ByteString.copyFromUtf8("myAsyncUnsubTopic");
         ByteString subscriberId = ByteString.copyFromUtf8("1");
@@ -446,7 +446,7 @@ public class TestPubSubClient extends PubSubServerStandAloneTestBase {
         assertTrue(queue.take());
     }
 
-    @Test
+    @Test(timeout=60000)
     public void testSyncUnsubscribeWithoutSubscription() throws Exception {
         boolean unsubscribeSuccess = false;
         try {
@@ -459,7 +459,7 @@ public class TestPubSubClient extends PubSubServerStandAloneTestBase {
         assertTrue(unsubscribeSuccess);
     }
 
-    @Test
+    @Test(timeout=60000)
     public void testAsyncSubscribeAndCloseSubscription() throws Exception {
         ByteString topic = ByteString.copyFromUtf8("myAsyncSubAndCloseSubTopic");
         ByteString subscriberId = ByteString.copyFromUtf8("1");
@@ -469,7 +469,27 @@ public class TestPubSubClient extends PubSubServerStandAloneTestBase {
         assertTrue(true);
     }
 
-    @Test
+    @Test(timeout=60000)
+    public void testSubClosesubAndPublish() throws Exception {
+        ByteString topic = ByteString.copyFromUtf8("mySubClosesubAndPublish");
+        ByteString subid = ByteString.copyFromUtf8("mysub");
+        // to populate startServing/stopServing sequeuence
+        for (int i=0; i<5; i++) {
+            subscriber.subscribe(topic, subid, CreateOrAttach.CREATE_OR_ATTACH);
+            subscriber.closeSubscription(topic, subid);
+        }
+        subscriber.subscribe(topic, subid, CreateOrAttach.CREATE_OR_ATTACH);
+        subscriber.startDelivery(topic, subid, new TestMessageHandler());
+        for (int i=0; i<3; i++) {
+            publisher.asyncPublish(topic,
+                Message.newBuilder().setBody(ByteString.copyFromUtf8("Message #" + i)).build(),
+                new TestCallback(), null);
+            assertTrue(queue.take());
+            assertTrue(consumeQueue.take());
+        }
+    }
+
+    @Test(timeout=60000)
     public void testSyncSubscribeWithListener() throws Exception {
         ByteString topic = ByteString.copyFromUtf8("mySyncSubscribeWithListener");
         ByteString subscriberId = ByteString.copyFromUtf8("mysub");
@@ -488,7 +508,7 @@ public class TestPubSubClient extends PubSubServerStandAloneTestBase {
         assertEquals(SubscriptionEvent.TOPIC_MOVED, eventQueue.take());
     }
 
-    @Test
+    @Test(timeout=60000)
     public void testAsyncSubscribeWithListener() throws Exception {
         ByteString topic = ByteString.copyFromUtf8("myAsyncSubscribeWithListener");
         ByteString subscriberId = ByteString.copyFromUtf8("mysub");
@@ -505,7 +525,7 @@ public class TestPubSubClient extends PubSubServerStandAloneTestBase {
         assertEquals(SubscriptionEvent.TOPIC_MOVED, eventQueue.take());
     }
 
-    @Test
+    @Test(timeout=60000)
     public void testSyncSubscribeForceAttach() throws Exception {
         ByteString topic = ByteString.copyFromUtf8("mySyncSubscribeForceAttach");
         ByteString subscriberId = ByteString.copyFromUtf8("mysub");
@@ -562,7 +582,7 @@ public class TestPubSubClient extends PubSubServerStandAloneTestBase {
         client2.close();
     }
 
-    @Test
+    @Test(timeout=60000)
     public void testSyncSubscribeWithListenerWhenReleasingTopic() throws Exception {
         client.close();
 
@@ -603,6 +623,66 @@ public class TestPubSubClient extends PubSubServerStandAloneTestBase {
 
         Thread.sleep(RETENTION_SECS_VALUE * 2);
         assertEquals(SubscriptionEvent.TOPIC_MOVED, eventQueue.take());
+    }
+
+    @Test
+    public void testCloseSubscribeDuringResubscribe() throws Exception {
+        client.close();
+
+        final long reconnectWaitTime = 2000L;
+        client = new HedwigClient(new ClientConfiguration() {
+            @Override
+            public HedwigSocketAddress getDefaultServerHedwigSocketAddress() {
+                return getDefaultHedwigAddress();
+            }
+
+            @Override
+            public boolean isSubscriptionChannelSharingEnabled() {
+                return TestPubSubClient.this.isSubscriptionChannelSharingEnabled;
+            }
+
+            @Override
+            public long getSubscribeReconnectRetryWaitTime() {
+                return reconnectWaitTime;
+            }
+        });
+
+        publisher = client.getPublisher();
+        subscriber = client.getSubscriber();
+
+        ByteString topic = ByteString.copyFromUtf8("testCloseSubscribeDuringResubscribe");
+        ByteString subscriberId = ByteString.copyFromUtf8("mysub");
+        subscriber.addSubscriptionListener(new TestSubscriptionListener());
+        SubscriptionOptions options =
+            SubscriptionOptions.newBuilder()
+            .setCreateOrAttach(CreateOrAttach.CREATE_OR_ATTACH)
+            .setForceAttach(false).setEnableResubscribe(true).build();
+        subscriber.subscribe(topic, subscriberId, options);
+        logger.info("Subscribed topic {}, subscriber {}.", topic.toStringUtf8(),
+                    subscriberId.toStringUtf8());
+        subscriber.startDelivery(topic, subscriberId, new TestMessageHandler());
+
+        // tear down the hub server to let subscribe enter
+        tearDownHubServer();
+        logger.info("Tear down the hub server");
+
+        // wait for client enter to resubscribe logic
+        Thread.sleep(reconnectWaitTime / 2);
+
+        // close sub
+        subscriber.closeSubscription(topic, subscriberId);
+
+        // start the hub server again
+        startHubServer(conf);
+
+        // publish a new message
+        publisher.asyncPublish(topic, Message.newBuilder().setBody(ByteString.copyFromUtf8("Message #1")).build(),
+                               new TestCallback(), null);
+        assertTrue(queue.take());
+
+        // wait for another reconnect time period
+        assertNull("Should not receive any messages since the subscription has already been closed.",
+                   consumeQueue.poll(reconnectWaitTime + reconnectWaitTime / 2, TimeUnit.MILLISECONDS));
     }
 
 }

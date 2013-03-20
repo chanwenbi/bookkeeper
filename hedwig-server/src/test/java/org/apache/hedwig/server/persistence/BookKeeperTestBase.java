@@ -25,6 +25,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
 
+import org.apache.bookkeeper.replication.ReplicationException.CompatibilityException;
+import org.apache.bookkeeper.replication.ReplicationException.UnavailableException;
 import org.apache.bookkeeper.test.PortManager;
 
 import org.apache.bookkeeper.bookie.Bookie;
@@ -78,7 +80,9 @@ public class BookKeeperTestBase extends ZooKeeperTestBase {
 
     class TestBookieServer extends BookieServer {
         public TestBookieServer(ServerConfiguration conf)
-            throws IOException, KeeperException, InterruptedException, BookieException {
+            throws IOException,
+                KeeperException, InterruptedException, BookieException,
+                UnavailableException, CompatibilityException {
             super(conf);
         }
 
@@ -128,7 +132,7 @@ public class BookKeeperTestBase extends ZooKeeperTestBase {
     }
 
     // Give junit a fake test so that its happy
-    @Test
+    @Test(timeout=60000)
     public void testNothing() throws Exception {
 
     }
@@ -187,7 +191,19 @@ public class BookKeeperTestBase extends ZooKeeperTestBase {
             bookiesList.add(startBookie(conf));
         }
     }
-    
+
+    public void suspendAllBookieServers() throws Exception {
+        for (BookieServer bs : bookiesList) {
+            bs.suspendProcessing();
+        }
+    }
+
+    public void resumeAllBookieServers() throws Exception {
+        for (BookieServer bs : bookiesList) {
+            bs.resumeProcessing();
+        }
+    }
+
     public void tearDownOneBookieServer() throws Exception {
         Random r = new Random();
         int bi = r.nextInt(bookiesList.size());

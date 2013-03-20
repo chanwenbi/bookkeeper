@@ -50,7 +50,7 @@ import org.apache.hedwig.zookeeper.SafeAsyncZKCallback;
 
 public class TestPubSubServer extends PubSubServerStandAloneTestBase {
 
-    @Test
+    @Test(timeout=60000)
     public void testSecondServer() throws Exception {
         PubSubServer server1 = new PubSubServer(new StandAloneServerConfiguration() {
                 @Override
@@ -123,7 +123,7 @@ public class TestPubSubServer extends PubSubServerStandAloneTestBase {
         }, null);
     }
 
-    @Test
+    @Test(timeout=60000)
     public void testUncaughtExceptionInNettyThread() throws Exception {
 
         SynchronousQueue<Throwable> queue = new SynchronousQueue<Throwable>();
@@ -154,7 +154,7 @@ public class TestPubSubServer extends PubSubServerStandAloneTestBase {
         server.shutdown();
     }
 
-    @Test
+    @Test(timeout=60000)
     public void testUncaughtExceptionInZKThread() throws Exception {
 
         SynchronousQueue<Throwable> queue = new SynchronousQueue<Throwable>();
@@ -207,7 +207,7 @@ public class TestPubSubServer extends PubSubServerStandAloneTestBase {
         server.shutdown();
     }
 
-    @Test
+    @Test(timeout=60000)
     public void testInvalidServerConfiguration() throws Exception {
         boolean success = false;
         ServerConfiguration conf = new ServerConfiguration() {
@@ -235,7 +235,7 @@ public class TestPubSubServer extends PubSubServerStandAloneTestBase {
         assertTrue(success);
     }
 
-    @Test
+    @Test(timeout=60000)
     public void testValidServerConfiguration() throws Exception {
         boolean success = true;
         ServerConfiguration conf = new ServerConfiguration() {

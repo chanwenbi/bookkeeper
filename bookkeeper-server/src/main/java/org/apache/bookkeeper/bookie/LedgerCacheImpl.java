@@ -35,6 +35,8 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import org.apache.bookkeeper.util.SnapshotMap;
 import org.apache.bookkeeper.bookie.LedgerDirsManager.LedgerDirsListener;
 import org.apache.bookkeeper.bookie.LedgerDirsManager.NoWritableLedgerDirException;
@@ -148,17 +150,18 @@ public class LedgerCacheImpl implements LedgerCache {
         return null;
     }
 
-    synchronized private LedgerEntryPage getLedgerEntryPage(Long ledger, Long firstEntry, boolean onlyDirty) {
+    synchronized protected LedgerEntryPage getLedgerEntryPage(Long ledger, Long firstEntry, boolean onlyDirty) {
         LedgerEntryPage lep = getFromTable(pages, ledger, firstEntry);
-        try {
-            if (onlyDirty && lep.isClean()) {
-                return null;
-            }
+        if (lep == null) {
+            return null;
+        }
+
+        lep.usePage();
+
+        if (onlyDirty && lep.isClean()) {
+            return null;
+        } else {
             return lep;
-        } finally {
-            if (lep != null) {
-                lep.usePage();
-            }
         }
     }
 
@@ -206,11 +209,8 @@ public class LedgerCacheImpl implements LedgerCache {
         if (lep == null) {
             lep = grabLedgerEntryPage(ledger, pageEntry); 
         }
-        if (lep != null) {
-            lep.setOffset(offset, offsetInPage*8);
-            lep.releasePage();
-            return;
-        }
+        lep.setOffset(offset, offsetInPage*8);
+        lep.releasePage();
     }
 
     @Override
@@ -232,7 +232,8 @@ public class LedgerCacheImpl implements LedgerCache {
         }
     }
 
-    static final String getLedgerName(long ledgerId) {
+    @VisibleForTesting
+    public static final String getLedgerName(long ledgerId) {
         int parent = (int) (ledgerId & 0xff);
         int grandParent = (int) ((ledgerId & 0xff00) >> 8);
         StringBuilder sb = new StringBuilder();
@@ -359,10 +360,17 @@ public class LedgerCacheImpl implements LedgerCache {
                 // if some new dir detected as full, then move all corresponding
                 // open index files to new location
                 for (Long l : dirtyLedgers) {
-                    FileInfo fi = getFileInfo(l, null);
-                    File currentDir = getLedgerDirForLedger(fi);
-                    if (ledgerDirsManager.isDirFull(currentDir)) {
-                        moveLedgerIndexFile(l, fi);
+                    FileInfo fi = null;
+                    try {
+                        fi = getFileInfo(l, null);
+                        File currentDir = getLedgerDirForLedger(fi);
+                        if (ledgerDirsManager.isDirFull(currentDir)) {
+                            moveLedgerIndexFile(l, fi);
+                        }
+                    } finally {
+                        if (null != fi) {
+                            fi.release();
+                        }
                     }
                 }
                 shouldRelocateIndexFile.set(false);
@@ -806,10 +814,7 @@ public class LedgerCacheImpl implements LedgerCache {
         FileInfo fi = null;
         try {
             fi = getFileInfo(ledgerId, null);
-            if (null != fi) {
-                return fi.setFenced();
-            }
-            return false;
+            return fi.setFenced();
         } finally {
             if (null != fi) {
                 fi.release();
@@ -822,10 +827,7 @@ public class LedgerCacheImpl implements LedgerCache {
         FileInfo fi = null;
         try {
             fi = getFileInfo(ledgerId, null);
-            if (null != fi) {
-                return fi.isFenced();
-            }
-            return false;
+            return fi.isFenced();
         } finally {
             if (null != fi) {
                 fi.release();

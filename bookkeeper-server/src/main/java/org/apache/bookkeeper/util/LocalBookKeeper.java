@@ -31,6 +31,8 @@ import java.util.concurrent.TimeUnit;
 import org.apache.bookkeeper.bookie.BookieException;
 import org.apache.bookkeeper.conf.ServerConfiguration;
 import org.apache.bookkeeper.proto.BookieServer;
+import org.apache.bookkeeper.replication.ReplicationException.CompatibilityException;
+import org.apache.bookkeeper.replication.ReplicationException.UnavailableException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.zookeeper.CreateMode;
@@ -42,6 +44,8 @@ import org.apache.zookeeper.Watcher.Event.KeeperState;
 import org.apache.zookeeper.ZooDefs.Ids;
 import org.apache.zookeeper.server.NIOServerCnxnFactory;
 import org.apache.zookeeper.server.ZooKeeperServer;
+
+import static com.google.common.base.Charsets.UTF_8;
 
 public class LocalBookKeeper {
     protected static final Logger LOG = LoggerFactory.getLogger(LocalBookKeeper.class);
@@ -121,8 +125,10 @@ public class LocalBookKeeper {
             LOG.error("Interrupted while creating znodes", e);
         }
     }
-    private void runBookies(ServerConfiguration baseConf) 
-            throws IOException, KeeperException, InterruptedException, BookieException {
+
+    private void runBookies(ServerConfiguration baseConf) throws IOException,
+            KeeperException, InterruptedException, BookieException,
+            UnavailableException, CompatibilityException {
         LOG.info("Starting Bookie(s)");
         // Create Bookie Servers (B1, B2, B3)
 
@@ -149,8 +155,9 @@ public class LocalBookKeeper {
         }
     }
 
-    public static void main(String[] args)
-            throws IOException, KeeperException, InterruptedException, BookieException {
+    public static void main(String[] args) throws IOException, KeeperException,
+            InterruptedException, BookieException, UnavailableException,
+            CompatibilityException {
         if(args.length < 1) {
             usage();
             System.exit(-1);
@@ -218,12 +225,12 @@ public class LocalBookKeeper {
                 BufferedReader reader = null;
                 try {
                     OutputStream outstream = sock.getOutputStream();
-                    outstream.write("stat".getBytes());
+                    outstream.write("stat".getBytes(UTF_8));
                     outstream.flush();
 
                     reader =
                         new BufferedReader(
-                        new InputStreamReader(sock.getInputStream()));
+                                new InputStreamReader(sock.getInputStream(), UTF_8));
                     String line = reader.readLine();
                     if (line != null && line.startsWith("Zookeeper version:")) {
                         LOG.info("Server UP");

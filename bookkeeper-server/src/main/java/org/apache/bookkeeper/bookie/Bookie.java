@@ -37,11 +37,13 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.bookkeeper.meta.LedgerManager;
 import org.apache.bookkeeper.meta.LedgerManagerFactory;
 import org.apache.bookkeeper.bookie.BookieException;
+import org.apache.bookkeeper.bookie.GarbageCollectorThread.SafeEntryAdder;
 import org.apache.bookkeeper.bookie.Journal.JournalScanner;
 import org.apache.bookkeeper.bookie.LedgerDirsManager.LedgerDirsListener;
 import org.apache.bookkeeper.bookie.LedgerDirsManager.NoWritableLedgerDirException;
@@ -49,6 +51,7 @@ import org.apache.bookkeeper.conf.ServerConfiguration;
 import org.apache.bookkeeper.jmx.BKMBeanInfo;
 import org.apache.bookkeeper.jmx.BKMBeanRegistry;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.WriteCallback;
+import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.GenericCallback;
 import org.apache.bookkeeper.util.BookKeeperConstants;
 import org.apache.bookkeeper.util.IOUtils;
 import org.apache.bookkeeper.util.MathUtils;
@@ -67,6 +70,7 @@ import org.apache.zookeeper.ZooKeeper;
 import org.apache.zookeeper.ZooDefs.Ids;
 import org.apache.zookeeper.Watcher.Event.EventType;
 
+import static com.google.common.base.Charsets.UTF_8;
 import com.google.common.annotations.VisibleForTesting;
 
 /**
@@ -191,8 +195,11 @@ public class Bookie extends Thread {
             return value;
         }
         @Override
-        public T get(long timeout, TimeUnit unit) throws InterruptedException {
-            latch.await(timeout, unit);
+        public T get(long timeout, TimeUnit unit)
+            throws InterruptedException, TimeoutException {
+            if (!latch.await(timeout, unit)) {
+                throw new TimeoutException("Timed out waiting for latch");
+            }
             return value;
         }
 
@@ -264,60 +271,95 @@ public class Bookie extends Thread {
             flushInterval = conf.getFlushInterval();
             LOG.debug("Flush Interval : {}", flushInterval);
         }
+
+        private Object suspensionLock = new Object();
+        private boolean suspended = false;
+
+        /**
+         * Suspend sync thread. (for testing)
+         */
+        @VisibleForTesting
+        public void suspendSync() {
+            synchronized(suspensionLock) {
+                suspended = true;
+            }
+        }
+
+        /**
+         * Resume sync thread. (for testing)
+         */
+        @VisibleForTesting
+        public void resumeSync() {
+            synchronized(suspensionLock) {
+                suspended = false;
+                suspensionLock.notify();
+            }
+        }
+
         @Override
         public void run() {
-            while(running) {
-                synchronized(this) {
-                    try {
-                        wait(flushInterval);
-                        if (!ledgerStorage.isFlushRequired()) {
+            try {
+                while (running) {
+                    synchronized (this) {
+                        try {
+                            wait(flushInterval);
+                            if (!ledgerStorage.isFlushRequired()) {
+                                continue;
+                            }
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
                             continue;
                         }
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        continue;
                     }
-                }
+                    synchronized (suspensionLock) {
+                        while (suspended) {
+                            suspensionLock.wait();
+                        }
+                    }
+                    // try to mark flushing flag to make sure it would not be interrupted
+                    // by shutdown during flushing. otherwise it will receive
+                    // ClosedByInterruptException which may cause index file & entry logger
+                    // closed and corrupted.
+                    if (!flushing.compareAndSet(false, true)) {
+                        // set flushing flag failed, means flushing is true now
+                        // indicates another thread wants to interrupt sync thread to exit
+                        break;
+                    }
 
-                // try to mark flushing flag to make sure it would not be interrupted
-                // by shutdown during flushing. otherwise it will receive
-                // ClosedByInterruptException which may cause index file & entry logger
-                // closed and corrupted.
-                if (!flushing.compareAndSet(false, true)) {
-                    // set flushing flag failed, means flushing is true now
-                    // indicates another thread wants to interrupt sync thread to exit
-                    break;
-                }
+                    // journal mark log
+                    journal.markLog();
 
-                // journal mark log
-                journal.markLog();
-
-                boolean flushFailed = false;
-                try {
-                    ledgerStorage.flush();
-                } catch (NoWritableLedgerDirException e) {
-                    flushFailed = true;
-                    flushing.set(false);
-                    transitionToReadOnlyMode();
-                } catch (IOException e) {
-                    LOG.error("Exception flushing Ledger", e);
-                    flushFailed = true;
-                }
-
-                // if flush failed, we should not roll last mark, otherwise we would
-                // have some ledgers are not flushed and their journal entries were lost
-                if (!flushFailed) {
+                    boolean flushFailed = false;
                     try {
-                        journal.rollLog();
-                        journal.gcJournals();
+                        ledgerStorage.flush();
                     } catch (NoWritableLedgerDirException e) {
+                        flushFailed = true;
                         flushing.set(false);
                         transitionToReadOnlyMode();
+                    } catch (IOException e) {
+                        LOG.error("Exception flushing Ledger", e);
+                        flushFailed = true;
                     }
-                }
 
-                // clear flushing flag
+                    // if flush failed, we should not roll last mark, otherwise we would
+                    // have some ledgers are not flushed and their journal entries were lost
+                    if (!flushFailed) {
+                        try {
+                            journal.rollLog();
+                            journal.gcJournals();
+                        } catch (NoWritableLedgerDirException e) {
+                            flushing.set(false);
+                            transitionToReadOnlyMode();
+                        }
+                    }
+
+                    // clear flushing flag
+                    flushing.set(false);
+                }
+            } catch (Throwable t) {
+                LOG.error("Exception in SyncThread", t);
                 flushing.set(false);
+                triggerBookieShutdown(ExitCode.BOOKIE_EXCEPTION);
             }
         }
 
@@ -452,7 +494,7 @@ public class Bookie extends Thread {
         try {
             byte[] data = zk.getData(conf.getZkLedgersRootPath() + "/"
                     + BookKeeperConstants.INSTANCEID, false, null);
-            instanceId = new String(data);
+            instanceId = new String(data, UTF_8);
         } catch (KeeperException.NoNodeException e) {
             LOG.warn("INSTANCEID not exists in zookeeper. Not considering it for data verification");
         }
@@ -490,7 +532,9 @@ public class Bookie extends Thread {
         LOG.info("instantiate ledger manager {}", ledgerManagerFactory.getClass().getName());
         ledgerManager = ledgerManagerFactory.newLedgerManager();
         syncThread = new SyncThread(conf);
-        ledgerStorage = new InterleavedLedgerStorage(conf, ledgerManager, ledgerDirsManager);
+        ledgerStorage = new InterleavedLedgerStorage(conf, ledgerManager,
+                                                     ledgerDirsManager,
+                                                     new BookieSafeEntryAdder());
         handles = new HandleFactoryImpl(ledgerStorage);
         // instantiate the journal
         journal = new Journal(conf, ledgerDirsManager);
@@ -1146,6 +1190,37 @@ public class Bookie extends Thread {
         return true;
     }
 
+    private class BookieSafeEntryAdder implements SafeEntryAdder {
+        @Override
+        public void safeAddEntry(final long ledgerId, final ByteBuffer buffer,
+                                 final GenericCallback<Void> cb) {
+            journal.logAddEntry(buffer, new WriteCallback() {
+                    @Override
+                    public void writeComplete(int rc, long ledgerId2, long entryId,
+                                              InetSocketAddress addr, Object ctx) {
+                        if (rc != BookieException.Code.OK) {
+                            LOG.error("Error rewriting to journal (ledger {}, entry {})", ledgerId2, entryId);
+                            cb.operationComplete(rc, null);
+                            return;
+                        }
+                        try {
+                            addEntryByLedgerId(ledgerId, buffer);
+                            cb.operationComplete(rc, null);
+                        } catch (IOException ioe) {
+                            LOG.error("Error adding to ledger storage (ledger " + ledgerId2
+                                      + ", entry " + entryId + ")", ioe);
+                            // couldn't add to ledger storage
+                            cb.operationComplete(BookieException.Code.IllegalOpException, null);
+                        } catch (BookieException bke) {
+                            LOG.error("Bookie error adding to ledger storage (ledger " + ledgerId2
+                                      + ", entry " + entryId + ")", bke);
+                            // couldn't add to ledger storage
+                            cb.operationComplete(bke.getCode(), null);
+                        }
+                    }
+                }, null);
+        }
+    }
     /**
      * @param args
      * @throws IOException
