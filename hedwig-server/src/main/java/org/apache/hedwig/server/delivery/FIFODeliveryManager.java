@@ -17,9 +17,10 @@
  */
 package org.apache.hedwig.server.delivery;
 
+import static org.apache.hedwig.util.VarArgs.va;
+
 import java.util.Comparator;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.SortedMap;
@@ -27,16 +28,10 @@ import java.util.TreeMap;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.google.common.annotations.VisibleForTesting;
-import com.google.protobuf.ByteString;
 
 import org.apache.bookkeeper.util.MathUtils;
 import org.apache.hedwig.client.data.TopicSubscriber;
@@ -62,7 +57,11 @@ import org.apache.hedwig.server.persistence.ReadAheadCache;
 import org.apache.hedwig.server.persistence.ScanCallback;
 import org.apache.hedwig.server.persistence.ScanRequest;
 import org.apache.hedwig.util.Callback;
-import static org.apache.hedwig.util.VarArgs.va;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.annotations.VisibleForTesting;
+import com.google.protobuf.ByteString;
 
 public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnectedListener {
 
@@ -98,7 +97,7 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
     private final ReadAheadCache cache;
     private final PersistenceManager persistenceMgr;
 
-    private ServerConfiguration cfg;
+    private final ServerConfiguration cfg;
 
     private final int numDeliveryWorkers;
     private final DeliveryWorker[] deliveryWorkers;
@@ -127,7 +126,7 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
         private final Thread workerThread;
         private final int idx;
 
-        private Object suspensionLock = new Object();
+        private final Object suspensionLock = new Object();
         private boolean suspended = false;
 
         DeliveryWorker(int index) {
@@ -249,6 +248,7 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
             // This is a simple type of Request we will enqueue when the
             // PubSubServer is shut down and we want to stop the DeliveryManager
             // thread.
+            @Override
             public void performRequest() {
                 keepRunning = false;
             }
@@ -278,6 +278,7 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
         }
     }
 
+    @Override
     public void start() {
         for (int i=0; i<numDeliveryWorkers; i++) {
             deliveryWorkers[i].start();
@@ -307,6 +308,7 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
     /**
      * Stop the FIFO delivery manager.
      */
+    @Override
     public void stop() {
         for (int i=0; i<numDeliveryWorkers; i++) {
             deliveryWorkers[i].stop();
@@ -351,7 +353,7 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
                                          MessageSeqId seqIdToStartFrom,
                                          DeliveryEndPoint endPoint, ServerMessageFilter filter,
                                          Callback<Void> callback, Object ctx) {
-        ActiveSubscriberState subscriber = 
+        ActiveSubscriberState subscriber =
             new ActiveSubscriberState(topic, subscriberId,
                                       preferences,
                                       seqIdToStartFrom.getLocalComponent() - 1,
@@ -360,6 +362,7 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
         enqueueWithoutFailure(topic, subscriber);
     }
 
+    @Override
     public void stopServingSubscriber(ByteString topic, ByteString subscriberId,
                                       SubscriptionEvent event,
                                       Callback<Void> cb, Object ctx) {
@@ -390,7 +393,7 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
         if (null == subState) {
             return;
         }
-        subState.messageConsumed(consumedSeqId.getLocalComponent()); 
+        subState.messageConsumed(consumedSeqId.getLocalComponent());
     }
 
     /**
@@ -600,14 +603,17 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
                 enqueueWithoutFailure(topic, new DeliveryManagerRequest() {
                     @Override
                     public void performRequest() {
-                        // enqueue 
-                        clearRetryDelayForSubscriber(ActiveSubscriberState.this);            
+                        // enqueue
+                        clearRetryDelayForSubscriber(ActiveSubscriberState.this);
                     }
                 });
             }
         }
 
         protected boolean msgLimitExceeded() {
+            logger.info("{} , {} check msg limit : last delivered {}, last consumed {}, window size {}.", new Object[] {
+                    topic.toStringUtf8(), subscriberId.toStringUtf8(), lastLocalSeqIdDelivered, lastSeqIdConsumedUtil,
+                    messageWindowSize });
             if (messageWindowSize == UNLIMITED) {
                 return false;
             }
@@ -687,6 +693,7 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
          * {@link ScanCallback} methods
          */
 
+        @Override
         public void messageScanned(Object ctx, Message message) {
             if (!checkConnected()) {
                 return;
@@ -713,6 +720,7 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
 
         }
 
+        @Override
         public void scanFailed(Object ctx, Exception exception) {
             if (!checkConnected()) {
                 return;
@@ -722,6 +730,7 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
             retryErroredSubscriberAfterDelay(this);
         }
 
+        @Override
         public void scanFinished(Object ctx, ReasonForFinish reason) {
             checkConnected();
         }
@@ -730,6 +739,7 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
          * ===============================================================
          * {@link DeliveryCallback} methods
          */
+        @Override
         public void sendingFinished() {
             if (!isConnected()) {
                 return;
@@ -759,6 +769,7 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
         }
 
 
+        @Override
         public void permanentErrorOnSend() {
             // the underlying channel is broken, the channel will
             // be closed in UmbrellaHandler when exception happened.
@@ -767,6 +778,7 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
                                   NOP_CALLBACK, null);
         }
 
+        @Override
         public void transientErrorOnSend() {
             retryErroredSubscriberAfterDelay(this);
         }
@@ -775,6 +787,7 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
          * ===============================================================
          * {@link DeliveryManagerRequest} methods
          */
+        @Override
         public void performRequest() {
             // Put this subscriber in the channel to subscriber mapping
             ActiveSubscriberState prevSubscriber =

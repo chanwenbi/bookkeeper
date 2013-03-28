@@ -66,6 +66,7 @@ public class HelixLocalSubscriptionStorage implements SubscriptionDataManager {
     protected final ReadOptions ro;
     protected final WriteOptions wo;
     protected final Options options;
+    volatile boolean closed = false;
 
     protected final CacheLoader<byte[], ISubscriptionTxn> subscriptionCacheLoader = new CacheLoader<byte[], ISubscriptionTxn>() {
 
@@ -116,7 +117,11 @@ public class HelixLocalSubscriptionStorage implements SubscriptionDataManager {
     }
 
     @Override
-    public void close() throws IOException {
+    public synchronized void close() throws IOException {
+        if (closed) {
+            return;
+        }
+        closed = true;
         // close the subscription db.
         subscriptionDB.close();
     }

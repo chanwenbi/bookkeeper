@@ -144,7 +144,9 @@ public class PubSubServer {
         }
 
         // Close and release the Netty channels and resources
-        allChannels.close().awaitUninterruptibly();
+        if (null != allChannels) {
+            allChannels.close().awaitUninterruptibly();
+        }
         serverChannelFactory.releaseExternalResources();
         clientChannelFactory.releaseExternalResources();
 

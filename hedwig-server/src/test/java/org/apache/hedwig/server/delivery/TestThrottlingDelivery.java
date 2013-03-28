@@ -20,29 +20,14 @@ package org.apache.hedwig.server.delivery;
 import java.io.File;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import org.junit.Before;
-import org.junit.After;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertEquals;
-
-import com.google.protobuf.ByteString;
 
 import org.apache.hedwig.client.HedwigClient;
 import org.apache.hedwig.client.api.MessageHandler;
 import org.apache.hedwig.client.api.Publisher;
 import org.apache.hedwig.client.api.Subscriber;
-import org.apache.hedwig.client.conf.ClientConfiguration;
 import org.apache.hedwig.protocol.PubSubProtocol.Message;
 import org.apache.hedwig.protocol.PubSubProtocol.MessageSeqId;
 import org.apache.hedwig.protocol.PubSubProtocol.SubscribeRequest.CreateOrAttach;
@@ -50,6 +35,14 @@ import org.apache.hedwig.protocol.PubSubProtocol.SubscriptionOptions;
 import org.apache.hedwig.server.HedwigHubTestBase;
 import org.apache.hedwig.server.common.ServerConfiguration;
 import org.apache.hedwig.util.Callback;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameters;
+
+import com.google.protobuf.ByteString;
 
 @RunWith(Parameterized.class)
 public class TestThrottlingDelivery extends HedwigHubTestBase {
@@ -58,13 +51,13 @@ public class TestThrottlingDelivery extends HedwigHubTestBase {
 
     protected class ThrottleDeliveryServerConfiguration extends HubServerConfiguration {
 
-        ThrottleDeliveryServerConfiguration(int serverPort, int sslServerPort, File dbDir) {
-            super(serverPort, sslServerPort, dbDir);
+        ThrottleDeliveryServerConfiguration(int serverPort, int sslServerPort, File pstDir, File prtDir, File subDir) {
+            super(serverPort, sslServerPort, pstDir, prtDir, subDir);
         }
 
         @Override
         public int getDefaultMessageWindowSize() {
-            return TestThrottlingDelivery.this.DEFAULT_MESSAGE_WINDOW_SIZE;
+            return TestThrottlingDelivery.DEFAULT_MESSAGE_WINDOW_SIZE;
         }
     }
 
@@ -73,7 +66,7 @@ public class TestThrottlingDelivery extends HedwigHubTestBase {
         int messageWindowSize;
 
         ThrottleDeliveryClientConfiguration() {
-            this(TestThrottlingDelivery.this.DEFAULT_MESSAGE_WINDOW_SIZE);
+            this(TestThrottlingDelivery.DEFAULT_MESSAGE_WINDOW_SIZE);
         }
 
         ThrottleDeliveryClientConfiguration(int messageWindowSize) {
@@ -140,7 +133,7 @@ public class TestThrottlingDelivery extends HedwigHubTestBase {
                     callback.operationFinished(context, null);
                     if (expected.get() > X + 1) {
                         sub.consume(topic, subscriberId, msg.getMsgId());
-                    }      
+                    }
                 } catch (Exception e) {
                     logger.error("Received bad message", e);
                     throttleLatch.countDown();
@@ -192,8 +185,9 @@ public class TestThrottlingDelivery extends HedwigHubTestBase {
     }
 
 
-    protected ServerConfiguration getServerConfiguration(int port, int sslPort, File dir) {
-        return new ThrottleDeliveryServerConfiguration(port, sslPort, dir);
+    @Override
+    protected ServerConfiguration getServerConfiguration(int port, int sslPort, File pstDir, File prtDir, File subDir) {
+        return new ThrottleDeliveryServerConfiguration(port, sslPort, pstDir, prtDir, subDir);
     }
 
     @Test(timeout=60000)
@@ -205,7 +199,7 @@ public class TestThrottlingDelivery extends HedwigHubTestBase {
         Publisher pub = client.getPublisher();
         Subscriber sub = client.getSubscriber();
 
-        ByteString topic = ByteString.copyFromUtf8("testServerSideThrottle"); 
+        ByteString topic = ByteString.copyFromUtf8("testServerSideThrottle");
         ByteString subid = ByteString.copyFromUtf8("serverThrottleSub");
         sub.subscribe(topic, subid, CreateOrAttach.CREATE);
         sub.closeSubscription(topic, subid);

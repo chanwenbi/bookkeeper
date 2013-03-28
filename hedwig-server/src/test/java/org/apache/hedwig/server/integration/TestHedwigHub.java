@@ -18,25 +18,18 @@
 package org.apache.hedwig.server.integration;
 
 import java.net.InetSocketAddress;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.concurrent.SynchronousQueue;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-
-import com.google.protobuf.ByteString;
-import org.apache.hedwig.client.api.MessageHandler;
-import org.apache.hedwig.client.api.Subscriber;
-import org.apache.hedwig.client.conf.ClientConfiguration;
-import org.apache.hedwig.client.exceptions.InvalidSubscriberIdException;
-import org.apache.hedwig.client.exceptions.AlreadyStartDeliveryException;
+import org.apache.bookkeeper.test.PortManager;
 import org.apache.hedwig.client.HedwigClient;
 import org.apache.hedwig.client.api.Client;
+import org.apache.hedwig.client.api.MessageHandler;
 import org.apache.hedwig.client.api.Publisher;
 import org.apache.hedwig.client.api.Subscriber;
+import org.apache.hedwig.client.conf.ClientConfiguration;
+import org.apache.hedwig.client.exceptions.AlreadyStartDeliveryException;
+import org.apache.hedwig.client.exceptions.InvalidSubscriberIdException;
 import org.apache.hedwig.exceptions.PubSubException;
 import org.apache.hedwig.exceptions.PubSubException.ClientNotSubscribedException;
 import org.apache.hedwig.protocol.PubSubProtocol.Message;
@@ -46,11 +39,12 @@ import org.apache.hedwig.protocol.PubSubProtocol.ProtocolVersion;
 import org.apache.hedwig.protocol.PubSubProtocol.PubSubRequest;
 import org.apache.hedwig.protocol.PubSubProtocol.PubSubResponse;
 import org.apache.hedwig.protocol.PubSubProtocol.StartDeliveryRequest;
-import org.apache.hedwig.protocol.PubSubProtocol.StopDeliveryRequest;
 import org.apache.hedwig.protocol.PubSubProtocol.StatusCode;
+import org.apache.hedwig.protocol.PubSubProtocol.StopDeliveryRequest;
 import org.apache.hedwig.protocol.PubSubProtocol.SubscribeRequest.CreateOrAttach;
 import org.apache.hedwig.protoextensions.SubscriptionStateUtils;
 import org.apache.hedwig.server.HedwigHubTestBase;
+import org.apache.hedwig.server.LoggingExceptionHandler;
 import org.apache.hedwig.server.netty.WriteRecordingChannel;
 import org.apache.hedwig.server.proxy.HedwigProxy;
 import org.apache.hedwig.server.proxy.ProxyConfiguration;
@@ -58,8 +52,11 @@ import org.apache.hedwig.server.regions.HedwigHubClient;
 import org.apache.hedwig.util.Callback;
 import org.apache.hedwig.util.ConcurrencyUtils;
 import org.apache.hedwig.util.HedwigSocketAddress;
-import org.apache.bookkeeper.test.PortManager;
-import org.apache.hedwig.server.LoggingExceptionHandler;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+
+import com.google.protobuf.ByteString;
 
 public abstract class TestHedwigHub extends HedwigHubTestBase {
 
@@ -143,7 +140,7 @@ public abstract class TestHedwigHub extends HedwigHubTestBase {
         // messages we've already processed and consumed. We need to keep
         // track of the ones we've encountered so we only signal back to the
         // consumeQueue once.
-        private HashSet<MessageSeqId> consumedMessages = new HashSet<MessageSeqId>();
+        private final HashSet<MessageSeqId> consumedMessages = new HashSet<MessageSeqId>();
         private long largestMsgSeqIdConsumed = -1;
         private final SynchronousQueue<Boolean> consumeQueue;
 
@@ -151,6 +148,7 @@ public abstract class TestHedwigHub extends HedwigHubTestBase {
             this.consumeQueue = consumeQueue;
         }
 
+        @Override
         public void deliver(ByteString topic, ByteString subscriberId, final Message msg, Callback<Void> callback,
                             Object context) {
             if (!consumedMessages.contains(msg.getMsgId())) {
@@ -236,8 +234,10 @@ public abstract class TestHedwigHub extends HedwigHubTestBase {
     @Override
     @After
     public void tearDown() throws Exception {
-        client.close();
-        if (mode == Mode.PROXY) {
+        if (null != client) {
+            client.close();
+        }
+        if (mode == Mode.PROXY && null != proxy) {
             proxy.shutdown();
         }
         super.tearDown();

@@ -114,10 +114,6 @@ public abstract class HedwigHubTestBase extends TestCase {
         private final File partitionDbDir;
         private final File subscriptionDbDir;
 
-        public HubServerConfiguration(int serverPort, int sslServerPort, File persistenceDbDir) {
-            this(serverPort, sslServerPort, persistenceDbDir, null, null);
-        }
-
         public HubServerConfiguration(int serverPort, int sslServerPort, File persistenceDbDir, File partitionDbDir,
                 File subscriptionDbDir) {
             this.serverPort = serverPort;
@@ -206,10 +202,6 @@ public abstract class HedwigHubTestBase extends TestCase {
     // the specified ports. Extending child classes can override this. This
     // default implementation will return the HubServerConfiguration object
     // defined above.
-    protected ServerConfiguration getServerConfiguration(int serverPort, int sslServerPort, File leveldbDir) {
-        return new HubServerConfiguration(serverPort, sslServerPort, leveldbDir);
-    }
-
     protected ServerConfiguration getServerConfiguration(int serverPort, int sslServerPort, File pstDir, File prtDir,
             File subDir) {
         return new HubServerConfiguration(serverPort, sslServerPort, pstDir, prtDir, subDir);

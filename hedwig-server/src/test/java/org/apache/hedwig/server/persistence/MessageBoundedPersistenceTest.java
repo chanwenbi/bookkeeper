@@ -17,59 +17,56 @@
  */
 package org.apache.hedwig.server.persistence;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import static org.junit.Assert.*;
-
 import java.io.File;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.hedwig.client.HedwigClient;
+import org.apache.hedwig.client.api.Client;
 import org.apache.hedwig.client.api.MessageHandler;
-import com.google.protobuf.ByteString;
+import org.apache.hedwig.client.api.Publisher;
+import org.apache.hedwig.client.api.Subscriber;
 import org.apache.hedwig.protocol.PubSubProtocol.Message;
 import org.apache.hedwig.protocol.PubSubProtocol.SubscribeRequest.CreateOrAttach;
 import org.apache.hedwig.protocol.PubSubProtocol.SubscriptionOptions;
-import org.apache.hedwig.protocol.PubSubProtocol.LedgerRange;
-import org.apache.hedwig.protocol.PubSubProtocol.LedgerRanges;
-
-import org.apache.hedwig.client.api.Client;
-import org.apache.hedwig.client.api.Subscriber;
-import org.apache.hedwig.client.api.Publisher;
-import org.apache.hedwig.client.conf.ClientConfiguration;
-import org.apache.hedwig.util.Callback;
-
 import org.apache.hedwig.server.HedwigHubTestBase;
 import org.apache.hedwig.server.common.ServerConfiguration;
+import org.apache.hedwig.util.Callback;
+import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.protobuf.ByteString;
 
 public class MessageBoundedPersistenceTest extends HedwigHubTestBase {
     protected static Logger logger = LoggerFactory.getLogger(MessageBoundedPersistenceTest.class);
 
     protected class SmallReadAheadServerConfiguration
         extends HedwigHubTestBase.HubServerConfiguration {
-        SmallReadAheadServerConfiguration(int serverPort, int sslServerPort, File dir) {
-            super(serverPort, sslServerPort, dir);
+        SmallReadAheadServerConfiguration(int serverPort, int sslServerPort, File pstDir, File prtDir, File subDir) {
+            super(serverPort, sslServerPort, pstDir, prtDir, subDir);
         }
+        @Override
         public long getMaximumCacheSize() {
             return 1;
         }
 
+        @Override
         public int getReadAheadCount() {
             return 1;
         }
 
+        @Override
         public int getMessagesConsumedThreadRunInterval() {
             return 1000; // run every second
         }
     }
 
-    protected ServerConfiguration getServerConfiguration(int serverPort, int sslServerPort, File dir) {
-        return new SmallReadAheadServerConfiguration(serverPort, sslServerPort, dir);
+    @Override
+    protected ServerConfiguration getServerConfiguration(int serverPort, int sslServerPort, File pstDir, File prtDir,
+            File subDir) {
+        return new SmallReadAheadServerConfiguration(serverPort, sslServerPort, pstDir, prtDir, subDir);
     }
 
     private class MessageBoundClientConfiguration extends HubClientConfiguration {
@@ -79,10 +76,7 @@ public class MessageBoundedPersistenceTest extends HedwigHubTestBase {
             this.messageBound = bound;
         }
 
-        public MessageBoundClientConfiguration() {
-            this(5);
-        }
-
+        @Override
         public int getSubscriptionMessageBound() {
             return messageBound;
         }
@@ -100,6 +94,7 @@ public class MessageBoundedPersistenceTest extends HedwigHubTestBase {
         final AtomicInteger expected = new AtomicInteger(X - Y);
         final CountDownLatch latch = new CountDownLatch(1);
         sub.startDelivery(topic, subid, new MessageHandler () {
+                @Override
                 synchronized public void deliver(ByteString topic, ByteString subscriberId,
                                     Message msg, Callback<Void> callback,
                                     Object context) {

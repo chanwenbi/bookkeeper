@@ -22,26 +22,24 @@ import java.io.IOException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.SynchronousQueue;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.google.protobuf.ByteString;
+import org.apache.hedwig.client.HedwigClient;
 import org.apache.hedwig.client.api.MessageHandler;
 import org.apache.hedwig.client.api.Publisher;
 import org.apache.hedwig.client.api.Subscriber;
 import org.apache.hedwig.exceptions.PubSubException;
-import org.apache.hedwig.client.conf.ClientConfiguration;
-import org.apache.hedwig.client.HedwigClient;
 import org.apache.hedwig.protocol.PubSubProtocol.Message;
 import org.apache.hedwig.protocol.PubSubProtocol.SubscribeRequest.CreateOrAttach;
 import org.apache.hedwig.server.HedwigHubTestBase;
 import org.apache.hedwig.server.common.ServerConfiguration;
 import org.apache.hedwig.util.Callback;
 import org.apache.hedwig.util.ConcurrencyUtils;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.protobuf.ByteString;
 
 public class TestDeadlock extends HedwigHubTestBase {
 
@@ -118,6 +116,7 @@ public class TestDeadlock extends HedwigHubTestBase {
             this.consumeQueue = consumeQueue;
         }
 
+        @Override
         public void deliver(ByteString t, ByteString sub, final Message msg, Callback<Void> callback,
                             Object context) {
             if (!doAdd) {
@@ -175,8 +174,8 @@ public class TestDeadlock extends HedwigHubTestBase {
     }
 
     class TestServerConfiguration extends HubServerConfiguration {
-        public TestServerConfiguration(int serverPort, int sslServerPort) {
-            super(serverPort, sslServerPort, null);
+        public TestServerConfiguration(int serverPort, int sslServerPort, File pstDir, File prtDir, File subDir) {
+            super(serverPort, sslServerPort, pstDir, prtDir, subDir);
         }
         @Override
         public int getBkEnsembleSize() {
@@ -197,8 +196,9 @@ public class TestDeadlock extends HedwigHubTestBase {
     }
 
     @Override
-    protected ServerConfiguration getServerConfiguration(int serverPort, int sslServerPort, File dir) {
-        ServerConfiguration serverConf = new TestServerConfiguration(serverPort, sslServerPort);
+    protected ServerConfiguration getServerConfiguration(int serverPort, int sslServerPort, File pstDir, File prtDir,
+            File subDir) {
+        ServerConfiguration serverConf = new TestServerConfiguration(serverPort, sslServerPort, pstDir, prtDir, subDir);
 
         org.apache.bookkeeper.conf.ClientConfiguration bkClientConf =
             new org.apache.bookkeeper.conf.ClientConfiguration();
@@ -254,6 +254,7 @@ public class TestDeadlock extends HedwigHubTestBase {
     protected void sleepBookies(final int seconds, final CountDownLatch l)
             throws InterruptedException, IOException {
         Thread sleeper = new Thread() {
+                @Override
                 public void run() {
                     try {
                         bktb.suspendAllBookieServers();

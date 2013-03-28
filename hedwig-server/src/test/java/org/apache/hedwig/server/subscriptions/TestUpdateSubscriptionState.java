@@ -24,14 +24,12 @@ import org.apache.hedwig.client.HedwigClient;
 import org.apache.hedwig.client.api.MessageHandler;
 import org.apache.hedwig.client.api.Publisher;
 import org.apache.hedwig.client.api.Subscriber;
-import org.apache.hedwig.client.conf.ClientConfiguration;
 import org.apache.hedwig.protocol.PubSubProtocol.Message;
 import org.apache.hedwig.protocol.PubSubProtocol.SubscribeRequest.CreateOrAttach;
 import org.apache.hedwig.server.HedwigHubTestBase;
 import org.apache.hedwig.server.common.ServerConfiguration;
 import org.apache.hedwig.util.Callback;
 import org.apache.hedwig.util.ConcurrencyUtils;
-import org.apache.hedwig.util.HedwigSocketAddress;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -115,8 +113,8 @@ public class TestUpdateSubscriptionState extends HedwigHubTestBase {
 
     protected class NewHubServerConfiguration extends HubServerConfiguration {
 
-        public NewHubServerConfiguration(int serverPort, int sslServerPort) {
-            super(serverPort, sslServerPort, null);
+        public NewHubServerConfiguration(int serverPort, int sslServerPort, File pstDir, File prtDir, File subDir) {
+            super(serverPort, sslServerPort, pstDir, prtDir, subDir);
         }
 
         @Override
@@ -127,8 +125,9 @@ public class TestUpdateSubscriptionState extends HedwigHubTestBase {
     }
 
     @Override
-    protected ServerConfiguration getServerConfiguration(int serverPort, int sslServerPort, File dir) {
-        return new NewHubServerConfiguration(serverPort, sslServerPort);
+    protected ServerConfiguration getServerConfiguration(int serverPort, int sslServerPort, File pstDir, File prtDir,
+            File subDir) {
+        return new NewHubServerConfiguration(serverPort, sslServerPort, pstDir, prtDir, subDir);
     }
 
     protected class TestClientConfiguration extends HubClientConfiguration {

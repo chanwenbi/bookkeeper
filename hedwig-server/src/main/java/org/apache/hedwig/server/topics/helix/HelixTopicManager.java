@@ -437,7 +437,8 @@ public class HelixTopicManager extends StateModelFactory<TopicStateModel> implem
             if (isub.getVersion() < 0) {
                 localSubscriptionStore.createSubscriptionData(isub.getTopic(), isub.getSubscriberId(), isub.getSubscriptionData(), persistCb, ctx);
             } else {
-                localSubscriptionStore.updateSubscriptionData(isub.getTopic(), isub.getSubscriberId(), isub.getSubscriptionData(), new ZkVersion(isub.getVersion()), persistCb, ctx);
+                localSubscriptionStore.replaceSubscriptionData(isub.getTopic(), isub.getSubscriberId(),
+                        isub.getSubscriptionData(), new ZkVersion(isub.getVersion()), persistCb, ctx);
             }
         }
 

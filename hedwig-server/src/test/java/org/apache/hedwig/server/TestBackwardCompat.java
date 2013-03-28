@@ -17,31 +17,28 @@
  */
 package org.apache.hedwig.server;
 
-import java.net.InetAddress;
 import java.io.File;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.google.protobuf.ByteString;
-
 import junit.framework.TestCase;
 
-import org.junit.Test;
-import static org.junit.Assert.*;
-
-import org.apache.bookkeeper.test.ZooKeeperUtil;
 import org.apache.bookkeeper.test.PortManager;
-
-import org.apache.hedwig.util.HedwigSocketAddress;
-
+import org.apache.bookkeeper.test.ZooKeeperUtil;
 import org.apache.commons.configuration.Configuration;
-import org.apache.commons.configuration.ConfigurationException;
+import org.apache.hedwig.server.snitch.helix.HelixSnitch;
+import org.apache.hedwig.util.FileUtils;
+import org.apache.hedwig.util.HedwigSocketAddress;
+import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.protobuf.ByteString;
 
 /**
  * Test Backward Compatability between different versions
@@ -540,8 +537,9 @@ public class TestBackwardCompat extends TestCase {
     static class ServerCurrent {
         org.apache.hedwig.server.common.ServerConfiguration conf;
         org.apache.hedwig.server.netty.PubSubServer server;
+        File pstDir, prtDir, subDir;
 
-        ServerCurrent(final String zkHosts, final int port, final int sslPort) {
+        ServerCurrent(final String zkHosts, final int port, final int sslPort) throws Exception {
             conf = new org.apache.hedwig.server.common.ServerConfiguration() {
                 @Override
                 public int getConsumeInterval() {
@@ -562,18 +560,61 @@ public class TestBackwardCompat extends TestCase {
                 public int getSSLServerPort() {
                     return sslPort;
                 }
+
+                @Override
+                public String getLeveldbPersistencePath() {
+                    return getFilePath(pstDir);
+                }
+
+                @Override
+                public String getLeveldbPartitionDBPath() {
+                    return getFilePath(prtDir);
+                }
+
+                @Override
+                public String getLeveldbSubscriptionDBPath() {
+                    return getFilePath(subDir);
+                }
+
+                private String getFilePath(File dir) {
+                    if (null == dir) {
+                        return null;
+                    }
+                    try {
+                        return dir.getCanonicalPath().toString();
+                    } catch (IOException ie) {
+                        return null;
+                    }
+                }
             };
+            HelixSnitch.initializeCluster(conf, 1, new HedwigSocketAddress[] { new HedwigSocketAddress(InetAddress
+                    .getLocalHost().getHostAddress(), port, sslPort) });
         }
 
         void start() throws Exception {
+            pstDir = FileUtils.createTempDirectory("hub-pst", "test");
+            prtDir = FileUtils.createTempDirectory("hub-prt", "test");
+            subDir = FileUtils.createTempDirectory("hub-sub", "test");
             server = new org.apache.hedwig.server.netty.PubSubServer(conf);
             server.start();
+            // TODO: sleep a while wait until partitions are assigned.
+            TimeUnit.SECONDS.sleep(5);
         }
 
         void stop() throws Exception {
             if (null != server) {
                 server.shutdown();
             }
+            deleteDir(pstDir);
+            deleteDir(prtDir);
+            deleteDir(subDir);
+        }
+
+        private void deleteDir(File dir) throws IOException {
+            if (null == dir) {
+                return;
+            }
+            org.apache.commons.io.FileUtils.deleteDirectory(dir);
         }
     }
 
@@ -749,6 +790,7 @@ public class TestBackwardCompat extends TestCase {
             final AtomicInteger expected = new AtomicInteger(base);
             final CountDownLatch latch = new CountDownLatch(1);
             subscriber.startDeliveryWithFilter(topic, subid, new org.apache.hedwig.client.api.MessageHandler() {
+                @Override
                 synchronized public void deliver(ByteString topic, ByteString subscriberId,
                                                  org.apache.hedwig.protocol.PubSubProtocol.Message msg,
                                                  org.apache.hedwig.util.Callback<Void> callback, Object context) {

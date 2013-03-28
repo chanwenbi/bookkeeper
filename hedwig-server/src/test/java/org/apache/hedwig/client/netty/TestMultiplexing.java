@@ -42,8 +42,8 @@ public class TestMultiplexing extends HedwigHubTestBase {
     private static final int DEFAULT_MSG_WINDOW_SIZE = 10;
 
     protected class TestServerConfiguration extends HubServerConfiguration {
-        TestServerConfiguration(int serverPort, int sslServerPort, File dir) {
-            super(serverPort, sslServerPort, dir);
+        TestServerConfiguration(int serverPort, int sslServerPort, File pstDir, File prtDir, File subDir) {
+            super(serverPort, sslServerPort, pstDir, prtDir, subDir);
         }
         @Override
         public int getDefaultMessageWindowSize() {
@@ -248,8 +248,8 @@ public class TestMultiplexing extends HedwigHubTestBase {
     }
 
     @Override
-    protected ServerConfiguration getServerConfiguration(int port, int sslPort, File dir) {
-        return new TestServerConfiguration(port, sslPort, dir);
+    protected ServerConfiguration getServerConfiguration(int port, int sslPort, File pstDir, File prtDir, File subDir) {
+        return new TestServerConfiguration(port, sslPort, pstDir, prtDir, subDir);
     }
 
     @Test(timeout=60000)
