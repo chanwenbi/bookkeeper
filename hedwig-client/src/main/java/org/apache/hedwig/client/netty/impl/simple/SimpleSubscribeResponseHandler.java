@@ -17,42 +17,35 @@
  */
 package org.apache.hedwig.client.netty.impl.simple;
 
-import java.net.InetSocketAddress;
-import java.util.Set;
 import java.util.Collections;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.jboss.netty.channel.Channel;
-import org.jboss.netty.channel.ChannelFuture;
-import org.jboss.netty.channel.ChannelFutureListener;
-
-import com.google.protobuf.ByteString;
 
 import org.apache.hedwig.client.api.MessageHandler;
 import org.apache.hedwig.client.conf.ClientConfiguration;
 import org.apache.hedwig.client.data.PubSubData;
 import org.apache.hedwig.client.data.TopicSubscriber;
 import org.apache.hedwig.client.exceptions.AlreadyStartDeliveryException;
-import org.apache.hedwig.client.handlers.SubscribeResponseHandler;
 import org.apache.hedwig.client.netty.HChannel;
 import org.apache.hedwig.client.netty.HChannelManager;
 import org.apache.hedwig.client.netty.impl.AbstractHChannelManager;
 import org.apache.hedwig.client.netty.impl.AbstractSubscribeResponseHandler;
 import org.apache.hedwig.client.netty.impl.ActiveSubscriber;
 import org.apache.hedwig.client.netty.impl.HChannelImpl;
-import org.apache.hedwig.exceptions.PubSubException;
 import org.apache.hedwig.exceptions.PubSubException.ClientNotSubscribedException;
 import org.apache.hedwig.protocol.PubSubProtocol.Message;
 import org.apache.hedwig.protocol.PubSubProtocol.PubSubResponse;
 import org.apache.hedwig.protocol.PubSubProtocol.ResponseBody;
-import org.apache.hedwig.protocol.PubSubProtocol.SubscriptionEvent;
-import org.apache.hedwig.protocol.PubSubProtocol.SubscriptionPreferences;
 import org.apache.hedwig.protocol.PubSubProtocol.StatusCode;
+import org.apache.hedwig.protocol.PubSubProtocol.SubscriptionPreferences;
 import org.apache.hedwig.protoextensions.MessageIdUtils;
 import org.apache.hedwig.util.Callback;
 import org.apache.hedwig.util.Either;
+import org.jboss.netty.channel.Channel;
+import org.jboss.netty.channel.ChannelFuture;
+import org.jboss.netty.channel.ChannelFutureListener;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class SimpleSubscribeResponseHandler extends AbstractSubscribeResponseHandler {
 
@@ -69,7 +62,7 @@ public class SimpleSubscribeResponseHandler extends AbstractSubscribeResponseHan
         // throttle things by temporarily setting the Subscribe Netty Channel
         // to not be readable. When the Set has shrunk sufficiently, we can turn the
         // channel back on to read new messages.
-        private final Set<Message> outstandingMsgSet;
+        protected final Set<Message> outstandingMsgSet;
 
         public SimpleActiveSubscriber(ClientConfiguration cfg,
                                       AbstractHChannelManager channelManager,

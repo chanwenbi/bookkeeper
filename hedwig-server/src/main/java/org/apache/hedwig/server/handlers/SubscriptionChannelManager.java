@@ -17,24 +17,27 @@
  */
 package org.apache.hedwig.server.handlers;
 
+import static org.apache.hedwig.util.VarArgs.va;
+
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.jboss.netty.channel.Channel;
-import org.jboss.netty.channel.ChannelFuture;
-import org.jboss.netty.channel.ChannelFutureListener;
-
 import org.apache.hedwig.client.data.TopicSubscriber;
 import org.apache.hedwig.protocol.PubSubProtocol.PubSubResponse;
 import org.apache.hedwig.protocol.PubSubProtocol.SubscriptionEvent;
+import org.apache.hedwig.protocol.PubSubProtocol.SubscriptionPreferences;
+import org.apache.hedwig.protocol.PubSubProtocol.SubscriptionType;
 import org.apache.hedwig.protoextensions.PubSubResponseUtils;
-import org.apache.hedwig.util.Callback;
-import static org.apache.hedwig.util.VarArgs.va;
+import org.jboss.netty.channel.Channel;
+import org.jboss.netty.channel.ChannelFuture;
+import org.jboss.netty.channel.ChannelFutureListener;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.protobuf.ByteString;
 
 public class SubscriptionChannelManager implements ChannelDisconnectListener {
 
@@ -58,14 +61,22 @@ public class SubscriptionChannelManager implements ChannelDisconnectListener {
         }
     };
 
+    static class TopicChannelSubscriber extends TopicSubscriber {
+
+        TopicChannelSubscriber(ByteString topic, ByteString subscriberId, Channel ch) {
+            super(topic, ByteString.copyFromUtf8(subscriberId.toStringUtf8() + "/" + ch));
+        }
+
+    }
+
     final List<SubChannelDisconnectedListener> listeners;
 
-    public interface SubChannelDisconnectedListener {
+    public static interface SubChannelDisconnectedListener {
         /**
          * Act on a particular topicSubscriber being disconnected
          * @param topicSubscriber
          */
-        public void onSubChannelDisconnected(TopicSubscriber topicSubscriber);
+        public void onSubChannelDisconnected(TopicSubscriber topicSubscriber, Channel channel);
     }
 
     final ConcurrentHashMap<TopicSubscriber, Channel> sub2Channel;
@@ -99,7 +110,7 @@ public class SubscriptionChannelManager implements ChannelDisconnectListener {
                 // remove entry only currently mapped to given value.
                 sub2Channel.remove(topicSub, channel);
                 for (SubChannelDisconnectedListener listener : listeners) {
-                    listener.onSubChannelDisconnected(topicSub);
+                    listener.onSubChannelDisconnected(topicSub, channel);
                 }
             }
         }
@@ -116,15 +127,26 @@ public class SubscriptionChannelManager implements ChannelDisconnectListener {
     /**
      * Put <code>topicSub</code> on Channel <code>channel</code>.
      *
-     * @param topicSub
-     *          Topic Subscription
+     * @param topic
+     *          Topic
+     * @param subscriber
+     *          Subscriber
      * @param channel
      *          Netty channel
-     * @param mode
-     *          Create or Attach mode
+     * @param preferences
+     *          Subscription preferences
+     * @param forceAttach
+     *          Force Attach or not
      * @return null succeed, otherwise the old existed channel.
      */
-    public Channel put(TopicSubscriber topicSub, Channel channel, boolean forceAttach) {
+    public Channel put(ByteString topic, ByteString subscriber, Channel channel, SubscriptionPreferences preferences,
+            boolean forceAttach) {
+        TopicSubscriber topicSub;
+        if (preferences.hasSubscriptionType() && SubscriptionType.CLUSTER == preferences.getSubscriptionType()) {
+            topicSub = new TopicChannelSubscriber(topic, subscriber, channel);
+        } else {
+            topicSub = new TopicSubscriber(topic, subscriber);
+        }
         // race with channel getting disconnected while we are adding it
         // to the 2 maps
         synchronized (channel) {
@@ -179,7 +201,7 @@ public class SubscriptionChannelManager implements ChannelDisconnectListener {
             Set<TopicSubscriber> topicSubs = channel2sub.get(channel);
             if (null == topicSubs) {
                 topicSubs = new HashSet<TopicSubscriber>();
-                channel2sub.put(channel, topicSubs); 
+                channel2sub.put(channel, topicSubs);
             }
             topicSubs.add(topicSub);
             return null;
@@ -189,12 +211,19 @@ public class SubscriptionChannelManager implements ChannelDisconnectListener {
     /**
      * Remove <code>topicSub</code> from Channel <code>channel</code>
      *
-     * @param topicSub
-     *          Topic Subscription
+     * @param topic
+     *          Topic
+     * @param subscriber
+     *          Subscriber
      * @param channel
      *          Netty channel
      */
-    public void remove(TopicSubscriber topicSub, Channel channel) {
+    public void remove(ByteString topic, ByteString subscriber, Channel channel) {
+        remove(new TopicSubscriber(topic, subscriber), channel);
+        remove(new TopicChannelSubscriber(topic, subscriber, channel), channel);
+    }
+
+    private void remove(TopicSubscriber topicSub, Channel channel) {
         synchronized (channel) {
             Set<TopicSubscriber> topicSubs = channel2sub.get(channel);
             if (null != topicSubs) {

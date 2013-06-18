@@ -19,21 +19,20 @@ package org.apache.hedwig.client.netty;
 
 import java.net.InetSocketAddress;
 
-import org.jboss.netty.channel.Channel;
-
 import org.apache.hedwig.client.data.PubSubData;
 import org.apache.hedwig.client.data.TopicSubscriber;
 import org.apache.hedwig.protocol.PubSubProtocol.CloseSubscriptionRequest;
 import org.apache.hedwig.protocol.PubSubProtocol.ConsumeRequest;
 import org.apache.hedwig.protocol.PubSubProtocol.MessageSeqId;
 import org.apache.hedwig.protocol.PubSubProtocol.OperationType;
-import org.apache.hedwig.protocol.PubSubProtocol.PublishRequest;
-import org.apache.hedwig.protocol.PubSubProtocol.PubSubRequest;
 import org.apache.hedwig.protocol.PubSubProtocol.ProtocolVersion;
+import org.apache.hedwig.protocol.PubSubProtocol.PubSubRequest;
+import org.apache.hedwig.protocol.PubSubProtocol.PublishRequest;
 import org.apache.hedwig.protocol.PubSubProtocol.SubscribeRequest;
 import org.apache.hedwig.protocol.PubSubProtocol.SubscriptionOptions;
 import org.apache.hedwig.protocol.PubSubProtocol.SubscriptionPreferences;
 import org.apache.hedwig.protocol.PubSubProtocol.UnsubscribeRequest;
+import org.jboss.netty.channel.Channel;
 
 /**
  * Utilities for network operations.
@@ -213,6 +212,11 @@ public class NetUtils {
         // set message window size if set
         if (options.hasMessageWindowSize() && options.getMessageWindowSize() > 0) {
             preferencesBuilder.setMessageWindowSize(options.getMessageWindowSize());
+        }
+
+        // set subscription type
+        if (options.hasSubscriptionType()) {
+            preferencesBuilder.setSubscriptionType(options.getSubscriptionType());
         }
 
         return preferencesBuilder;

@@ -17,19 +17,13 @@
  */
 package org.apache.hedwig.server.handlers;
 
-import org.jboss.netty.channel.Channel;
-import org.jboss.netty.channel.ChannelFutureListener;
-
-import com.google.protobuf.ByteString;
-
-import org.apache.hedwig.client.data.TopicSubscriber;
 import org.apache.hedwig.exceptions.PubSubException;
 import org.apache.hedwig.protocol.PubSubProtocol.CloseSubscriptionRequest;
 import org.apache.hedwig.protocol.PubSubProtocol.OperationType;
 import org.apache.hedwig.protocol.PubSubProtocol.PubSubRequest;
-import org.apache.hedwig.protocol.PubSubProtocol.SubscriptionEvent;
 import org.apache.hedwig.protoextensions.PubSubResponseUtils;
 import org.apache.hedwig.server.common.ServerConfiguration;
+import org.apache.hedwig.server.delivery.ChannelEndPoint;
 import org.apache.hedwig.server.delivery.DeliveryManager;
 import org.apache.hedwig.server.netty.ServerStats;
 import org.apache.hedwig.server.netty.ServerStats.OpStats;
@@ -37,6 +31,9 @@ import org.apache.hedwig.server.netty.UmbrellaHandler;
 import org.apache.hedwig.server.subscriptions.SubscriptionManager;
 import org.apache.hedwig.server.topics.TopicManager;
 import org.apache.hedwig.util.Callback;
+import org.jboss.netty.channel.Channel;
+
+import com.google.protobuf.ByteString;
 
 public class CloseSubscriptionHandler extends BaseHandler {
     SubscriptionManager subMgr;
@@ -78,7 +75,7 @@ public class CloseSubscriptionHandler extends BaseHandler {
                 // we should not close the channel in delivery manager
                 // since client waits the response for closeSubscription request
                 // client side would close the channel
-                deliveryMgr.stopServingSubscriber(topic, subscriberId, null,
+                deliveryMgr.stopServingSubscriber(topic, subscriberId, null, new ChannelEndPoint(channel),
                 new Callback<Void>() {
                     @Override
                     public void operationFailed(Object ctx, PubSubException exception) {
@@ -88,8 +85,7 @@ public class CloseSubscriptionHandler extends BaseHandler {
                     @Override
                     public void operationFinished(Object ctx, Void resultOfOperation) {
                         // remove the topic subscription from subscription channels
-                        subChannelMgr.remove(new TopicSubscriber(topic, subscriberId),
-                                             channel);
+                        subChannelMgr.remove(topic, subscriberId, channel);
                         channel.write(PubSubResponseUtils.getSuccessResponse(request.getTxnId()));
                         closesubStats.updateLatency(System.currentTimeMillis() - requestTime);
                     }

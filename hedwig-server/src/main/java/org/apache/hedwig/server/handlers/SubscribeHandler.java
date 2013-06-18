@@ -17,17 +17,8 @@
  */
 package org.apache.hedwig.server.handlers;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.jboss.netty.channel.Channel;
-import org.jboss.netty.channel.ChannelFuture;
-import org.jboss.netty.channel.ChannelFutureListener;
-
-import com.google.protobuf.ByteString;
-
 import org.apache.bookkeeper.util.MathUtils;
 import org.apache.bookkeeper.util.ReflectionUtils;
-import org.apache.hedwig.client.data.TopicSubscriber;
 import org.apache.hedwig.exceptions.PubSubException;
 import org.apache.hedwig.exceptions.PubSubException.ServerNotResponsibleForTopicException;
 import org.apache.hedwig.filter.PipelineFilter;
@@ -39,6 +30,7 @@ import org.apache.hedwig.protocol.PubSubProtocol.ResponseBody;
 import org.apache.hedwig.protocol.PubSubProtocol.SubscribeRequest;
 import org.apache.hedwig.protocol.PubSubProtocol.SubscribeResponse;
 import org.apache.hedwig.protocol.PubSubProtocol.SubscriptionData;
+import org.apache.hedwig.protocol.PubSubProtocol.SubscriptionPreferences;
 import org.apache.hedwig.protoextensions.PubSubResponseUtils;
 import org.apache.hedwig.protoextensions.SubscriptionStateUtils;
 import org.apache.hedwig.server.common.ServerConfiguration;
@@ -48,11 +40,15 @@ import org.apache.hedwig.server.netty.ServerStats;
 import org.apache.hedwig.server.netty.ServerStats.OpStats;
 import org.apache.hedwig.server.netty.UmbrellaHandler;
 import org.apache.hedwig.server.persistence.PersistenceManager;
-import org.apache.hedwig.server.subscriptions.SubscriptionManager;
 import org.apache.hedwig.server.subscriptions.AllToAllTopologyFilter;
+import org.apache.hedwig.server.subscriptions.SubscriptionManager;
 import org.apache.hedwig.server.topics.TopicManager;
 import org.apache.hedwig.util.Callback;
-import static org.apache.hedwig.util.VarArgs.va;
+import org.jboss.netty.channel.Channel;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.protobuf.ByteString;
 
 public class SubscribeHandler extends BaseHandler {
     static Logger logger = LoggerFactory.getLogger(SubscribeHandler.class);
@@ -94,8 +90,7 @@ public class SubscribeHandler extends BaseHandler {
         try {
             seqId = persistenceMgr.getCurrentSeqIdForTopic(topic);
         } catch (ServerNotResponsibleForTopicException e) {
-            channel.write(PubSubResponseUtils.getResponseForException(e, request.getTxnId())).addListener(
-                ChannelFutureListener.CLOSE);
+            channel.write(PubSubResponseUtils.getResponseForException(e, request.getTxnId()));
             logger.error("Error getting current seq id for topic " + topic.toStringUtf8()
                        + " when processing subscribe request (txnid:" + request.getTxnId() + ") :", e);
             subStats.incrementFailedOps();
@@ -113,8 +108,7 @@ public class SubscribeHandler extends BaseHandler {
 
             @Override
             public void operationFailed(Object ctx, PubSubException exception) {
-                channel.write(PubSubResponseUtils.getResponseForException(exception, request.getTxnId())).addListener(
-                    ChannelFutureListener.CLOSE);
+                channel.write(PubSubResponseUtils.getResponseForException(exception, request.getTxnId()));
                 logger.error("Error serving subscribe request (" + request.getTxnId() + ") for (topic: "
                            + topic.toStringUtf8() + " , subscriber: " + subscriberId.toStringUtf8() + ")", exception);
                 subStats.incrementFailedOps();
@@ -122,8 +116,6 @@ public class SubscribeHandler extends BaseHandler {
 
             @Override
             public void operationFinished(Object ctx, final SubscriptionData subData) {
-
-                TopicSubscriber topicSub = new TopicSubscriber(topic, subscriberId);
                 synchronized (channel) {
                     if (!channel.isConnected()) {
                         // channel got disconnected while we were processing the
@@ -166,23 +158,23 @@ public class SubscribeHandler extends BaseHandler {
                     logger.error(errMsg, t);
                     PubSubException pse = new PubSubException.InvalidMessageFilterException(errMsg, t);
                     subStats.incrementFailedOps();
-                    channel.write(PubSubResponseUtils.getResponseForException(pse, request.getTxnId()))
-                    .addListener(ChannelFutureListener.CLOSE);
+                    channel.write(PubSubResponseUtils.getResponseForException(pse, request.getTxnId()));
                     return;
                 }
                 boolean forceAttach = false;
                 if (subRequest.hasForceAttach()) {
                     forceAttach = subRequest.getForceAttach();
                 }
+                SubscriptionPreferences preferences = subData.hasPreferences() ? subData.getPreferences()
+                        : SubscriptionPreferences.getDefaultInstance();
                 // Try to store the subscription channel for the topic subscriber
-                Channel oldChannel = subChannelMgr.put(topicSub, channel, forceAttach);
+                Channel oldChannel = subChannelMgr.put(topic, subscriberId, channel, preferences, forceAttach);
                 if (null != oldChannel) {
                     PubSubException pse = new PubSubException.TopicBusyException(
                         "Subscriber " + subscriberId.toStringUtf8() + " for topic " + topic.toStringUtf8()
                         + " is already being served on a different channel " + oldChannel + ".");
                     subStats.incrementFailedOps();
-                    channel.write(PubSubResponseUtils.getResponseForException(pse, request.getTxnId()))
-                    .addListener(ChannelFutureListener.CLOSE);
+                    channel.write(PubSubResponseUtils.getResponseForException(pse, request.getTxnId()));
                     return;
                 }
 

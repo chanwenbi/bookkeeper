@@ -17,9 +17,10 @@
  */
 package org.apache.hedwig.server.delivery;
 
+import static org.apache.hedwig.util.VarArgs.va;
+
 import java.util.Comparator;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.SortedMap;
@@ -27,16 +28,12 @@ import java.util.TreeMap;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.PriorityBlockingQueue;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.PriorityBlockingQueue;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.google.common.annotations.VisibleForTesting;
-import com.google.protobuf.ByteString;
 
 import org.apache.bookkeeper.util.MathUtils;
 import org.apache.hedwig.client.data.TopicSubscriber;
@@ -49,6 +46,7 @@ import org.apache.hedwig.protocol.PubSubProtocol.PubSubResponse;
 import org.apache.hedwig.protocol.PubSubProtocol.StatusCode;
 import org.apache.hedwig.protocol.PubSubProtocol.SubscriptionEvent;
 import org.apache.hedwig.protocol.PubSubProtocol.SubscriptionPreferences;
+import org.apache.hedwig.protocol.PubSubProtocol.SubscriptionType;
 import org.apache.hedwig.protoextensions.PubSubResponseUtils;
 import org.apache.hedwig.server.common.ServerConfiguration;
 import org.apache.hedwig.server.common.UnexpectedError;
@@ -63,7 +61,12 @@ import org.apache.hedwig.server.persistence.ScanCallback;
 import org.apache.hedwig.server.persistence.ScanRequest;
 import org.apache.hedwig.server.topics.TopicManager;
 import org.apache.hedwig.util.Callback;
-import static org.apache.hedwig.util.VarArgs.va;
+import org.jboss.netty.channel.Channel;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.annotations.VisibleForTesting;
+import com.google.protobuf.ByteString;
 
 public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnectedListener {
 
@@ -98,11 +101,12 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
 
     private final ReadAheadCache cache;
     private final PersistenceManager persistenceMgr;
-    private TopicManager tm;
-    private ServerConfiguration cfg;
+    private final TopicManager tm;
+    private final ServerConfiguration cfg;
 
     private final int numDeliveryWorkers;
     private final DeliveryWorker[] deliveryWorkers;
+    private final ScheduledExecutorService clusterDeliveryScheduler = Executors.newSingleThreadScheduledExecutor();
 
     private class DeliveryWorker implements Runnable {
 
@@ -249,6 +253,7 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
             // This is a simple type of Request we will enqueue when the
             // PubSubServer is shut down and we want to stop the DeliveryManager
             // thread.
+            @Override
             public void performRequest() {
                 keepRunning = false;
             }
@@ -280,6 +285,7 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
         }
     }
 
+    @Override
     public void start() {
         for (int i=0; i<numDeliveryWorkers; i++) {
             deliveryWorkers[i].start();
@@ -309,6 +315,7 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
     /**
      * Stop the FIFO delivery manager.
      */
+    @Override
     public void stop() {
         for (int i=0; i<numDeliveryWorkers; i++) {
             deliveryWorkers[i].stop();
@@ -353,19 +360,38 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
                                          MessageSeqId seqIdToStartFrom,
                                          DeliveryEndPoint endPoint, ServerMessageFilter filter,
                                          Callback<Void> callback, Object ctx) {
-        ActiveSubscriberState subscriber = 
-            new ActiveSubscriberState(topic, subscriberId,
-                                      preferences,
-                                      seqIdToStartFrom.getLocalComponent() - 1,
-                                      endPoint, filter, callback, ctx);
-
-        enqueueWithoutFailure(topic, subscriber);
+        int messageWindowSize;
+        if (preferences.hasMessageWindowSize()) {
+            messageWindowSize = preferences.getMessageWindowSize();
+        } else {
+            if (FIFODeliveryManager.this.cfg.getDefaultMessageWindowSize() > 0) {
+                messageWindowSize = FIFODeliveryManager.this.cfg.getDefaultMessageWindowSize();
+            } else {
+                messageWindowSize = WindowThrottlingPolicy.UNLIMITED;
+            }
+        }
+        if (preferences.hasSubscriptionType() && SubscriptionType.CLUSTER == preferences.getSubscriptionType()) {
+            ClusterDeliveryEndPoint clusterEP = new ClusterDeliveryEndPoint("(topic: " + topic.toStringUtf8() + ", subscriber: "
+ + subscriberId.toStringUtf8() + ")", messageWindowSize, clusterDeliveryScheduler);
+            clusterEP.addDeliveryEndPoint(endPoint);
+            ClusterSubscriber subscriber = new ClusterSubscriber(topic, subscriberId, preferences,
+                    seqIdToStartFrom.getLocalComponent() - 1, clusterEP, filter, callback, ctx);
+            StartServingClusterSubscriberRequest request = new StartServingClusterSubscriberRequest(subscriber,
+                    endPoint);
+            enqueueWithoutFailure(topic, request);
+        } else {
+            SimpleSubscriber subscriber = new SimpleSubscriber(topic, subscriberId, preferences,
+                    seqIdToStartFrom.getLocalComponent() - 1, endPoint, filter, messageWindowSize, callback, ctx);
+            enqueueWithoutFailure(topic, subscriber);
+        }
     }
 
+    @Override
     public void stopServingSubscriber(ByteString topic, ByteString subscriberId,
                                       SubscriptionEvent event,
+                                      DeliveryEndPoint endPoint,
                                       Callback<Void> cb, Object ctx) {
-        enqueueWithoutFailure(topic, new StopServingSubscriber(topic, subscriberId, event, cb, ctx));
+        enqueueWithoutFailure(topic, new StopServingSubscriber(topic, subscriberId, event, endPoint, cb, ctx));
     }
 
     /**
@@ -392,7 +418,7 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
         if (null == subState) {
             return;
         }
-        subState.messageConsumed(consumedSeqId.getLocalComponent()); 
+        subState.messageConsumed(consumedSeqId.getLocalComponent());
     }
 
     /**
@@ -455,10 +481,109 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
         MapMethods.addToMultiMap(deliveryPtrs, seqId, subscriber, HashMapSubscriberFactory.instance);
     }
 
-    public class ActiveSubscriberState
-        implements ScanCallback, DeliveryCallback, DeliveryManagerRequest, CancelScanRequest {
+    class StartServingClusterSubscriberRequest implements DeliveryManagerRequest {
 
-        static final int UNLIMITED = 0;
+        private final ClusterSubscriber subscriber;
+        private final DeliveryEndPoint endpoint;
+
+        public StartServingClusterSubscriberRequest(ClusterSubscriber subscriber, DeliveryEndPoint endpoint) {
+            this.subscriber = subscriber;
+            this.endpoint = endpoint;
+        }
+
+        @Override
+        public void performRequest() {
+            // Put this subscriber in the channel to subscriber mapping
+            TopicSubscriber ts = new TopicSubscriber(subscriber.topic, subscriber.subscriberId);
+            ActiveSubscriberState curSubscriber = subscriberStates.get(ts);
+            if (null == curSubscriber) {
+                subscriberStates.put(ts, subscriber);
+            }
+
+            // after put the active subscriber in subscriber states mapping
+            // trigger the callback to tell it started to deliver the message
+            // should let subscriber response go first before first delivered message.
+            subscriber.cb.operationFinished(subscriber.ctx, (Void) null);
+
+            if (curSubscriber != null) {
+                ((ClusterSubscriber) curSubscriber).clusterEP.addDeliveryEndPoint(endpoint);
+            } else {
+                synchronized (subscriber) {
+                    subscriber.lastSeqIdCommunicatedExternally = subscriber.lastLocalSeqIdDelivered;
+                    addDeliveryPtr(curSubscriber, subscriber.lastLocalSeqIdDelivered);
+                }
+                subscriber.deliverNextMessage();
+            }
+        }
+
+    }
+
+    class ClusterSubscriber extends ActiveSubscriberState {
+
+        private final ClusterDeliveryEndPoint clusterEP;
+
+        public ClusterSubscriber(ByteString topic, ByteString subscriberId, SubscriptionPreferences preferences,
+                long lastLocalSeqIdDelivered, ClusterDeliveryEndPoint deliveryEndPoint, ServerMessageFilter filter,
+                Callback<Void> cb, Object ctx) {
+            super(topic, subscriberId, preferences, lastLocalSeqIdDelivered, deliveryEndPoint, filter,
+                    deliveryEndPoint, cb, ctx);
+            clusterEP = deliveryEndPoint;
+        }
+
+        @Override
+        void sendSubscriptionEventToDeliveryChannel(SubscriptionEvent event) {
+            if (null != event
+                    && (SubscriptionEvent.TOPIC_MOVED == event || SubscriptionEvent.SUBSCRIPTION_FORCED_CLOSED == event)) {
+                // we should not close the channel now after enabling multiplexing
+                PubSubResponse response = PubSubResponseUtils.getResponseForSubscriptionEvent(topic, subscriberId,
+                        event);
+                clusterEP.sendSubscriptionEvent(response);
+            }
+        }
+
+    }
+
+    class SimpleSubscriber extends ActiveSubscriberState {
+
+        public SimpleSubscriber(ByteString topic, ByteString subscriberId, SubscriptionPreferences preferences,
+                long lastLocalSeqIdDelivered, DeliveryEndPoint deliveryEndPoint, ServerMessageFilter filter,
+                int messageWindowSize, Callback<Void> cb, Object ctx) {
+            super(topic, subscriberId, preferences, lastLocalSeqIdDelivered, deliveryEndPoint, filter,
+                    new WindowThrottlingPolicy("(topic: " + topic.toStringUtf8() + ", subscriber: "
+                            + subscriberId.toStringUtf8() + ")", lastLocalSeqIdDelivered, messageWindowSize), cb, ctx);
+        }
+
+        @Override
+        void sendSubscriptionEventToDeliveryChannel(SubscriptionEvent event) {
+            if (null != event
+                    && (SubscriptionEvent.TOPIC_MOVED == event || SubscriptionEvent.SUBSCRIPTION_FORCED_CLOSED == event)) {
+                // we should not close the channel now after enabling multiplexing
+                PubSubResponse response = PubSubResponseUtils.getResponseForSubscriptionEvent(topic, subscriberId,
+                        event);
+                deliveryEndPoint.send(response, new DeliveryCallback() {
+                    @Override
+                    public void sendingFinished() {
+                        // do nothing now
+                    }
+
+                    @Override
+                    public void transientErrorOnSend() {
+                        // do nothing now
+                    }
+
+                    @Override
+                    public void permanentErrorOnSend() {
+                        // if channel is broken, close the channel
+                        deliveryEndPoint.close();
+                    }
+                });
+            }
+        }
+
+    }
+
+    abstract class ActiveSubscriberState
+        implements ScanCallback, DeliveryCallback, DeliveryManagerRequest, CancelScanRequest {
 
         ByteString topic;
         ByteString subscriberId;
@@ -469,9 +594,8 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
         long lastScanErrorTime = -1;
         long localSeqIdDeliveringNow;
         long lastSeqIdCommunicatedExternally;
-        long lastSeqIdConsumedUtil;
+        ThrottlingPolicy throttlingPolicy;
         boolean isThrottled = false;
-        final int messageWindowSize;
         ServerMessageFilter filter;
         Callback<Void> cb;
         Object ctx;
@@ -487,26 +611,19 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
                                      long lastLocalSeqIdDelivered,
                                      DeliveryEndPoint deliveryEndPoint,
                                      ServerMessageFilter filter,
+                                     ThrottlingPolicy throttlingPolicy,
                                      Callback<Void> cb, Object ctx) {
             this.topic = topic;
             this.subscriberId = subscriberId;
             this.lastLocalSeqIdDelivered = lastLocalSeqIdDelivered;
-            this.lastSeqIdConsumedUtil = lastLocalSeqIdDelivered;
             this.deliveryEndPoint = deliveryEndPoint;
             this.filter = filter;
-            if (preferences.hasMessageWindowSize()) {
-                messageWindowSize = preferences.getMessageWindowSize();
-            } else {
-                if (FIFODeliveryManager.this.cfg.getDefaultMessageWindowSize() > 0) {
-                    messageWindowSize =
-                        FIFODeliveryManager.this.cfg.getDefaultMessageWindowSize();
-                } else {
-                    messageWindowSize = UNLIMITED;
-                }
-            }
+            this.throttlingPolicy = throttlingPolicy;
             this.cb = cb;
             this.ctx = ctx;
         }
+
+        abstract void sendSubscriptionEventToDeliveryChannel(SubscriptionEvent event);
 
         public void setNotConnected(SubscriptionEvent event) {
             this.connectedLock.writeLock().lock();
@@ -525,30 +642,8 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
             } finally {
                 this.connectedLock.writeLock().unlock();
             }
-
-            if (null != event &&
-                (SubscriptionEvent.TOPIC_MOVED == event ||
-                 SubscriptionEvent.SUBSCRIPTION_FORCED_CLOSED == event)) {
-                // we should not close the channel now after enabling multiplexing
-                PubSubResponse response = PubSubResponseUtils.getResponseForSubscriptionEvent(
-                    topic, subscriberId, event
-                );
-                deliveryEndPoint.send(response, new DeliveryCallback() {
-                    @Override
-                    public void sendingFinished() {
-                        // do nothing now
-                    }
-                    @Override
-                    public void transientErrorOnSend() {
-                        // do nothing now
-                    }
-                    @Override
-                    public void permanentErrorOnSend() {
-                        // if channel is broken, close the channel
-                        deliveryEndPoint.close();
-                    }
-                });
-            }
+            // send subscription events to delivery channel
+            sendSubscriptionEventToDeliveryChannel(event);
             // uninitialize filter
             this.filter.uninitialize();
         }
@@ -582,41 +677,30 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
         }
 
         protected synchronized void messageConsumed(long newSeqIdConsumed) {
-            if (newSeqIdConsumed <= lastSeqIdConsumedUtil) {
+            if (!throttlingPolicy.messageConsumed(newSeqIdConsumed)) {
                 return;
             }
-            if (logger.isDebugEnabled()) {
-                logger.debug("Subscriber ({}) moved consumed ptr from {} to {}.",
-                             va(this, lastSeqIdConsumedUtil, newSeqIdConsumed));
-            }
-            lastSeqIdConsumedUtil = newSeqIdConsumed;
             // after updated seq id check whether it still exceed msg limitation
-            if (msgLimitExceeded()) {
+            if (shouldThrottle()) {
                 return;
             }
             if (isThrottled) {
                 isThrottled = false;
-                logger.info("Try to wake up subscriber ({}) to deliver messages again : last delivered {}, last consumed {}.",
-                            va(this, lastLocalSeqIdDelivered, lastSeqIdConsumedUtil));
+                logger.info("Try to wake up subscriber ({}) to deliver messages again : last delivered {}.", this,
+                        lastLocalSeqIdDelivered);
 
                 enqueueWithoutFailure(topic, new DeliveryManagerRequest() {
                     @Override
                     public void performRequest() {
-                        // enqueue 
-                        clearRetryDelayForSubscriber(ActiveSubscriberState.this);            
+                        // enqueue
+                        clearRetryDelayForSubscriber(ActiveSubscriberState.this);
                     }
                 });
             }
         }
 
-        protected boolean msgLimitExceeded() {
-            if (messageWindowSize == UNLIMITED) {
-                return false;
-            }
-            if (lastLocalSeqIdDelivered - lastSeqIdConsumedUtil >= messageWindowSize) {
-                return true;
-            }
-            return false;
+        protected boolean shouldThrottle() {
+            return throttlingPolicy.shouldThrottle(lastLocalSeqIdDelivered);
         }
 
         public void deliverNextMessage() {
@@ -635,9 +719,8 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
 
             synchronized (this) {
                 // check whether we have delivered enough messages without receiving their consumes
-                if (msgLimitExceeded()) {
-                    logger.info("Subscriber ({}) is throttled : last delivered {}, last consumed {}.",
-                                va(this, lastLocalSeqIdDelivered, lastSeqIdConsumedUtil));
+                if (shouldThrottle()) {
+                    logger.info("Subscriber ({}) is throttled : last delivered {}.", va(this, lastLocalSeqIdDelivered));
                     isThrottled = true;
                     // do nothing, since the delivery process would be throttled.
                     // After message consumed, it would be added back to retry queue.
@@ -689,6 +772,7 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
          * {@link ScanCallback} methods
          */
 
+        @Override
         public void messageScanned(Object ctx, Message message) {
             if (!checkConnected()) {
                 return;
@@ -701,6 +785,7 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
             tm.incrementTopicAccessTimes(topic);
 
             if (!filter.testMessage(message)) {
+                messageConsumed(message.getMsgId().getLocalComponent());
                 sendingFinished();
                 return;
             }
@@ -721,6 +806,7 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
 
         }
 
+        @Override
         public void scanFailed(Object ctx, Exception exception) {
             if (!checkConnected()) {
                 return;
@@ -730,6 +816,7 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
             retryErroredSubscriberAfterDelay(this);
         }
 
+        @Override
         public void scanFinished(Object ctx, ReasonForFinish reason) {
             checkConnected();
         }
@@ -738,6 +825,7 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
          * ===============================================================
          * {@link DeliveryCallback} methods
          */
+        @Override
         public void sendingFinished() {
             if (!isConnected()) {
                 return;
@@ -767,14 +855,16 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
         }
 
 
+        @Override
         public void permanentErrorOnSend() {
             // the underlying channel is broken, the channel will
             // be closed in UmbrellaHandler when exception happened.
             // so we don't need to close the channel again
-            stopServingSubscriber(topic, subscriberId, null,
+            stopServingSubscriber(topic, subscriberId, null, deliveryEndPoint,
                                   NOP_CALLBACK, null);
         }
 
+        @Override
         public void transientErrorOnSend() {
             retryErroredSubscriberAfterDelay(this);
         }
@@ -783,6 +873,7 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
          * ===============================================================
          * {@link DeliveryManagerRequest} methods
          */
+        @Override
         public void performRequest() {
             // Put this subscriber in the channel to subscriber mapping
             ActiveSubscriberState prevSubscriber =
@@ -833,25 +924,63 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
     }
 
     protected class StopServingSubscriber implements DeliveryManagerRequest {
-        TopicSubscriber ts;
-        SubscriptionEvent event;
+        final TopicSubscriber ts;
+        final SubscriptionEvent event;
+        // EndPoint could be null
+        final DeliveryEndPoint endPoint;
         final Callback<Void> cb;
         final Object ctx;
 
         public StopServingSubscriber(ByteString topic, ByteString subscriberId,
                                      SubscriptionEvent event,
+                                     DeliveryEndPoint endPoint,
                                      Callback<Void> callback, Object ctx) {
             this.ts = new TopicSubscriber(topic, subscriberId);
             this.event = event;
+            this.endPoint = endPoint;
             this.cb = callback;
             this.ctx = ctx;
         }
 
         @Override
         public void performRequest() {
-            ActiveSubscriberState subscriber = subscriberStates.remove(ts);
+            ActiveSubscriberState subscriber = subscriberStates.get(ts);
             if (null != subscriber) {
-                doStopServingSubscriber(subscriber, event);
+                if (subscriber instanceof SimpleSubscriber) {
+                    if (null == this.endPoint || subscriber.deliveryEndPoint.equals(this.endPoint)) {
+                        // it is safe to remove the subscriber when the delivery end point is matched.
+                        subscriberStates.remove(ts);
+                        doStopServingSubscriber(subscriber, event);
+                    }
+                } else {
+                    if (null == this.endPoint) {
+                        subscriberStates.remove(ts);
+                        doStopServingSubscriber(subscriber, event);
+                    } else {
+                        // stop specific delivery endpoint
+                        ((ClusterDeliveryEndPoint) subscriber.deliveryEndPoint).removeDeliveryEndPoint(endPoint);
+                        // we should not close the channel now after enabling multiplexing
+                        PubSubResponse response = PubSubResponseUtils.getResponseForSubscriptionEvent(subscriber.topic,
+                                subscriber.subscriberId, event);
+                        endPoint.send(response, new DeliveryCallback() {
+                            @Override
+                            public void sendingFinished() {
+                                // do nothing now
+                            }
+
+                            @Override
+                            public void transientErrorOnSend() {
+                                // do nothing now
+                            }
+
+                            @Override
+                            public void permanentErrorOnSend() {
+                                // if channel is broken, close the channel
+                                endPoint.close();
+                            }
+                        });
+                    }
+                }
             }
             cb.operationFinished(ctx, null);
         }
@@ -948,9 +1077,9 @@ public class FIFODeliveryManager implements DeliveryManager, SubChannelDisconnec
     }
 
     @Override
-    public void onSubChannelDisconnected(TopicSubscriber topicSubscriber) {
+    public void onSubChannelDisconnected(TopicSubscriber topicSubscriber, Channel channel) {
         stopServingSubscriber(topicSubscriber.getTopic(), topicSubscriber.getSubscriberId(),
-                null, NOP_CALLBACK, null);
+                null, new ChannelEndPoint(channel), NOP_CALLBACK, null);
     }
 
 }

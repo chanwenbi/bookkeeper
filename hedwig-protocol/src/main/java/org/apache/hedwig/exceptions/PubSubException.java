@@ -76,6 +76,8 @@ public abstract class PubSubException extends Exception {
             return new InvalidMessageFilterException(msg);
         } else if (code == StatusCode.RESUBSCRIBE_EXCEPTION) {
             return new ResubscribeException(msg);
+        } else if (code == StatusCode.INVALID_SUBSCRIPTION) {
+            return new InvalidSubscriptionException(msg);
         }
         /*
          * Insert new ones here
@@ -205,6 +207,12 @@ public abstract class PubSubException extends Exception {
 
         public InvalidMessageFilterException(String msg, Throwable t) {
             super(StatusCode.INVALID_MESSAGE_FILTER, msg, t);
+        }
+    }
+
+    public static class InvalidSubscriptionException extends PubSubException {
+        public InvalidSubscriptionException(String msg) {
+            super(StatusCode.INVALID_SUBSCRIPTION, msg);
         }
     }
 

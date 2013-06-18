@@ -17,12 +17,13 @@
  */
 package org.apache.hedwig.server.delivery;
 
-import com.google.protobuf.ByteString;
+import org.apache.hedwig.filter.ServerMessageFilter;
 import org.apache.hedwig.protocol.PubSubProtocol.MessageSeqId;
 import org.apache.hedwig.protocol.PubSubProtocol.SubscriptionEvent;
 import org.apache.hedwig.protocol.PubSubProtocol.SubscriptionPreferences;
-import org.apache.hedwig.filter.ServerMessageFilter;
 import org.apache.hedwig.util.Callback;
+
+import com.google.protobuf.ByteString;
 
 public interface DeliveryManager {
     public void start();
@@ -63,6 +64,8 @@ public interface DeliveryManager {
      *          Subscriber Id
      * @param event
      *          Subscription event indicating the reason to stop the subscriber.
+     * @param endPoint
+     *          End point serving this subscription.
      * @param callback
      *          Callback instance.
      * @param ctx
@@ -70,6 +73,7 @@ public interface DeliveryManager {
      */
     public void stopServingSubscriber(ByteString topic, ByteString subscriberId,
                                       SubscriptionEvent event,
+                                      DeliveryEndPoint endPoint,
                                       Callback<Void> callback, Object ctx);
 
     /**

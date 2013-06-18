@@ -17,16 +17,10 @@
  */
 package org.apache.hedwig.client.netty.impl;
 
+import static org.apache.hedwig.util.VarArgs.va;
+
 import java.util.LinkedList;
 import java.util.Queue;
-
-import com.google.protobuf.ByteString;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.jboss.netty.channel.Channel;
-import org.jboss.netty.channel.ChannelFuture;
-import org.jboss.netty.channel.ChannelFutureListener;
 
 import org.apache.hedwig.client.api.MessageHandler;
 import org.apache.hedwig.client.conf.ClientConfiguration;
@@ -34,9 +28,9 @@ import org.apache.hedwig.client.data.MessageConsumeData;
 import org.apache.hedwig.client.data.PubSubData;
 import org.apache.hedwig.client.data.TopicSubscriber;
 import org.apache.hedwig.client.exceptions.AlreadyStartDeliveryException;
+import org.apache.hedwig.client.netty.FilterableMessageHandler;
 import org.apache.hedwig.client.netty.HChannel;
 import org.apache.hedwig.client.netty.NetUtils;
-import org.apache.hedwig.client.netty.FilterableMessageHandler;
 import org.apache.hedwig.exceptions.PubSubException.ClientNotSubscribedException;
 import org.apache.hedwig.filter.ClientMessageFilter;
 import org.apache.hedwig.protocol.PubSubProtocol.Message;
@@ -44,14 +38,19 @@ import org.apache.hedwig.protocol.PubSubProtocol.MessageSeqId;
 import org.apache.hedwig.protocol.PubSubProtocol.PubSubRequest;
 import org.apache.hedwig.protocol.PubSubProtocol.SubscriptionEvent;
 import org.apache.hedwig.protocol.PubSubProtocol.SubscriptionPreferences;
+import org.apache.hedwig.protocol.PubSubProtocol.SubscriptionType;
 import org.apache.hedwig.protoextensions.MessageIdUtils;
 import org.apache.hedwig.protoextensions.SubscriptionStateUtils;
-import static org.apache.hedwig.util.VarArgs.va;
+import org.jboss.netty.channel.Channel;
+import org.jboss.netty.channel.ChannelFuture;
+import org.jboss.netty.channel.ChannelFutureListener;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * an active subscriber handles subscription actions in a channel.
  */
-public class ActiveSubscriber {
+public class ActiveSubscriber implements Consumer {
 
     private static final Logger logger = LoggerFactory.getLogger(ActiveSubscriber.class);
 
@@ -67,12 +66,6 @@ public class ActiveSubscriber {
     protected final Channel channel;
     protected final HChannel hChannel;
 
-    // Counter for the number of consumed messages so far to buffer up before we
-    // send the Consume message back to the server along with the last/largest
-    // message seq ID seen so far in that batch.
-    private int numConsumedMessagesInBuffer = 0;
-    private MessageSeqId lastMessageSeqId = null;
-
     // Message Handler
     private MessageHandler msgHandler = null;
 
@@ -80,6 +73,9 @@ public class ActiveSubscriber {
     // yet but we've already received subscription messages from the server.
     // This will be lazily created as needed.
     private final Queue<Message> msgQueue = new LinkedList<Message>();
+
+    // Create Consumer Policy
+    private final ConsumePolicy consumePolicy;
 
     /**
      * Construct an active subscriber instance.
@@ -110,6 +106,11 @@ public class ActiveSubscriber {
         this.preferences = preferences;
         this.channel = channel;
         this.hChannel = hChannel;
+        if (preferences.hasSubscriptionType() && SubscriptionType.CLUSTER == preferences.getSubscriptionType()) {
+            consumePolicy = new DirectConsumePolicy();
+        } else {
+            consumePolicy = new BufferedConsumePolicy(cfg.getConsumedMessagesBufferSize());
+        }
     }
 
     /**
@@ -259,27 +260,13 @@ public class ActiveSubscriber {
                            messageConsumeData);
     }
 
-    private synchronized boolean updateLastMessageSeqId(MessageSeqId seqId) {
-        if (null != lastMessageSeqId &&
-            seqId.getLocalComponent() <= lastMessageSeqId.getLocalComponent()) {
-            return false;
-        }
-        ++numConsumedMessagesInBuffer;
-        lastMessageSeqId = seqId;
-        if (numConsumedMessagesInBuffer >= cfg.getConsumedMessagesBufferSize()) {
-            numConsumedMessagesInBuffer = 0;
-            lastMessageSeqId = null;
-            return true;
-        }
-        return false;
-    }
-
     /**
      * Consume a specific message.
      *
      * @param messageSeqId
      *          Message seq id.
      */
+    @Override
     public void consume(final MessageSeqId messageSeqId) {
         PubSubRequest.Builder pubsubRequestBuilder =
             NetUtils.buildConsumeRequest(channelManager.nextTxnId(),
@@ -321,20 +308,7 @@ public class ActiveSubscriber {
         // should be delivered in order and without gaps. Do this only if
         // auto-sending of consume messages is enabled.
         if (cfg.isAutoSendConsumeMessageEnabled()) {
-            // Update these variables only if we are auto-sending consume
-            // messages to the server. Otherwise the onus is on the client app
-            // to call the Subscriber consume API to let the server know which
-            // messages it has successfully consumed.
-            if (updateLastMessageSeqId(message.getMsgId())) {
-                // Send the consume request and reset the consumed messages buffer
-                // variables. We will use the same Channel created from the
-                // subscribe request for the TopicSubscriber.
-                if (logger.isDebugEnabled()) {
-                    logger.debug("Consume message {} when reaching consumed message buffer limit.",
-                                 message.getMsgId());
-                }
-                consume(message.getMsgId());
-            }
+            consumePolicy.messageConsumed(message, this);
         }
     }
 

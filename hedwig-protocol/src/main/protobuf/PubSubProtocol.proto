@@ -124,6 +124,8 @@ message SubscriptionPreferences {
     // message window size, this is the maximum number of messages 
     // which will be delivered without being consumed
     optional uint32 messageWindowSize = 4;
+    // subscription type
+    optional SubscriptionType subscriptionType = 5 [default = INDIVIDUAL];
 }
 
 message SubscribeRequest{
@@ -149,6 +151,11 @@ message SubscribeRequest{
     optional bool forceAttach = 7 [default = false];
 }
 
+enum SubscriptionType {
+    INDIVIDUAL = 0;
+    CLUSTER = 1;
+}
+
 // used in client only
 // options are stored in SubscriptionPreferences structure
 message SubscriptionOptions {
@@ -166,6 +173,8 @@ message SubscriptionOptions {
     optional uint32 messageWindowSize = 6;
     // enable resubscribe
     optional bool enableResubscribe = 7 [default = true];
+    // subscription type
+    optional SubscriptionType subscriptionType = 8 [default = INDIVIDUAL];
 }
 
 message ConsumeRequest{
@@ -255,6 +264,7 @@ enum StatusCode{
     SERVICE_DOWN = 502;
     UNCERTAIN_STATE = 503;
     INVALID_MESSAGE_FILTER = 504;
+    INVALID_SUBSCRIPTION = 505;
 
     //server-side meta manager errors (52x)
     BAD_VERSION = 520;
