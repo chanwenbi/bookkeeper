@@ -21,8 +21,15 @@ package org.apache.bookkeeper.proto;
  *
  */
 
-import org.jboss.netty.buffer.ChannelBuffer;
 import java.nio.ByteBuffer;
+
+import org.apache.bookkeeper.middleware.Requests.AddRequest;
+import org.apache.bookkeeper.middleware.Requests.LedgerRequest;
+import org.apache.bookkeeper.middleware.Requests.ReadRequest;
+import org.apache.bookkeeper.middleware.Responses.AddResponse;
+import org.apache.bookkeeper.middleware.Responses.LedgerResponse;
+import org.apache.bookkeeper.middleware.Responses.ReadResponse;
+import org.jboss.netty.buffer.ChannelBuffer;
 
 /**
  * The packets of the Bookie protocol all have a 4-byte integer indicating the
@@ -177,21 +184,21 @@ public interface BookieProtocol {
     public static final short FLAG_DO_FENCING = 0x0001;
     public static final short FLAG_RECOVERY_ADD = 0x0002;
 
-    static class Request {
+    static abstract class BKLedgerRequest implements LedgerRequest {
 
         final byte protocolVersion;
         final byte opCode;
-        final long ledgerId;
-        final long entryId;
-        final short flags;
-        final byte[] masterKey;
+        long ledgerId;
+        long entryId;
+        short flags;
+        byte[] masterKey;
 
-        protected Request(byte protocolVersion, byte opCode, long ledgerId,
+        protected BKLedgerRequest(byte protocolVersion, byte opCode, long ledgerId,
                           long entryId, short flags) {
             this(protocolVersion, opCode, ledgerId, entryId, flags, null);
         }
 
-        protected Request(byte protocolVersion, byte opCode, long ledgerId,
+        protected BKLedgerRequest(byte protocolVersion, byte opCode, long ledgerId,
                           long entryId, short flags, byte[] masterKey) {
             this.protocolVersion = protocolVersion;
             this.opCode = opCode;
@@ -209,25 +216,58 @@ public interface BookieProtocol {
             return opCode;
         }
 
-        long getLedgerId() {
+        @Override
+        public long getLedgerId() {
             return ledgerId;
         }
 
-        long getEntryId() {
+        @Override
+        public void setLedgerId(long lid) {
+            this.ledgerId = lid;
+        }
+
+        @Override
+        public long getEntryId() {
             return entryId;
+        }
+
+        @Override
+        public void setEntryId(long entryId) {
+            this.entryId = entryId;
         }
 
         short getFlags() {
             return flags;
         }
 
-        boolean hasMasterKey() {
+        void setFlags(short flags) {
+            this.flags = flags;
+        }
+
+        @Override
+        public boolean hasMasterKey() {
             return masterKey != null;
         }
 
-        byte[] getMasterKey() {
+        @Override
+        public byte[] getMasterKey() {
             assert hasMasterKey();
             return masterKey;
+        }
+
+        @Override
+        public void setMasterKey(byte[] masterKey) {
+            this.masterKey = masterKey;
+        }
+
+        @Override
+        public String getAttribute(String attr) {
+            throw new UnsupportedOperationException("Don't support request header prev v3.");
+        }
+
+        @Override
+        public void setAttribute(String attr, String value) {
+            throw new UnsupportedOperationException("Don't support request header prev v3.");
         }
 
         @Override
@@ -236,51 +276,70 @@ public interface BookieProtocol {
         }
     }
 
-    static class AddRequest extends Request {
-        final ChannelBuffer data;
+    static class BKAddRequest extends BKLedgerRequest implements AddRequest {
+        ChannelBuffer data;
 
-        AddRequest(byte protocolVersion, long ledgerId, long entryId,
+        BKAddRequest(byte protocolVersion, long ledgerId, long entryId,
                    short flags, byte[] masterKey, ChannelBuffer data) {
             super(protocolVersion, ADDENTRY, ledgerId, entryId, flags, masterKey);
             this.data = data;
         }
 
-        ChannelBuffer getData() {
-            return data;
-        }
-
-        ByteBuffer getDataAsByteBuffer() {
+        @Override
+        public ByteBuffer getDataAsByteBuffer() {
             return data.toByteBuffer().slice();
         }
 
-        boolean isRecoveryAdd() {
+        @Override
+        public boolean isRecoveryAdd() {
             return (flags & FLAG_RECOVERY_ADD) == FLAG_RECOVERY_ADD;
+        }
+
+        @Override
+        public ChannelBuffer getDataAsChannelBuffer() {
+            return data;
+        }
+
+        @Override
+        public void setData(ChannelBuffer data) {
+            this.data = data;
+        }
+
+        @Override
+        public void setRecoveryAdd() {
+            flags |= FLAG_RECOVERY_ADD;
         }
     }
 
-    static class ReadRequest extends Request {
-        ReadRequest(byte protocolVersion, long ledgerId, long entryId, short flags) {
+    static class BKReadRequest extends BKLedgerRequest implements ReadRequest {
+        BKReadRequest(byte protocolVersion, long ledgerId, long entryId, short flags) {
             super(protocolVersion, READENTRY, ledgerId, entryId, flags);
         }
 
-        ReadRequest(byte protocolVersion, long ledgerId, long entryId,
+        BKReadRequest(byte protocolVersion, long ledgerId, long entryId,
                     short flags, byte[] masterKey) {
             super(protocolVersion, READENTRY, ledgerId, entryId, flags, masterKey);
         }
 
-        boolean isFencingRequest() {
+        @Override
+        public boolean isFencingRequest() {
             return (flags & FLAG_DO_FENCING) == FLAG_DO_FENCING;
+        }
+
+        @Override
+        public void enableFencing() {
+            flags |= FLAG_DO_FENCING;
         }
     }
 
-    static class Response {
+    static abstract class BKLedgerResponse implements LedgerResponse {
         final byte protocolVersion;
         final byte opCode;
-        final int errorCode;
-        final long ledgerId;
-        final long entryId;
+        int errorCode;
+        long ledgerId;
+        long entryId;
 
-        protected Response(byte protocolVersion, byte opCode,
+        protected BKLedgerResponse(byte protocolVersion, byte opCode,
                            int errorCode, long ledgerId, long entryId) {
             this.protocolVersion = protocolVersion;
             this.opCode = opCode;
@@ -297,16 +356,44 @@ public interface BookieProtocol {
             return opCode;
         }
 
-        long getLedgerId() {
+        @Override
+        public long getLedgerId() {
             return ledgerId;
         }
 
-        long getEntryId() {
+        @Override
+        public void setLedgerId(long lid) {
+            this.ledgerId = lid;
+        }
+
+        @Override
+        public long getEntryId() {
             return entryId;
         }
 
-        int getErrorCode() {
+        @Override
+        public void setEntryId(long eid) {
+            this.entryId = eid;
+        }
+
+        @Override
+        public int getErrorCode() {
             return errorCode;
+        }
+
+        @Override
+        public void setErrorCode(int errorCode) {
+            this.errorCode = errorCode;
+        }
+
+        @Override
+        public String getAttribute(String attr) {
+            throw new UnsupportedOperationException("Don't support response header prev v3.");
+        }
+
+        @Override
+        public void setAttribute(String attr, String value) {
+            throw new UnsupportedOperationException("Don't support response header prev v3.");
         }
 
         @Override
@@ -316,30 +403,37 @@ public interface BookieProtocol {
         }
     }
 
-    static class ReadResponse extends Response {
-        final ChannelBuffer data;
+    static class BKReadResponse extends BKLedgerResponse implements ReadResponse {
+        ChannelBuffer data;
 
-        ReadResponse(byte protocolVersion, int errorCode, long ledgerId, long entryId) {
+        BKReadResponse(byte protocolVersion, int errorCode, long ledgerId, long entryId) {
             super(protocolVersion, READENTRY, errorCode, ledgerId, entryId);
             this.data = null;
         }
 
-        ReadResponse(byte protocolVersion, int errorCode, long ledgerId, long entryId, ChannelBuffer data) {
+        BKReadResponse(byte protocolVersion, int errorCode, long ledgerId, long entryId, ChannelBuffer data) {
             super(protocolVersion, READENTRY, errorCode, ledgerId, entryId);
             this.data = data;
         }
 
-        boolean hasData() {
+        @Override
+        public boolean hasData() {
             return data != null;
         }
 
-        ChannelBuffer getData() {
+        @Override
+        public ChannelBuffer getDataAsChannelBuffer() {
             return data;
+        }
+
+        @Override
+        public void setData(ChannelBuffer data) {
+            this.data = data;
         }
     }
 
-    static class AddResponse extends Response {
-        AddResponse(byte protocolVersion, int errorCode, long ledgerId, long entryId) {
+    static class BKAddResponse extends BKLedgerResponse implements AddResponse {
+        BKAddResponse(byte protocolVersion, int errorCode, long ledgerId, long entryId) {
             super(protocolVersion, ADDENTRY, errorCode, ledgerId, entryId);
         }
     }
