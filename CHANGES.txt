@@ -30,6 +30,10 @@ Trunk (unreleased changes)
 
       BOOKKEEPER-617: BOOKKEEPER-544 breaks hedwig-server/bin/hedwig script (ivank)
 
+      BOOKKEEPER-619: Bookie should not create local cookie files if zookeeper is uninitialized (ivank)
+
+      BOOKKEEPER-313: Bookkeeper shutdown call from Bookie thread is not shutting down server (vinay via ivank)
+
       bookkeeper-server:
 
         BOOKKEEPER-567: ReadOnlyBookieTest hangs on shutdown (sijie via ivank)
@@ -53,6 +57,10 @@ Trunk (unreleased changes)
 	BOOKKEEPER-577: BookieFailureTest uses sync/wait()/notify() incorrectly (ivank via fpj) 
 	
 	BOOKKEEPER-626: BOOKIE_EXTRA_OPTS are added twice (vinay via fpj)
+
+        BOOKKEEPER-623: LedgerChecker should avoid segments of closed ledger with higher start entryId than closed entry. (vinay via sijie)
+
+        BOOKKEEPER-633: ConcurrentModificationException in RackawareEnsemblePlacementPolicy when a bookie is removed from available list (vinay via sijie)
 
       hedwig-client:
 
