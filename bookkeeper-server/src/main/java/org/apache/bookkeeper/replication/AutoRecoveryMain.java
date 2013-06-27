@@ -30,7 +30,6 @@ import org.apache.bookkeeper.conf.ServerConfiguration;
 import org.apache.bookkeeper.replication.ReplicationException.CompatibilityException;
 import org.apache.bookkeeper.replication.ReplicationException.UnavailableException;
 import org.apache.bookkeeper.util.ZkUtils;
-import org.apache.bookkeeper.util.StringUtils;
 import org.apache.bookkeeper.zookeeper.ZooKeeperWatcherBase;
 import org.apache.commons.cli.BasicParser;
 import org.apache.commons.cli.CommandLine;
@@ -79,8 +78,7 @@ public class AutoRecoveryMain {
             }
         };
         zk = ZkUtils.createConnectedZookeeperClient(conf.getZkServers(), w);
-        auditorElector = new AuditorElector(
-                StringUtils.addrToString(Bookie.getBookieAddress(conf)), conf, zk);
+        auditorElector = new AuditorElector(Bookie.getBookieAddress(conf).toString(), conf, zk);
         replicationWorker = new ReplicationWorker(zk, conf,
                 Bookie.getBookieAddress(conf));
         deathWatcher = new AutoRecoveryDeathWatcher(this);

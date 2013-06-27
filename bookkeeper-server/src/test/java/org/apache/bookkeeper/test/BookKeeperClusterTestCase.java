@@ -24,7 +24,6 @@ package org.apache.bookkeeper.test;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -41,6 +40,7 @@ import org.apache.bookkeeper.conf.AbstractConfiguration;
 import org.apache.bookkeeper.conf.ClientConfiguration;
 import org.apache.bookkeeper.conf.ServerConfiguration;
 import org.apache.bookkeeper.metastore.InMemoryMetaStore;
+import org.apache.bookkeeper.net.BookieSocketAddress;
 import org.apache.bookkeeper.proto.BookieServer;
 import org.apache.bookkeeper.replication.AutoRecoveryMain;
 import org.apache.bookkeeper.replication.ReplicationException.CompatibilityException;
@@ -203,7 +203,7 @@ public abstract class BookKeeperClusterTestCase extends TestCase {
     /**
      * Get bookie address for bookie at index
      */
-    public InetSocketAddress getBookie(int index) throws Exception {
+    public BookieSocketAddress getBookie(int index) throws Exception {
         if (bs.size() <= index || index < 0) {
             throw new IllegalArgumentException("Invalid index, there are only " + bs.size()
                                                + " bookies. Asked for " + index);
@@ -220,7 +220,7 @@ public abstract class BookKeeperClusterTestCase extends TestCase {
      * @return the configuration of killed bookie
      * @throws InterruptedException
      */
-    public ServerConfiguration killBookie(InetSocketAddress addr) throws Exception {
+    public ServerConfiguration killBookie(BookieSocketAddress addr) throws Exception {
         BookieServer toRemove = null;
         int toRemoveIndex = 0;
         for (BookieServer server : bs) {
@@ -271,7 +271,7 @@ public abstract class BookKeeperClusterTestCase extends TestCase {
      * @throws InterruptedException
      * @throws IOException
      */
-    public CountDownLatch sleepBookie(InetSocketAddress addr, final int seconds)
+    public CountDownLatch sleepBookie(BookieSocketAddress addr, final int seconds)
             throws Exception {
         for (final BookieServer bookie : bs) {
             if (bookie.getLocalAddress().equals(addr)) {
@@ -306,7 +306,7 @@ public abstract class BookKeeperClusterTestCase extends TestCase {
      * @throws InterruptedException
      * @throws IOException
      */
-    public void sleepBookie(InetSocketAddress addr, final CountDownLatch l)
+    public void sleepBookie(BookieSocketAddress addr, final CountDownLatch l)
             throws Exception {
         for (final BookieServer bookie : bs) {
             if (bookie.getLocalAddress().equals(addr)) {
@@ -363,13 +363,11 @@ public abstract class BookKeeperClusterTestCase extends TestCase {
         bs.clear();
         Thread.sleep(1000);
         // restart them to ensure we can't
-        int j = 0;
         for (ServerConfiguration conf : bsConfs) {
             if (null != newConf) {
                 conf.loadConf(newConf);
             }
             bs.add(startBookie(conf));
-            j++;
         }
     }
 

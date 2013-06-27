@@ -21,11 +21,12 @@ package org.apache.bookkeeper.client;
  *
  */
 
+import java.security.GeneralSecurityException;
+
 import org.apache.bookkeeper.client.AsyncCallback.AddCallback;
 import org.apache.bookkeeper.client.AsyncCallback.CloseCallback;
 import org.apache.bookkeeper.client.BookKeeper.DigestType;
-import java.security.GeneralSecurityException;
-import java.net.InetSocketAddress;
+import org.apache.bookkeeper.net.BookieSocketAddress;
 
 /**
  * Read only ledger handle. This ledger handle allows you to 
@@ -78,7 +79,7 @@ class ReadOnlyLedgerHandle extends LedgerHandle {
     }
 
     @Override
-    void handleBookieFailure(final InetSocketAddress addr, final int bookieIndex) {
+    void handleBookieFailure(final BookieSocketAddress addr, final int bookieIndex) {
         blockAddCompletions.incrementAndGet();
         synchronized (metadata) {
             try {

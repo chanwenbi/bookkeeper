@@ -21,28 +21,25 @@
 
 package org.apache.bookkeeper.bookie;
 
+import static com.google.common.base.Charsets.UTF_8;
+
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.io.FilenameFilter;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
+import java.io.IOException;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Map;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.apache.bookkeeper.meta.LedgerManager;
-import org.apache.bookkeeper.meta.LedgerManagerFactory;
-import org.apache.bookkeeper.bookie.BookieException;
 import org.apache.bookkeeper.bookie.GarbageCollectorThread.SafeEntryAdder;
 import org.apache.bookkeeper.bookie.Journal.JournalScanner;
 import org.apache.bookkeeper.bookie.LedgerDirsManager.LedgerDirsListener;
@@ -50,28 +47,29 @@ import org.apache.bookkeeper.bookie.LedgerDirsManager.NoWritableLedgerDirExcepti
 import org.apache.bookkeeper.conf.ServerConfiguration;
 import org.apache.bookkeeper.jmx.BKMBeanInfo;
 import org.apache.bookkeeper.jmx.BKMBeanRegistry;
-import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.WriteCallback;
+import org.apache.bookkeeper.meta.LedgerManager;
+import org.apache.bookkeeper.meta.LedgerManagerFactory;
+import org.apache.bookkeeper.net.BookieSocketAddress;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.GenericCallback;
+import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.WriteCallback;
 import org.apache.bookkeeper.util.BookKeeperConstants;
 import org.apache.bookkeeper.util.IOUtils;
 import org.apache.bookkeeper.util.MathUtils;
 import org.apache.bookkeeper.util.ZkUtils;
-import org.apache.bookkeeper.util.StringUtils;
 import org.apache.bookkeeper.util.net.DNS;
 import org.apache.bookkeeper.zookeeper.ZooKeeperWatcherBase;
 import org.apache.commons.io.FileUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.CreateMode;
+import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.KeeperException.NodeExistsException;
 import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.Watcher;
-import org.apache.zookeeper.ZooKeeper;
-import org.apache.zookeeper.ZooDefs.Ids;
 import org.apache.zookeeper.Watcher.Event.EventType;
+import org.apache.zookeeper.ZooDefs.Ids;
+import org.apache.zookeeper.ZooKeeper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import static com.google.common.base.Charsets.UTF_8;
 import com.google.common.annotations.VisibleForTesting;
 
 /**
@@ -159,7 +157,7 @@ public class Bookie extends Thread {
     static class NopWriteCallback implements WriteCallback {
         @Override
         public void writeComplete(int rc, long ledgerId, long entryId,
-                                  InetSocketAddress addr, Object ctx) {
+                                  BookieSocketAddress addr, Object ctx) {
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Finished writing entry {} @ ledger {} for {} : {}",
                           new Object[] { entryId, ledgerId, addr, rc });
@@ -226,7 +224,7 @@ public class Bookie extends Thread {
 
         @Override
         public void writeComplete(int rc, long ledgerId, long entryId,
-                                  InetSocketAddress addr, Object ctx) {
+                                  BookieSocketAddress addr, Object ctx) {
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Finished writing entry {} @ ledger {} for {} : {}",
                           new Object[] { entryId, ledgerId, addr, rc });
@@ -346,16 +344,16 @@ public class Bookie extends Thread {
     /**
      * Return the configured address of the bookie.
      */
-    public static InetSocketAddress getBookieAddress(ServerConfiguration conf)
+    public static BookieSocketAddress getBookieAddress(ServerConfiguration conf)
             throws UnknownHostException {
         String iface = conf.getListeningInterface();
         if (iface == null) {
             iface = "default";
         }
-        InetSocketAddress addr = new InetSocketAddress(
+        BookieSocketAddress addr = new BookieSocketAddress(
                 DNS.getDefaultHost(iface),
                 conf.getBookiePort());
-        if (addr.getAddress().isLoopbackAddress()
+        if (addr.getSocketAddress().getAddress().isLoopbackAddress()
             && !conf.getAllowLoopback()) {
             throw new UnknownHostException("Trying to listen on loopback address, "
                     + addr + " but this is forbidden by default "
@@ -429,7 +427,7 @@ public class Bookie extends Thread {
     }
 
     private String getMyId() throws UnknownHostException {
-        return StringUtils.addrToString(Bookie.getBookieAddress(conf));
+        return Bookie.getBookieAddress(conf).toString();
     }
 
     void readJournal() throws IOException, BookieException {
@@ -622,8 +620,7 @@ public class Bookie extends Thread {
         }
 
         // ZK ephemeral node for this Bookie.
-        String zkBookieRegPath = this.bookieRegistrationPath
-            + StringUtils.addrToString(getBookieAddress(conf));
+        String zkBookieRegPath = this.bookieRegistrationPath + getBookieAddress(conf);
         final CountDownLatch prevNodeLatch = new CountDownLatch(1);
         try{
             Watcher zkPrevRegNodewatcher = new Watcher() {
@@ -989,7 +986,7 @@ public class Bookie extends Thread {
     static class CounterCallback implements WriteCallback {
         int count;
 
-        synchronized public void writeComplete(int rc, long l, long e, InetSocketAddress addr, Object ctx) {
+        synchronized public void writeComplete(int rc, long l, long e, BookieSocketAddress addr, Object ctx) {
             count--;
             if (count == 0) {
                 notifyAll();
@@ -1088,7 +1085,7 @@ public class Bookie extends Thread {
             journal.logAddEntry(buffer, new WriteCallback() {
                     @Override
                     public void writeComplete(int rc, long ledgerId2, long entryId,
-                                              InetSocketAddress addr, Object ctx) {
+                                              BookieSocketAddress addr, Object ctx) {
                         if (rc != BookieException.Code.OK) {
                             LOG.error("Error rewriting to journal (ledger {}, entry {})", ledgerId2, entryId);
                             cb.operationComplete(rc, null);

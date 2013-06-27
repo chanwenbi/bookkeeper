@@ -22,29 +22,29 @@ package org.apache.bookkeeper.test;
  */
 
 import java.io.File;
-import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.concurrent.Executors;
 
-import org.jboss.netty.buffer.ChannelBuffer;
-import org.jboss.netty.buffer.ChannelBuffers;
-import org.jboss.netty.channel.socket.ClientSocketChannelFactory;
-import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
-import org.junit.Test;
+import junit.framework.TestCase;
+
+import org.apache.bookkeeper.client.BKException;
 import org.apache.bookkeeper.conf.ClientConfiguration;
 import org.apache.bookkeeper.conf.ServerConfiguration;
-import org.apache.bookkeeper.client.BKException;
+import org.apache.bookkeeper.net.BookieSocketAddress;
 import org.apache.bookkeeper.proto.BookieClient;
 import org.apache.bookkeeper.proto.BookieProtocol;
 import org.apache.bookkeeper.proto.BookieServer;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.ReadEntryCallback;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.WriteCallback;
 import org.apache.bookkeeper.util.OrderedSafeExecutor;
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.jboss.netty.buffer.ChannelBuffers;
+import org.jboss.netty.channel.socket.ClientSocketChannelFactory;
+import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
+import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import junit.framework.TestCase;
 
 public class BookieClientTest extends TestCase {
     static Logger LOG = LoggerFactory.getLogger(BookieClientTest.class);
@@ -115,7 +115,7 @@ public class BookieClientTest extends TestCase {
     };
 
     WriteCallback wrcb = new WriteCallback() {
-        public void writeComplete(int rc, long ledgerId, long entryId, InetSocketAddress addr, Object ctx) {
+        public void writeComplete(int rc, long ledgerId, long entryId, BookieSocketAddress addr, Object ctx) {
             if (ctx != null) {
                 synchronized (ctx) {
                     ctx.notifyAll();
@@ -129,7 +129,7 @@ public class BookieClientTest extends TestCase {
         final Object notifyObject = new Object();
         byte[] passwd = new byte[20];
         Arrays.fill(passwd, (byte) 'a');
-        InetSocketAddress addr = new InetSocketAddress("127.0.0.1", port);
+        BookieSocketAddress addr = new BookieSocketAddress("127.0.0.1", port);
         ResultStruct arc = new ResultStruct();
 
         BookieClient bc = new BookieClient(new ClientConfiguration(), channelFactory, executor);
@@ -232,7 +232,7 @@ public class BookieClientTest extends TestCase {
     @Test(timeout=60000)
     public void testNoLedger() throws Exception {
         ResultStruct arc = new ResultStruct();
-        InetSocketAddress addr = new InetSocketAddress("127.0.0.1", port);
+        BookieSocketAddress addr = new BookieSocketAddress("127.0.0.1", port);
         BookieClient bc = new BookieClient(new ClientConfiguration(), channelFactory, executor);
         synchronized (arc) {
             bc.readEntry(addr, 2, 13, recb, arc);

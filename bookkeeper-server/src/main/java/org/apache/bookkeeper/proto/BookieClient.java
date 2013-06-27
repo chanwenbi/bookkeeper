@@ -21,30 +21,30 @@ package org.apache.bookkeeper.proto;
  *
  */
 
-import java.util.Set;
-import java.util.HashSet;
+import static com.google.common.base.Charsets.UTF_8;
+
 import java.io.IOException;
-import java.net.InetSocketAddress;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
-import org.apache.bookkeeper.conf.ClientConfiguration;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+
 import org.apache.bookkeeper.client.BKException;
-import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.ReadEntryCallback;
+import org.apache.bookkeeper.conf.ClientConfiguration;
+import org.apache.bookkeeper.net.BookieSocketAddress;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.GenericCallback;
+import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.ReadEntryCallback;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.WriteCallback;
 import org.apache.bookkeeper.util.OrderedSafeExecutor;
 import org.apache.bookkeeper.util.SafeRunnable;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.buffer.ChannelBuffers;
 import org.jboss.netty.channel.socket.ClientSocketChannelFactory;
 import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
-
-import static com.google.common.base.Charsets.UTF_8;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Implements the client-side part of the BookKeeper protocol.
@@ -58,7 +58,7 @@ public class BookieClient {
 
     OrderedSafeExecutor executor;
     ClientSocketChannelFactory channelFactory;
-    ConcurrentHashMap<InetSocketAddress, PerChannelBookieClient> channels = new ConcurrentHashMap<InetSocketAddress, PerChannelBookieClient>();
+    ConcurrentHashMap<BookieSocketAddress, PerChannelBookieClient> channels = new ConcurrentHashMap<BookieSocketAddress, PerChannelBookieClient>();
 
     private final ClientConfiguration conf;
     private volatile boolean closed;
@@ -72,7 +72,7 @@ public class BookieClient {
         this.closeLock = new ReentrantReadWriteLock();
     }
 
-    public PerChannelBookieClient lookupClient(InetSocketAddress addr) {
+    public PerChannelBookieClient lookupClient(BookieSocketAddress addr) {
         PerChannelBookieClient channel = channels.get(addr);
 
         if (channel == null) {
@@ -94,9 +94,9 @@ public class BookieClient {
         return channel;
     }
 
-    public void closeClients(Set<InetSocketAddress> addrs) {
+    public void closeClients(Set<BookieSocketAddress> addrs) {
         final HashSet<PerChannelBookieClient> clients = new HashSet<PerChannelBookieClient>();
-        for (InetSocketAddress a : addrs) {
+        for (BookieSocketAddress a : addrs) {
             PerChannelBookieClient c = channels.get(a);
             if (c != null) {
                 clients.add(c);
@@ -116,7 +116,8 @@ public class BookieClient {
             });
     }
 
-    public void addEntry(final InetSocketAddress addr, final long ledgerId, final byte[] masterKey, final long entryId,
+    public void addEntry(final BookieSocketAddress addr, final long ledgerId, final byte[] masterKey,
+            final long entryId,
             final ChannelBuffer toSend, final WriteCallback cb, final Object ctx, final int options) {
         final PerChannelBookieClient client = lookupClient(addr);
         if (client == null) {
@@ -142,7 +143,7 @@ public class BookieClient {
         });
     }
 
-    public void readEntryAndFenceLedger(final InetSocketAddress addr,
+    public void readEntryAndFenceLedger(final BookieSocketAddress addr,
                                         final long ledgerId,
                                         final byte[] masterKey,
                                         final long entryId,
@@ -172,7 +173,7 @@ public class BookieClient {
         });
     }
 
-    public void readEntry(final InetSocketAddress addr, final long ledgerId, final long entryId,
+    public void readEntry(final BookieSocketAddress addr, final long ledgerId, final long entryId,
                           final ReadEntryCallback cb, final Object ctx) {
         final PerChannelBookieClient client = lookupClient(addr);
         if (client == null) {
@@ -248,7 +249,7 @@ public class BookieClient {
         }
         WriteCallback cb = new WriteCallback() {
 
-            public void writeComplete(int rc, long ledger, long entry, InetSocketAddress addr, Object ctx) {
+            public void writeComplete(int rc, long ledger, long entry, BookieSocketAddress addr, Object ctx) {
                 Counter counter = (Counter) ctx;
                 counter.dec();
                 if (rc != 0) {
@@ -263,7 +264,7 @@ public class BookieClient {
                 .newCachedThreadPool());
         OrderedSafeExecutor executor = new OrderedSafeExecutor(1);
         BookieClient bc = new BookieClient(new ClientConfiguration(), channelFactory, executor);
-        InetSocketAddress addr = new InetSocketAddress(args[0], Integer.parseInt(args[1]));
+        BookieSocketAddress addr = new BookieSocketAddress(args[0], Integer.parseInt(args[1]));
 
         for (int i = 0; i < 100000; i++) {
             counter.inc();

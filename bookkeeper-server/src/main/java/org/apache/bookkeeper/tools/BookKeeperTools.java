@@ -22,21 +22,17 @@ package org.apache.bookkeeper.tools;
  */
 
 import java.io.IOException;
-import org.apache.zookeeper.KeeperException;
-import java.net.InetSocketAddress;
 
-import org.apache.bookkeeper.client.BookKeeperAdmin;
 import org.apache.bookkeeper.client.BKException;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.bookkeeper.client.BookKeeperAdmin;
+import org.apache.bookkeeper.net.BookieSocketAddress;
+import org.apache.zookeeper.KeeperException;
 
 /**
  * Provides Admin Tools to manage the BookKeeper cluster.
  *
  */
 public class BookKeeperTools {
-    private static Logger LOG = LoggerFactory.getLogger(BookKeeperTools.class);
 
     /**
      * Main method so we can invoke the bookie recovery via command line.
@@ -67,9 +63,9 @@ public class BookKeeperTools {
             System.err.println("BookieSrc inputted has invalid name format (host:port expected): " + args[1]);
             return;
         }
-        final InetSocketAddress bookieSrc = new InetSocketAddress(bookieSrcString[0], Integer
+        final BookieSocketAddress bookieSrc = new BookieSocketAddress(bookieSrcString[0], Integer
                 .parseInt(bookieSrcString[1]));
-        InetSocketAddress bookieDest = null;
+        BookieSocketAddress bookieDest = null;
         if (args.length < 3) {
             String bookieDestString[] = args[2].split(":");
             if (bookieDestString.length < 2) {
@@ -77,7 +73,7 @@ public class BookKeeperTools {
                                    + args[2]);
                 return;
             }
-            bookieDest = new InetSocketAddress(bookieDestString[0], Integer.parseInt(bookieDestString[1]));
+            bookieDest = new BookieSocketAddress(bookieDestString[0], Integer.parseInt(bookieDestString[1]));
         }
 
         // Create the BookKeeperTools instance and perform the bookie recovery

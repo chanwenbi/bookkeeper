@@ -18,16 +18,14 @@
 package org.apache.bookkeeper.proto;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.util.ArrayDeque;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.bookkeeper.client.BKException;
 import org.apache.bookkeeper.conf.ClientConfiguration;
-import org.apache.bookkeeper.proto.BookieProtocol.PacketHeader;
+import org.apache.bookkeeper.net.BookieSocketAddress;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.GenericCallback;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.ReadEntryCallback;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.WriteCallback;
@@ -36,7 +34,6 @@ import org.apache.bookkeeper.util.OrderedSafeExecutor;
 import org.apache.bookkeeper.util.SafeRunnable;
 import org.jboss.netty.bootstrap.ClientBootstrap;
 import org.jboss.netty.buffer.ChannelBuffer;
-import org.jboss.netty.buffer.ChannelBuffers;
 import org.jboss.netty.channel.Channel;
 import org.jboss.netty.channel.ChannelFuture;
 import org.jboss.netty.channel.ChannelFutureListener;
@@ -72,7 +69,7 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
     static final long maxMemory = Runtime.getRuntime().maxMemory() / 5;
     public static final int MAX_FRAME_LENGTH = 2 * 1024 * 1024; // 2M
 
-    InetSocketAddress addr;
+    BookieSocketAddress addr;
     AtomicLong totalBytesOutstanding;
     ClientSocketChannelFactory channelFactory;
     OrderedSafeExecutor executor;
@@ -96,12 +93,12 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
     private final ClientConfiguration conf;
 
     public PerChannelBookieClient(OrderedSafeExecutor executor, ClientSocketChannelFactory channelFactory,
-                                  InetSocketAddress addr, AtomicLong totalBytesOutstanding) {
+                                  BookieSocketAddress addr, AtomicLong totalBytesOutstanding) {
         this(new ClientConfiguration(), executor, channelFactory, addr, totalBytesOutstanding);
     }
             
     public PerChannelBookieClient(ClientConfiguration conf, OrderedSafeExecutor executor, ClientSocketChannelFactory channelFactory,
-                                  InetSocketAddress addr, AtomicLong totalBytesOutstanding) {
+                                  BookieSocketAddress addr, AtomicLong totalBytesOutstanding) {
         this.conf = conf;
         this.addr = addr;
         this.executor = executor;
@@ -121,7 +118,7 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
         bootstrap.setOption("tcpNoDelay", conf.getClientTcpNoDelay());
         bootstrap.setOption("keepAlive", true);
 
-        ChannelFuture future = bootstrap.connect(addr);
+        ChannelFuture future = bootstrap.connect(addr.getSocketAddress());
 
         future.addListener(new ChannelFutureListener() {
             @Override

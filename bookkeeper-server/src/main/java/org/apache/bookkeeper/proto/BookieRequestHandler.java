@@ -21,19 +21,17 @@
 package org.apache.bookkeeper.proto;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import org.apache.bookkeeper.util.MathUtils;
-import org.apache.bookkeeper.conf.ServerConfiguration;
 import org.apache.bookkeeper.bookie.Bookie;
 import org.apache.bookkeeper.bookie.BookieException;
-
+import org.apache.bookkeeper.conf.ServerConfiguration;
+import org.apache.bookkeeper.net.BookieSocketAddress;
+import org.apache.bookkeeper.util.MathUtils;
 import org.jboss.netty.channel.Channel;
 import org.jboss.netty.channel.ChannelHandlerContext;
 import org.jboss.netty.channel.ChannelStateEvent;
@@ -41,7 +39,6 @@ import org.jboss.netty.channel.ExceptionEvent;
 import org.jboss.netty.channel.MessageEvent;
 import org.jboss.netty.channel.SimpleChannelHandler;
 import org.jboss.netty.channel.group.ChannelGroup;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -185,7 +182,7 @@ class BookieRequestHandler extends SimpleChannelHandler
 
     @Override
     public void writeComplete(int rc, long ledgerId, long entryId,
-                              InetSocketAddress addr, Object ctx) {
+                              BookieSocketAddress addr, Object ctx) {
         assert(ctx instanceof AddCtx);
         AddCtx addctx = (AddCtx)ctx;
         addctx.c.write(ResponseBuilder.buildAddResponse(addctx.r));

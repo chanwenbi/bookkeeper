@@ -21,18 +21,16 @@ package org.apache.bookkeeper.proto;
  *
  */
 
-import org.junit.*;
-import java.net.InetSocketAddress;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicLong;
 
+import org.apache.bookkeeper.net.BookieSocketAddress;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.GenericCallback;
 import org.apache.bookkeeper.test.BookKeeperClusterTestCase;
 import org.apache.bookkeeper.util.OrderedSafeExecutor;
-
 import org.jboss.netty.channel.socket.ClientSocketChannelFactory;
 import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
-
+import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,7 +59,7 @@ public class TestPerChannelBookieClient extends BookKeeperClusterTestCase {
                                                 Executors.newCachedThreadPool());
         OrderedSafeExecutor executor = new OrderedSafeExecutor(1);
 
-        InetSocketAddress addr = getBookie(0);
+        BookieSocketAddress addr = getBookie(0);
         AtomicLong bytesOutstanding = new AtomicLong(0);
         for (int i = 0; i < 1000; i++) {
             PerChannelBookieClient client = new PerChannelBookieClient(executor, channelFactory,
@@ -98,7 +96,7 @@ public class TestPerChannelBookieClient extends BookKeeperClusterTestCase {
                                                 Executors.newCachedThreadPool());
         OrderedSafeExecutor executor = new OrderedSafeExecutor(1);
 
-        InetSocketAddress addr = getBookie(0);
+        BookieSocketAddress addr = getBookie(0);
         AtomicLong bytesOutstanding = new AtomicLong(0);
         for (int i = 0; i < 100; i++) {
             PerChannelBookieClient client = new PerChannelBookieClient(executor, channelFactory,

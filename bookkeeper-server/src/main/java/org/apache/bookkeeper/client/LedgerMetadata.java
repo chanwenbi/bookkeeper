@@ -23,7 +23,6 @@ import static com.google.common.base.Charsets.UTF_8;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
-import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -32,8 +31,8 @@ import java.util.Map.Entry;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
+import org.apache.bookkeeper.net.BookieSocketAddress;
 import org.apache.bookkeeper.proto.DataFormats.LedgerMetadataFormat;
-import org.apache.bookkeeper.util.StringUtils;
 import org.apache.bookkeeper.versioning.Version;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,8 +70,8 @@ public class LedgerMetadata {
     private long lastEntryId;
 
     private LedgerMetadataFormat.State state;
-    private SortedMap<Long, ArrayList<InetSocketAddress>> ensembles = new TreeMap<Long, ArrayList<InetSocketAddress>>();
-    ArrayList<InetSocketAddress> currentEnsemble;
+    private SortedMap<Long, ArrayList<BookieSocketAddress>> ensembles = new TreeMap<Long, ArrayList<BookieSocketAddress>>();
+    ArrayList<BookieSocketAddress> currentEnsemble;
     volatile Version version = Version.NEW;
 
     private boolean hasPassword = false;
@@ -117,9 +116,9 @@ public class LedgerMetadata {
         this.password = new byte[other.password.length];
         System.arraycopy(other.password, 0, this.password, 0, other.password.length);
         // copy the ensembles
-        for (Entry<Long, ArrayList<InetSocketAddress>> entry : other.ensembles.entrySet()) {
+        for (Entry<Long, ArrayList<BookieSocketAddress>> entry : other.ensembles.entrySet()) {
             long startEntryId = entry.getKey();
-            ArrayList<InetSocketAddress> newEnsemble = new ArrayList<InetSocketAddress>(entry.getValue());
+            ArrayList<BookieSocketAddress> newEnsemble = new ArrayList<BookieSocketAddress>(entry.getValue());
             this.addEnsemble(startEntryId, newEnsemble);
         }
     }
@@ -136,11 +135,11 @@ public class LedgerMetadata {
      * @return SortedMap of Ledger Fragments and the corresponding
      * bookie ensembles that store the entries.
      */
-    public SortedMap<Long, ArrayList<InetSocketAddress>> getEnsembles() {
+    public SortedMap<Long, ArrayList<BookieSocketAddress>> getEnsembles() {
         return ensembles;
     }
 
-    void setEnsembles(SortedMap<Long, ArrayList<InetSocketAddress>> ensembles) {
+    void setEnsembles(SortedMap<Long, ArrayList<BookieSocketAddress>> ensembles) {
         this.ensembles = ensembles;
     }
 
@@ -215,14 +214,14 @@ public class LedgerMetadata {
         state = LedgerMetadataFormat.State.CLOSED;
     }
 
-    void addEnsemble(long startEntryId, ArrayList<InetSocketAddress> ensemble) {
+    void addEnsemble(long startEntryId, ArrayList<BookieSocketAddress> ensemble) {
         assert ensembles.isEmpty() || startEntryId >= ensembles.lastKey();
 
         ensembles.put(startEntryId, ensemble);
         currentEnsemble = ensemble;
     }
 
-    ArrayList<InetSocketAddress> getEnsemble(long entryId) {
+    ArrayList<BookieSocketAddress> getEnsemble(long entryId) {
         // the head map cannot be empty, since we insert an ensemble for
         // entry-id 0, right when we start
         return ensembles.get(ensembles.headMap(entryId + 1).lastKey());
@@ -236,7 +235,7 @@ public class LedgerMetadata {
      * @return
      */
     long getNextEnsembleChange(long entryId) {
-        SortedMap<Long, ArrayList<InetSocketAddress>> tailMap = ensembles.tailMap(entryId + 1);
+        SortedMap<Long, ArrayList<BookieSocketAddress>> tailMap = ensembles.tailMap(entryId + 1);
 
         if (tailMap.isEmpty()) {
             return -1;
@@ -263,11 +262,11 @@ public class LedgerMetadata {
             builder.setDigestType(digestType).setPassword(ByteString.copyFrom(password));
         }
 
-        for (Map.Entry<Long, ArrayList<InetSocketAddress>> entry : ensembles.entrySet()) {
+        for (Map.Entry<Long, ArrayList<BookieSocketAddress>> entry : ensembles.entrySet()) {
             LedgerMetadataFormat.Segment.Builder segmentBuilder = LedgerMetadataFormat.Segment.newBuilder();
             segmentBuilder.setFirstEntryId(entry.getKey());
-            for (InetSocketAddress addr : entry.getValue()) {
-                segmentBuilder.addEnsembleMember(StringUtils.addrToString(addr));
+            for (BookieSocketAddress addr : entry.getValue()) {
+                segmentBuilder.addEnsembleMember(addr.toString());
             }
             builder.addSegment(segmentBuilder.build());
         }
@@ -284,11 +283,11 @@ public class LedgerMetadata {
         s.append(VERSION_KEY).append(tSplitter).append(metadataFormatVersion).append(lSplitter);
         s.append(writeQuorumSize).append(lSplitter).append(ensembleSize).append(lSplitter).append(length);
 
-        for (Map.Entry<Long, ArrayList<InetSocketAddress>> entry : ensembles.entrySet()) {
+        for (Map.Entry<Long, ArrayList<BookieSocketAddress>> entry : ensembles.entrySet()) {
             s.append(lSplitter).append(entry.getKey());
-            for (InetSocketAddress addr : entry.getValue()) {
+            for (BookieSocketAddress addr : entry.getValue()) {
                 s.append(tSplitter);
-                s.append(StringUtils.addrToString(addr));
+                s.append(addr.toString());
             }
         }
 
@@ -326,7 +325,6 @@ public class LedgerMetadata {
         if (versionLine == null) {
             throw new IOException("Invalid metadata. Content missing");
         }
-        int i = 0;
         if (versionLine.startsWith(VERSION_KEY)) {
             String parts[] = versionLine.split(tSplitter);
             lc.metadataFormatVersion = new Integer(parts[1]);
@@ -373,9 +371,9 @@ public class LedgerMetadata {
         }
 
         for (LedgerMetadataFormat.Segment s : data.getSegmentList()) {
-            ArrayList<InetSocketAddress> addrs = new ArrayList<InetSocketAddress>();
+            ArrayList<BookieSocketAddress> addrs = new ArrayList<BookieSocketAddress>();
             for (String member : s.getEnsembleMemberList()) {
-                addrs.add(StringUtils.parseAddr(member));
+                addrs.add(new BookieSocketAddress(member));
             }
             lc.addEnsemble(s.getFirstEntryId(), addrs);
         }
@@ -406,9 +404,9 @@ public class LedgerMetadata {
                     lc.state = LedgerMetadataFormat.State.OPEN;
                 }
 
-                ArrayList<InetSocketAddress> addrs = new ArrayList<InetSocketAddress>();
+                ArrayList<BookieSocketAddress> addrs = new ArrayList<BookieSocketAddress>();
                 for (int j = 1; j < parts.length; j++) {
-                    addrs.add(StringUtils.parseAddr(parts[j]));
+                    addrs.add(new BookieSocketAddress(parts[j]));
                 }
                 lc.addEnsemble(new Long(parts[0]), addrs);
                 line = reader.readLine();
