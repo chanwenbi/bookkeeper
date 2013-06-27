@@ -23,16 +23,16 @@ package org.apache.bookkeeper.proto;
 import java.io.IOException;
 
 import org.apache.bookkeeper.conf.AbstractConfiguration;
-import org.apache.bookkeeper.middleware.Middleware;
-import org.apache.bookkeeper.middleware.MiddlewareContext;
+import org.apache.bookkeeper.processor.ServerProcessorContext;
+import org.apache.bookkeeper.processor.ServerRequestProcessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.stumbleupon.async.Deferred;
 
-public class ServerProtocolMiddleware implements Middleware {
+public class ServerProtocolProcessor implements ServerRequestProcessor {
 
-    private final static Logger LOG = LoggerFactory.getLogger(ServerProtocolMiddleware.class);
+    private final static Logger LOG = LoggerFactory.getLogger(ServerProtocolProcessor.class);
 
     public static class BadVersionException extends Exception {
 
@@ -53,7 +53,7 @@ public class ServerProtocolMiddleware implements Middleware {
     }
 
     @Override
-    public Deferred<MiddlewareContext> processRequest(MiddlewareContext ctx) {
+    public Deferred<ServerProcessorContext> processRequest(ServerProcessorContext ctx) {
         if (!(ctx.getRequest() instanceof BookieProtocol.BKLedgerRequest)) {
             return Deferred.fromResult(ctx);
         }
@@ -70,7 +70,7 @@ public class ServerProtocolMiddleware implements Middleware {
     }
 
     @Override
-    public Deferred<MiddlewareContext> processResponse(MiddlewareContext ctx) {
+    public Deferred<ServerProcessorContext> processResponse(ServerProcessorContext ctx) {
         return Deferred.fromResult(ctx);
     }
 

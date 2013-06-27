@@ -26,15 +26,16 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.bookkeeper.client.BKException;
 import org.apache.bookkeeper.conf.ClientConfiguration;
-import org.apache.bookkeeper.middleware.Middleware;
-import org.apache.bookkeeper.middleware.MiddlewareContext;
-import org.apache.bookkeeper.middleware.Middlewares;
-import org.apache.bookkeeper.middleware.Requests.AddRequest;
-import org.apache.bookkeeper.middleware.Requests.ReadRequest;
-import org.apache.bookkeeper.middleware.Requests.Request;
-import org.apache.bookkeeper.middleware.Responses.AddResponse;
-import org.apache.bookkeeper.middleware.Responses.LedgerResponse;
-import org.apache.bookkeeper.middleware.Responses.ReadResponse;
+import org.apache.bookkeeper.processor.ChainRequestProcessor;
+import org.apache.bookkeeper.processor.RequestContext;
+import org.apache.bookkeeper.processor.RequestProcessor;
+import org.apache.bookkeeper.processor.Requests.AddRequest;
+import org.apache.bookkeeper.processor.Requests.ReadRequest;
+import org.apache.bookkeeper.processor.Requests.Request;
+import org.apache.bookkeeper.processor.ResponseContext;
+import org.apache.bookkeeper.processor.Responses.AddResponse;
+import org.apache.bookkeeper.processor.Responses.LedgerResponse;
+import org.apache.bookkeeper.processor.Responses.ReadResponse;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.GenericCallback;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.ReadEntryCallback;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.WriteCallback;
@@ -73,7 +74,7 @@ import com.stumbleupon.async.Callback;
  * has reconnect logic if a connection to a bookie fails.
  *
  */
-public class PerChannelBookieClient extends SimpleChannelHandler implements ChannelPipelineFactory, Callback<MiddlewareContext, MiddlewareContext> {
+public class PerChannelBookieClient extends SimpleChannelHandler implements ChannelPipelineFactory {
 
     static final Logger LOG = LoggerFactory.getLogger(PerChannelBookieClient.class);
 
@@ -85,7 +86,7 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
     ClientSocketChannelFactory channelFactory;
     OrderedSafeExecutor executor;
     private Timer readTimeoutTimer;
-    private final Middleware middleware;
+    private final RequestProcessor<RequestContext, ResponseContext> processor;
 
     ConcurrentHashMap<CompletionKey, AddCompletion> addCompletions = new ConcurrentHashMap<CompletionKey, AddCompletion>();
     ConcurrentHashMap<CompletionKey, ReadCompletion> readCompletions = new ConcurrentHashMap<CompletionKey, ReadCompletion>();
@@ -104,9 +105,8 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
     private volatile ConnectionState state;
     private final ClientConfiguration conf;
     
-    private final Callback<MiddlewareContext, MiddlewareContext> REQUEST_SENDER = new Callback<MiddlewareContext, MiddlewareContext>() {
-        
-        public MiddlewareContext call(final MiddlewareContext ctx) throws Exception {
+    private final Callback<RequestContext, RequestContext> REQUEST_SENDER = new Callback<RequestContext, RequestContext>() {
+        public RequestContext call(final RequestContext ctx) throws Exception {
             try {
                 ChannelFuture future = ctx.getChannel().write(ctx.getRequest());
                 future.addListener(new ChannelFutureListener() {
@@ -126,6 +126,26 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
                 LOG.warn("operation {} failed", ctx.getRequest(), e);
                 errorOutRequest(ctx.getRequest());
             }
+            return ctx;
+        }
+    };
+
+    private final Callback<ResponseContext, ResponseContext> RESPONSE_HANDLER = new Callback<ResponseContext, ResponseContext>() {
+        @Override
+        public ResponseContext call(ResponseContext ctx) throws Exception {
+            final LedgerResponse r = (LedgerResponse) ctx.getResponse();
+            executor.submitOrdered(r.getLedgerId(), new SafeRunnable() {
+                @Override
+                public void safeRun() {
+                    if (r instanceof AddResponse) {
+                        handleAddResponse((AddResponse) r);
+                    } else if (r instanceof ReadResponse) {
+                        handleReadResponse((ReadResponse) r);
+                    } else {
+                        LOG.error("Unexpected response : {}", r);
+                    }
+                }
+            });
             return ctx;
         }
     };
@@ -160,14 +180,14 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
         this.channelFactory = channelFactory;
         this.state = ConnectionState.DISCONNECTED;
         this.readTimeoutTimer = null;
-        Middlewares middlewares = new Middlewares();
-        middlewares.add(new ClientProtocolMiddleware());
+        ChainRequestProcessor<RequestContext, ResponseContext> processor = new ChainRequestProcessor<RequestContext, ResponseContext>();
+        processor.add(new ClientProtocolProcessor());
         try {
-            middlewares.initialize(conf);
+            processor.initialize(conf);
         } catch (IOException ie) {
-            throw new RuntimeException("Failed to initialize middlewares to process request/response : ", ie);
+            throw new RuntimeException("Failed to initialize processors to process request/response : ", ie);
         }
-        this.middleware = middlewares;
+        this.processor = processor;
     }
 
     private void connect() {
@@ -290,8 +310,8 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
         final int entrySize = toSend.readableBytes();
         final CompletionKey completionKey = new CompletionKey(ledgerId, entryId);
         addCompletions.put(completionKey, new AddCompletion(cb, entrySize, ctx));
-        final MiddlewareContext mwctx = new MiddlewareContext(r, null, channel);
-        middleware.processRequest(mwctx).addCallbacks(REQUEST_SENDER, new ErrorOutCallback(r));
+
+        sendRequest(r);
     }
 
     public void readEntryAndFenceLedger(final long ledgerId, byte[] masterKey,
@@ -305,8 +325,7 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
                 BookieProtocol.CURRENT_PROTOCOL_VERSION, ledgerId, entryId,
                 BookieProtocol.FLAG_DO_FENCING, masterKey);
 
-        final MiddlewareContext mwctx = new MiddlewareContext(r, null, channel);
-        middleware.processRequest(mwctx).addCallbacks(REQUEST_SENDER, new ErrorOutCallback(r));
+        sendRequest(r);
     }
 
     public void readEntry(final long ledgerId, final long entryId, ReadEntryCallback cb, Object ctx) {
@@ -318,8 +337,12 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
                 BookieProtocol.CURRENT_PROTOCOL_VERSION, ledgerId, entryId,
                 BookieProtocol.FLAG_NONE);
 
-        final MiddlewareContext mwctx = new MiddlewareContext(r, null, channel);
-        middleware.processRequest(mwctx).addCallbacks(REQUEST_SENDER, new ErrorOutCallback(r));
+        sendRequest(r);
+    }
+
+    private void sendRequest(Request r) {
+        final RequestContext reqCtx = new RequestContext(r, channel);
+        processor.processRequest(reqCtx).addCallbacks(REQUEST_SENDER, new ErrorOutCallback(r));
     }
 
     /**
@@ -335,9 +358,9 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
     public void close() {
         closeInternal(true);
         try {
-            this.middleware.uninitialize();
+            this.processor.uninitialize();
         } catch (IOException e) {
-            LOG.warn("Failed to uninitialize middlewares : ", e);
+            LOG.warn("Failed to uninitialize processors : ", e);
         }
     }
 
@@ -531,25 +554,7 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
             return;
         }
         final LedgerResponse r = (LedgerResponse) e.getMessage();
-        middleware.processResponse(new MiddlewareContext(null, r, e.getChannel())).addCallback(this);
-    }
-    
-    @Override
-    public MiddlewareContext call(MiddlewareContext ctx) throws Exception {
-        final LedgerResponse r = (LedgerResponse) ctx.getResponse();
-        executor.submitOrdered(r.getLedgerId(), new SafeRunnable() {
-            @Override
-            public void safeRun() {
-                if (r instanceof AddResponse) {
-                    handleAddResponse((AddResponse) r);
-                } else if (r instanceof ReadResponse) {
-                    handleReadResponse((ReadResponse) r);
-                } else {
-                    LOG.error("Unexpected response : {}", r);
-                }
-            }
-        });
-        return ctx;
+        processor.processResponse(new ResponseContext(r, e.getChannel())).addCallback(RESPONSE_HANDLER);
     }
 
     void handleAddResponse(AddResponse a) {

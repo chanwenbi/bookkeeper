@@ -23,18 +23,18 @@ package org.apache.bookkeeper.stats;
 import java.io.IOException;
 
 import org.apache.bookkeeper.conf.AbstractConfiguration;
-import org.apache.bookkeeper.middleware.Middleware;
-import org.apache.bookkeeper.middleware.MiddlewareContext;
-import org.apache.bookkeeper.middleware.Requests.AddRequest;
-import org.apache.bookkeeper.middleware.Requests.ReadRequest;
-import org.apache.bookkeeper.middleware.Requests.Request;
+import org.apache.bookkeeper.processor.Requests.AddRequest;
+import org.apache.bookkeeper.processor.Requests.ReadRequest;
+import org.apache.bookkeeper.processor.Requests.Request;
+import org.apache.bookkeeper.processor.ServerProcessorContext;
+import org.apache.bookkeeper.processor.ServerRequestProcessor;
 import org.apache.bookkeeper.proto.BKStats;
 import org.apache.bookkeeper.proto.BookieProtocol;
 import org.apache.bookkeeper.util.MathUtils;
 
 import com.stumbleupon.async.Deferred;
 
-public class StatsMiddleware implements Middleware {
+public class StatsProcessor implements ServerRequestProcessor {
 
     private final static Object OP_TIME_ATTR = new Object();
 
@@ -49,13 +49,13 @@ public class StatsMiddleware implements Middleware {
     }
 
     @Override
-    public Deferred<MiddlewareContext> processRequest(MiddlewareContext ctx) {
+    public Deferred<ServerProcessorContext> processRequest(ServerProcessorContext ctx) {
         ctx.setContextAttribute(OP_TIME_ATTR, MathUtils.now());
         return Deferred.fromResult(ctx);
     }
 
     @Override
-    public Deferred<MiddlewareContext> processResponse(MiddlewareContext ctx) {
+    public Deferred<ServerProcessorContext> processResponse(ServerProcessorContext ctx) {
         int statsType = requestType2StatsType(ctx.getRequest());
         int errorCode = ctx.getResponse().getErrorCode();
         if (BookieProtocol.EOK == errorCode) {

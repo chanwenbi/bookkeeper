@@ -24,8 +24,9 @@ import java.io.IOException;
 
 import org.apache.bookkeeper.client.BKException;
 import org.apache.bookkeeper.conf.AbstractConfiguration;
-import org.apache.bookkeeper.middleware.Middleware;
-import org.apache.bookkeeper.middleware.MiddlewareContext;
+import org.apache.bookkeeper.processor.ClientRequestProcessor;
+import org.apache.bookkeeper.processor.RequestContext;
+import org.apache.bookkeeper.processor.ResponseContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,9 +35,9 @@ import com.stumbleupon.async.Deferred;
 /**
  * Handle server-side error code to client-side error code conversion
  */
-public class ClientProtocolMiddleware implements Middleware {
+public class ClientProtocolProcessor implements ClientRequestProcessor {
 
-    private final static Logger LOG = LoggerFactory.getLogger(ClientProtocolMiddleware.class);
+    private final static Logger LOG = LoggerFactory.getLogger(ClientProtocolProcessor.class);
 
     @Override
     public void initialize(AbstractConfiguration conf) throws IOException {
@@ -47,12 +48,12 @@ public class ClientProtocolMiddleware implements Middleware {
     }
 
     @Override
-    public Deferred<MiddlewareContext> processRequest(MiddlewareContext ctx) {
+    public Deferred<RequestContext> processRequest(RequestContext ctx) {
         return Deferred.fromResult(ctx);
     }
 
     @Override
-    public Deferred<MiddlewareContext> processResponse(MiddlewareContext ctx) {
+    public Deferred<ResponseContext> processResponse(ResponseContext ctx) {
         int rc = BKException.Code.IllegalOpException;
         if (ctx.getResponse() instanceof BookieProtocol.BKAddResponse) {
             // convert to BKException code because thats what the uppper

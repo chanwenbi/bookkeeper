@@ -18,7 +18,7 @@
  * under the License.
  *
  */
-package org.apache.bookkeeper.middleware;
+package org.apache.bookkeeper.processor;
 
 import java.io.IOException;
 import java.util.LinkedList;
@@ -29,38 +29,39 @@ import org.apache.bookkeeper.conf.AbstractConfiguration;
 import com.stumbleupon.async.Callback;
 import com.stumbleupon.async.Deferred;
 
-public class Middlewares extends LinkedList<Middleware> implements Middleware {
+public class ChainRequestProcessor<ReqCtx extends ProcessorContext, RespCtx extends ProcessorContext> extends
+        LinkedList<RequestProcessor<ReqCtx, RespCtx>> implements RequestProcessor<ReqCtx, RespCtx> {
 
     private static final long serialVersionUID = 7100090967089090554L;
 
     @Override
     public void initialize(AbstractConfiguration conf) throws IOException {
-        for (Middleware mw : this) {
-            mw.initialize(conf);
+        for (RequestProcessor<ReqCtx, RespCtx> rp : this) {
+            rp.initialize(conf);
         }
     }
 
     @Override
     public void uninitialize() throws IOException {
-        for (Middleware mw : this) {
-            mw.uninitialize();
+        for (RequestProcessor<ReqCtx, RespCtx> rp : this) {
+            rp.uninitialize();
         }
     }
 
     @Override
-    public Deferred<MiddlewareContext> processRequest(MiddlewareContext ctx) {
-        Deferred<MiddlewareContext> result = new Deferred<MiddlewareContext>();
+    public Deferred<ReqCtx> processRequest(ReqCtx ctx) {
+        Deferred<ReqCtx> result = new Deferred<ReqCtx>();
         processRequest(listIterator(), ctx, result);
         return result;
     }
 
-    private Deferred<MiddlewareContext> processRequest(final ListIterator<Middleware> iter, MiddlewareContext ctx,
-            final Deferred<MiddlewareContext> result) {
+    private Deferred<ReqCtx> processRequest(final ListIterator<RequestProcessor<ReqCtx, RespCtx>> iter, ReqCtx ctx,
+            final Deferred<ReqCtx> result) {
         if (iter.hasNext()) {
-            final Middleware middle = iter.next();
-            middle.processRequest(ctx).addCallbacks(new Callback<MiddlewareContext, MiddlewareContext>() {
+            final RequestProcessor<ReqCtx, RespCtx> processor = iter.next();
+            processor.processRequest(ctx).addCallbacks(new Callback<ReqCtx, ReqCtx>() {
                 @Override
-                public MiddlewareContext call(MiddlewareContext ctx) throws Exception {
+                public ReqCtx call(ReqCtx ctx) throws Exception {
                     processRequest(iter, ctx, result);
                     return ctx;
                 }
@@ -80,19 +81,19 @@ public class Middlewares extends LinkedList<Middleware> implements Middleware {
     }
 
     @Override
-    public Deferred<MiddlewareContext> processResponse(MiddlewareContext ctx) {
-        Deferred<MiddlewareContext> result = new Deferred<MiddlewareContext>();
+    public Deferred<RespCtx> processResponse(RespCtx ctx) {
+        Deferred<RespCtx> result = new Deferred<RespCtx>();
         processResponse(listIterator(size()), ctx, result);
         return result;
     }
 
-    private Deferred<MiddlewareContext> processResponse(final ListIterator<Middleware> iter,
-            MiddlewareContext ctx, final Deferred<MiddlewareContext> result) {
+    private Deferred<RespCtx> processResponse(final ListIterator<RequestProcessor<ReqCtx, RespCtx>> iter, RespCtx ctx,
+            final Deferred<RespCtx> result) {
         if (iter.hasPrevious()) {
-            final Middleware middle = iter.previous();
-            middle.processResponse(ctx).addCallbacks(new Callback<MiddlewareContext, MiddlewareContext>() {
+            final RequestProcessor<ReqCtx, RespCtx> processor = iter.previous();
+            processor.processResponse(ctx).addCallbacks(new Callback<RespCtx, RespCtx>() {
                 @Override
-                public MiddlewareContext call(MiddlewareContext ctx) throws Exception {
+                public RespCtx call(RespCtx ctx) throws Exception {
                     processResponse(iter, ctx, result);
                     return ctx;
                 }

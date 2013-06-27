@@ -23,12 +23,13 @@ package org.apache.bookkeeper.security.token;
 import java.io.IOException;
 
 import org.apache.bookkeeper.conf.AbstractConfiguration;
-import org.apache.bookkeeper.middleware.Middleware;
-import org.apache.bookkeeper.middleware.MiddlewareContext;
+import org.apache.bookkeeper.processor.ClientRequestProcessor;
+import org.apache.bookkeeper.processor.RequestContext;
+import org.apache.bookkeeper.processor.ResponseContext;
 
 import com.stumbleupon.async.Deferred;
 
-public class ClientTokenAuthMiddleware implements Middleware {
+public class ClientTokenAuthProcessor implements ClientRequestProcessor {
 
     public static final String TOKEN_KEY = "authentication";
 
@@ -45,14 +46,14 @@ public class ClientTokenAuthMiddleware implements Middleware {
     }
 
     @Override
-    public Deferred<MiddlewareContext> processRequest(MiddlewareContext ctx) {
+    public Deferred<RequestContext> processRequest(RequestContext ctx) {
         // inject the token fields in the request header
         ctx.getRequest().setAttribute(TOKEN_KEY, tokenValue);
         return Deferred.fromResult(ctx);
     }
 
     @Override
-    public Deferred<MiddlewareContext> processResponse(MiddlewareContext ctx) {
+    public Deferred<ResponseContext> processResponse(ResponseContext ctx) {
         return Deferred.fromResult(ctx);
     }
 

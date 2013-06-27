@@ -18,23 +18,23 @@
  * under the License.
  *
  */
-package org.apache.bookkeeper.middleware;
-
-import java.nio.ByteBuffer;
+package org.apache.bookkeeper.processor;
 
 import org.jboss.netty.buffer.ChannelBuffer;
 
-public class Requests {
+public class Responses {
 
-    public static interface Request {
+    public static interface Response {
+        public int getErrorCode();
+
+        public void setErrorCode(int errCode);
 
         public String getAttribute(String attr);
 
         public void setAttribute(String attr, String value);
     }
 
-    public static interface LedgerRequest extends Request {
-
+    public static interface LedgerResponse extends Response {
         public long getLedgerId();
 
         public void setLedgerId(long ledgerId);
@@ -42,33 +42,16 @@ public class Requests {
         public long getEntryId();
 
         public void setEntryId(long entryId);
-
-        public boolean hasMasterKey();
-
-        public byte[] getMasterKey();
-
-        public void setMasterKey(byte[] masterKey);
-
     }
 
-    public static interface AddRequest extends LedgerRequest {
+    public static interface ReadResponse extends LedgerResponse {
+        public boolean hasData();
 
         public ChannelBuffer getDataAsChannelBuffer();
 
-        public ByteBuffer getDataAsByteBuffer();
-
         public void setData(ChannelBuffer data);
-
-        public boolean isRecoveryAdd();
-
-        public void setRecoveryAdd();
     }
 
-    public static interface ReadRequest extends LedgerRequest {
-
-        public boolean isFencingRequest();
-
-        public void enableFencing();
+    public static interface AddResponse extends LedgerResponse {
     }
-
 }

@@ -21,10 +21,10 @@
 package org.apache.bookkeeper.proto;
 
 import org.apache.bookkeeper.conf.ServerConfiguration;
-import org.apache.bookkeeper.middleware.Middleware;
-import org.apache.bookkeeper.middleware.MiddlewareContext;
-import org.apache.bookkeeper.middleware.Requests.Request;
-import org.apache.bookkeeper.middleware.Responses.Response;
+import org.apache.bookkeeper.processor.RequestProcessor;
+import org.apache.bookkeeper.processor.Requests.Request;
+import org.apache.bookkeeper.processor.Responses.Response;
+import org.apache.bookkeeper.processor.ServerProcessorContext;
 import org.jboss.netty.channel.Channel;
 import org.jboss.netty.channel.ChannelHandlerContext;
 import org.jboss.netty.channel.ChannelStateEvent;
@@ -40,14 +40,38 @@ import com.stumbleupon.async.Callback;
 /**
  * Serverside handler for bookkeeper requests
  */
-class BookieRequestHandler extends SimpleChannelHandler implements Callback<MiddlewareContext, MiddlewareContext> {
+class BookieRequestHandler extends SimpleChannelHandler {
 
     static Logger LOG = LoggerFactory.getLogger(BookieRequestHandler.class);
-    private final Middleware middleware;
+
+    private final Callback<ServerProcessorContext, ServerProcessorContext> REQUEST_HANDLER =
+            new Callback<ServerProcessorContext, ServerProcessorContext>() {
+
+        @Override
+        public ServerProcessorContext call(ServerProcessorContext ctx) throws Exception {
+            processor.processResponse(ctx).addCallbacks(RESPONSE_HANDLER, ctx);
+            return ctx;
+        }
+
+    };
+
+    private final Callback<ServerProcessorContext, ServerProcessorContext> RESPONSE_HANDLER =
+            new Callback<ServerProcessorContext, ServerProcessorContext>() {
+
+        @Override
+        public ServerProcessorContext call(ServerProcessorContext ctx) throws Exception {
+            ctx.getChannel().write(ctx.getResponse());
+            return ctx;
+        }
+
+    };
+
+    private final RequestProcessor<ServerProcessorContext, ServerProcessorContext> processor;
     private final ChannelGroup allChannels;
 
-    BookieRequestHandler(ServerConfiguration conf, Middleware middleware, ChannelGroup allChannels) {
-        this.middleware = middleware;
+    BookieRequestHandler(ServerConfiguration conf,
+            RequestProcessor<ServerProcessorContext, ServerProcessorContext> processor, ChannelGroup allChannels) {
+        this.processor = processor;
         this.allChannels = allChannels;
     }
 
@@ -87,14 +111,8 @@ class BookieRequestHandler extends SimpleChannelHandler implements Callback<Midd
         Channel c = ctx.getChannel();
         Request request = r;
         Response response = ResponseBuilder.buildErrorResponse(BookieProtocol.EBADREQ, r);
-        MiddlewareContext mwctx = new MiddlewareContext(request, response, c);
-        middleware.processRequest(mwctx).addCallbacks(this, mwctx);
-    }
-
-    @Override
-    public MiddlewareContext call(MiddlewareContext ctx) throws Exception {
-        ctx.getChannel().write(ctx.getResponse());
-        return ctx;
+        ServerProcessorContext reqCtx = new ServerProcessorContext(request, response, c);
+        processor.processRequest(reqCtx).addCallbacks(REQUEST_HANDLER, reqCtx);
     }
 
 }

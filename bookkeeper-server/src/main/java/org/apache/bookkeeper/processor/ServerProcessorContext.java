@@ -18,30 +18,23 @@
  * under the License.
  *
  */
-package org.apache.bookkeeper.middleware;
+package org.apache.bookkeeper.processor;
 
-import java.util.HashMap;
-import java.util.Map;
-
-import org.apache.bookkeeper.middleware.Requests.Request;
-import org.apache.bookkeeper.middleware.Responses.Response;
+import org.apache.bookkeeper.processor.Requests.Request;
+import org.apache.bookkeeper.processor.Responses.Response;
 import org.jboss.netty.channel.Channel;
 
 import com.stumbleupon.async.Callback;
 
-public class MiddlewareContext implements Callback<Exception, Exception> {
+public class ServerProcessorContext extends ProcessorContext implements Callback<Exception, Exception> {
 
-    // channel interact with request/response
-    protected final Channel channel;
-    protected final Map<Object, Object> ctxAttributes;
     protected final Request request;
     protected final Response response;
 
-    public MiddlewareContext(Request request, Response response, Channel channel) {
+    public ServerProcessorContext(Request request, Response response, Channel channel) {
+        super(channel);
         this.request = request;
         this.response = response;
-        this.channel = channel;
-        this.ctxAttributes = new HashMap<Object, Object>();
     }
 
     public Request getRequest() {
@@ -50,18 +43,6 @@ public class MiddlewareContext implements Callback<Exception, Exception> {
 
     public Response getResponse() {
         return response;
-    }
-
-    public Channel getChannel() {
-        return this.channel;
-    }
-
-    public Object getContextAttribute(Object attr) {
-        return ctxAttributes.get(attr);
-    }
-
-    public void setContextAttribute(Object attr, Object value) {
-        ctxAttributes.put(attr, value);
     }
 
     @Override

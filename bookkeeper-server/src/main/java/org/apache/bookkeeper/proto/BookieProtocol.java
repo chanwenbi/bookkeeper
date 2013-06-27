@@ -23,12 +23,12 @@ package org.apache.bookkeeper.proto;
 
 import java.nio.ByteBuffer;
 
-import org.apache.bookkeeper.middleware.Requests.AddRequest;
-import org.apache.bookkeeper.middleware.Requests.LedgerRequest;
-import org.apache.bookkeeper.middleware.Requests.ReadRequest;
-import org.apache.bookkeeper.middleware.Responses.AddResponse;
-import org.apache.bookkeeper.middleware.Responses.LedgerResponse;
-import org.apache.bookkeeper.middleware.Responses.ReadResponse;
+import org.apache.bookkeeper.processor.Requests.AddRequest;
+import org.apache.bookkeeper.processor.Requests.LedgerRequest;
+import org.apache.bookkeeper.processor.Requests.ReadRequest;
+import org.apache.bookkeeper.processor.Responses.AddResponse;
+import org.apache.bookkeeper.processor.Responses.LedgerResponse;
+import org.apache.bookkeeper.processor.Responses.ReadResponse;
 import org.jboss.netty.buffer.ChannelBuffer;
 
 /**

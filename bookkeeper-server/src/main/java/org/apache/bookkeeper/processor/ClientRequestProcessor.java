@@ -18,22 +18,7 @@
  * under the License.
  *
  */
-package org.apache.bookkeeper.middleware;
+package org.apache.bookkeeper.processor;
 
-import java.io.IOException;
-
-import org.apache.bookkeeper.conf.AbstractConfiguration;
-
-import com.stumbleupon.async.Deferred;
-
-
-public interface Middleware {
-
-    public void initialize(AbstractConfiguration conf) throws IOException;
-
-    public void uninitialize() throws IOException;
-
-    public Deferred<MiddlewareContext> processRequest(MiddlewareContext ctx);
-
-    public Deferred<MiddlewareContext> processResponse(MiddlewareContext ctx);
+public interface ClientRequestProcessor extends RequestProcessor<RequestContext, ResponseContext> {
 }

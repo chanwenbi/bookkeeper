@@ -27,11 +27,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.bookkeeper.bookie.Bookie;
 import org.apache.bookkeeper.bookie.BookieException;
-import org.apache.bookkeeper.bookie.BookieMiddleware;
+import org.apache.bookkeeper.bookie.SimpleBookieProcessor;
 import org.apache.bookkeeper.conf.ServerConfiguration;
-import org.apache.bookkeeper.middleware.Middleware;
-import org.apache.bookkeeper.middleware.Middlewares;
-import org.apache.bookkeeper.stats.StatsMiddleware;
+import org.apache.bookkeeper.processor.ChainRequestProcessor;
+import org.apache.bookkeeper.processor.RequestProcessor;
+import org.apache.bookkeeper.processor.ServerProcessorContext;
+import org.apache.bookkeeper.stats.StatsProcessor;
 import org.apache.zookeeper.KeeperException;
 import org.jboss.netty.bootstrap.ServerBootstrap;
 import org.jboss.netty.channel.Channel;
@@ -61,7 +62,7 @@ class BookieNettyServer {
     final ServerConfiguration conf;
     final ChannelFactory serverChannelFactory;
     final Bookie bookie;
-    final Middleware middleware;
+    final RequestProcessor<ServerProcessorContext, ServerProcessorContext> processor;
     final ChannelGroup allChannels = new CleanupChannelGroup();
     final AtomicBoolean isRunning = new AtomicBoolean(false);
     Object suspensionLock = new Object();
@@ -73,7 +74,7 @@ class BookieNettyServer {
             throws IOException, KeeperException, InterruptedException, BookieException  {
         this.conf = conf;
         this.bookie = bookie;
-        this.middleware = buildMiddlewares(conf, bookie);
+        this.processor = buildRequestProcessor(conf, bookie);
 
         ThreadFactoryBuilder tfb = new ThreadFactoryBuilder();
         String base = "bookie-" + conf.getBookiePort() + "-netty";
@@ -88,18 +89,20 @@ class BookieNettyServer {
         }
     }
 
-    private Middleware buildMiddlewares(ServerConfiguration conf, Bookie bookie) throws IOException {
-        Middlewares middlewares = new Middlewares();
+    private RequestProcessor<ServerProcessorContext, ServerProcessorContext> buildRequestProcessor(
+            ServerConfiguration conf, Bookie bookie) throws IOException {
+        ChainRequestProcessor<ServerProcessorContext, ServerProcessorContext> processor =
+                new ChainRequestProcessor<ServerProcessorContext, ServerProcessorContext>();
         // handle protocol backward compatibility
-        middlewares.addLast(new ServerProtocolMiddleware());
+        processor.addLast(new ServerProtocolProcessor());
         // handle statistics
         if (conf.isStatisticsEnabled()) {
-            middlewares.addLast(new StatsMiddleware());
+            processor.addLast(new StatsProcessor());
         }
         // handle bookie add/read
-        middlewares.addLast(new BookieMiddleware(bookie));
-        middlewares.initialize(conf);
-        return middlewares;
+        processor.addLast(new SimpleBookieProcessor(bookie));
+        processor.initialize(conf);
+        return processor;
     }
 
     boolean isRunning() {
@@ -155,7 +158,7 @@ class BookieNettyServer {
 
             pipeline.addLast("bookieProtoDecoder", new BookieProtoEncoding.RequestDecoder());
             pipeline.addLast("bookieProtoEncoder", new BookieProtoEncoding.ResponseEncoder());
-            pipeline.addLast("bookieRequestHandler", new BookieRequestHandler(conf, middleware, allChannels));
+            pipeline.addLast("bookieRequestHandler", new BookieRequestHandler(conf, processor, allChannels));
             return pipeline;
         }
     }

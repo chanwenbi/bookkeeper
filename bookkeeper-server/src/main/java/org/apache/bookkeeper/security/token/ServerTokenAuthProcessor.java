@@ -20,18 +20,18 @@
  */
 package org.apache.bookkeeper.security.token;
 
-import static org.apache.bookkeeper.security.token.ClientTokenAuthMiddleware.TOKEN_KEY;
-
 import java.io.IOException;
 
 import org.apache.bookkeeper.conf.AbstractConfiguration;
-import org.apache.bookkeeper.middleware.Middleware;
-import org.apache.bookkeeper.middleware.MiddlewareContext;
+import org.apache.bookkeeper.processor.ServerProcessorContext;
+import org.apache.bookkeeper.processor.ServerRequestProcessor;
 import org.apache.bookkeeper.proto.BookieProtocol;
 
 import com.stumbleupon.async.Deferred;
 
-public class ServerTokenAuthMiddleware implements Middleware {
+public class ServerTokenAuthProcessor implements ServerRequestProcessor {
+
+    public static final String TOKEN_KEY = "authentication";
 
     static class InvalidTokenException extends Exception {
         private static final long serialVersionUID = 5864613645425492331L;
@@ -55,7 +55,7 @@ public class ServerTokenAuthMiddleware implements Middleware {
     }
 
     @Override
-    public Deferred<MiddlewareContext> processRequest(MiddlewareContext ctx) {
+    public Deferred<ServerProcessorContext> processRequest(ServerProcessorContext ctx) {
         String tokenValue = ctx.getRequest().getAttribute(TOKEN_KEY);
         if (isValidToken(tokenValue)) {
             return Deferred.fromResult(ctx);
@@ -66,7 +66,7 @@ public class ServerTokenAuthMiddleware implements Middleware {
     }
 
     @Override
-    public Deferred<MiddlewareContext> processResponse(MiddlewareContext ctx) {
+    public Deferred<ServerProcessorContext> processResponse(ServerProcessorContext ctx) {
         return Deferred.fromResult(ctx);
     }
 

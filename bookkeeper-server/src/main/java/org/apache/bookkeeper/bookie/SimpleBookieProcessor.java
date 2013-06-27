@@ -29,12 +29,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import org.apache.bookkeeper.conf.AbstractConfiguration;
-import org.apache.bookkeeper.middleware.Middleware;
-import org.apache.bookkeeper.middleware.MiddlewareContext;
-import org.apache.bookkeeper.middleware.Requests.AddRequest;
-import org.apache.bookkeeper.middleware.Requests.ReadRequest;
-import org.apache.bookkeeper.middleware.Requests.Request;
-import org.apache.bookkeeper.middleware.Responses.ReadResponse;
+import org.apache.bookkeeper.processor.Requests.AddRequest;
+import org.apache.bookkeeper.processor.Requests.ReadRequest;
+import org.apache.bookkeeper.processor.Requests.Request;
+import org.apache.bookkeeper.processor.Responses.ReadResponse;
+import org.apache.bookkeeper.processor.ServerProcessorContext;
+import org.apache.bookkeeper.processor.ServerRequestProcessor;
 import org.apache.bookkeeper.proto.BookieProtocol;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks;
 import org.jboss.netty.buffer.ChannelBuffers;
@@ -43,13 +43,13 @@ import org.slf4j.LoggerFactory;
 
 import com.stumbleupon.async.Deferred;
 
-public class BookieMiddleware implements Middleware, BookkeeperInternalCallbacks.WriteCallback {
+public class SimpleBookieProcessor implements ServerRequestProcessor, BookkeeperInternalCallbacks.WriteCallback {
 
-    private final static Logger LOG = LoggerFactory.getLogger(BookieMiddleware.class);
+    private final static Logger LOG = LoggerFactory.getLogger(SimpleBookieProcessor.class);
 
     private final Bookie bookie;
 
-    public BookieMiddleware(Bookie bookie) {
+    public SimpleBookieProcessor(Bookie bookie) {
         this.bookie = bookie;
     }
 
@@ -63,8 +63,8 @@ public class BookieMiddleware implements Middleware, BookkeeperInternalCallbacks
     }
 
     @Override
-    public Deferred<MiddlewareContext> processRequest(MiddlewareContext ctx) {
-        Deferred<MiddlewareContext> result = new Deferred<MiddlewareContext>();
+    public Deferred<ServerProcessorContext> processRequest(ServerProcessorContext ctx) {
+        Deferred<ServerProcessorContext> result = new Deferred<ServerProcessorContext>();
         Request request = ctx.getRequest();
         if (request instanceof AddRequest) {
             handleAdd((AddRequest) request, ctx, result);
@@ -77,7 +77,7 @@ public class BookieMiddleware implements Middleware, BookkeeperInternalCallbacks
         return result;
     }
 
-    private void handleAdd(AddRequest add, MiddlewareContext ctx, Deferred<MiddlewareContext> result) {
+    private void handleAdd(AddRequest add, ServerProcessorContext ctx, Deferred<ServerProcessorContext> result) {
         if (bookie.isReadOnly()) {
             LOG.warn("BookieServer is running as readonly mode," + " so rejecting the request from the client!");
             ctx.getResponse().setErrorCode(BookieProtocol.EREADONLY);
@@ -108,7 +108,7 @@ public class BookieMiddleware implements Middleware, BookkeeperInternalCallbacks
         }
     }
 
-    private void handleRead(ReadRequest read, MiddlewareContext ctx, Deferred<MiddlewareContext> result) {
+    private void handleRead(ReadRequest read, ServerProcessorContext ctx, Deferred<ServerProcessorContext> result) {
         LOG.debug("Received new read request: {}", read);
         int errorCode = BookieProtocol.EIO;
         ByteBuffer data = null;
@@ -190,16 +190,16 @@ public class BookieMiddleware implements Middleware, BookkeeperInternalCallbacks
     }
 
     @Override
-    public Deferred<MiddlewareContext> processResponse(MiddlewareContext ctx) {
+    public Deferred<ServerProcessorContext> processResponse(ServerProcessorContext ctx) {
         // nope
         return Deferred.fromResult(ctx);
     }
 
     class AddCtx {
-        final MiddlewareContext ctx;
-        final Deferred<MiddlewareContext> result;
+        final ServerProcessorContext ctx;
+        final Deferred<ServerProcessorContext> result;
 
-        AddCtx(MiddlewareContext ctx, Deferred<MiddlewareContext> result) {
+        AddCtx(ServerProcessorContext ctx, Deferred<ServerProcessorContext> result) {
             this.ctx = ctx;
             this.result = result;
         }
