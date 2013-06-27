@@ -195,7 +195,7 @@ public class SimpleBookieProcessor implements ServerRequestProcessor, Bookkeeper
         return Deferred.fromResult(ctx);
     }
 
-    class AddCtx {
+    static class AddCtx {
         final ServerProcessorContext ctx;
         final Deferred<ServerProcessorContext> result;
 
