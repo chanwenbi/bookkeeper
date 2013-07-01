@@ -27,6 +27,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FilenameFilter;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -350,9 +351,8 @@ public class Bookie extends Thread {
         if (iface == null) {
             iface = "default";
         }
-        BookieSocketAddress addr = new BookieSocketAddress(
-                DNS.getDefaultHost(iface),
-                conf.getBookiePort());
+        InetSocketAddress inetAddr = new InetSocketAddress(DNS.getDefaultHost(iface), conf.getBookiePort());
+        BookieSocketAddress addr = new BookieSocketAddress(inetAddr.getAddress().getHostAddress(), conf.getBookiePort());
         if (addr.getSocketAddress().getAddress().isLoopbackAddress()
             && !conf.getAllowLoopback()) {
             throw new UnknownHostException("Trying to listen on loopback address, "
