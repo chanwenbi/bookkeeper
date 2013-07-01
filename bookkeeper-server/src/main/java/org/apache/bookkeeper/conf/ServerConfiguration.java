@@ -48,6 +48,7 @@ public class ServerConfiguration extends AbstractConfiguration {
     protected final static String MAX_BACKUP_JOURNALS = "journalMaxBackups";
     // Bookie Parameters
     protected final static String BOOKIE_PORT = "bookiePort";
+    protected final static String BOOKIE_SSL_PORT = "bookieSSLPort";
     protected final static String LISTENING_INTERFACE = "listeningInterface";
     protected final static String ALLOW_LOOPBACK = "allowLoopback";
 
@@ -283,6 +284,27 @@ public class ServerConfiguration extends AbstractConfiguration {
      */
     public ServerConfiguration setBookiePort(int port) {
         this.setProperty(BOOKIE_PORT, Integer.toString(port));
+        return this;
+    }
+
+    /**
+     * Get bookie ssl port that bookie server listen on
+     *
+     * @return bookie port
+     */
+    public int getBookieSSLPort() {
+        return this.getInt(BOOKIE_SSL_PORT, 3182);
+    }
+
+    /**
+     * Set new bookie ssl port that bookie server listen on
+     *
+     * @param port
+     *          SSL Port to listen on
+     * @return server configuration
+     */
+    public ServerConfiguration setBookieSSLPort(int port) {
+        this.setProperty(BOOKIE_SSL_PORT, port);
         return this;
     }
 

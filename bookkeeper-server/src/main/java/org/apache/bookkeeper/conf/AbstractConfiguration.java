@@ -19,15 +19,14 @@ package org.apache.bookkeeper.conf;
 
 import java.net.URL;
 
+import org.apache.bookkeeper.meta.LedgerManagerFactory;
+import org.apache.bookkeeper.ssl.SSLContextFactory;
+import org.apache.bookkeeper.util.ReflectionUtils;
 import org.apache.commons.configuration.CompositeConfiguration;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.configuration.PropertiesConfiguration;
 import org.apache.commons.configuration.SystemConfiguration;
-
-import org.apache.bookkeeper.meta.LedgerManagerFactory;
-import org.apache.bookkeeper.util.ReflectionUtils;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,6 +56,9 @@ public abstract class AbstractConfiguration extends CompositeConfiguration {
     // Metastore settings, only being used when LEDGER_MANAGER_FACTORY_CLASS is MSLedgerManagerFactory
     protected final static String METASTORE_IMPL_CLASS = "metastoreImplClass";
     protected final static String METASTORE_MAX_ENTRIES_PER_SCAN = "metastoreMaxEntriesPerScan";
+
+    // SSL Settings
+    protected final static String SSL_CONTEXT_FACTORY_CLASS = "sslContextFactoryClass";
 
     protected AbstractConfiguration() {
         super();
@@ -233,5 +235,35 @@ public abstract class AbstractConfiguration extends CompositeConfiguration {
      */
     public void setMetastoreMaxEntriesPerScan(int maxEntries) {
         setProperty(METASTORE_MAX_ENTRIES_PER_SCAN, maxEntries);
+    }
+
+    /**
+     * Get the ssl context factory to use. If no ssl context factory specific, return null.
+     * If invalid ssl context factory returned, return null.
+     *
+     * @return ssl context factory to use.
+     */
+    public Class<? extends SSLContextFactory> getSSLContextFactoryClass() {
+        try {
+            return ReflectionUtils.getClass(this, SSL_CONTEXT_FACTORY_CLASS, null, SSLContextFactory.class,
+                    defaultLoader);
+        } catch (ConfigurationException e) {
+            LOG.warn("Fail to load ssl context factory, so disable SSL.", e);
+            return null;
+        }
+    }
+
+    /**
+     * Set the ssl context factory to use.
+     *
+     * @param factoryCls
+     *          SSL Context Factory Class
+     */
+    public void setSSLContextFactoryClass(Class<? extends SSLContextFactory> factoryCls) {
+        if (null != factoryCls) {
+            setProperty(SSL_CONTEXT_FACTORY_CLASS, factoryCls.getName());
+        } else {
+            setProperty(SSL_CONTEXT_FACTORY_CLASS, null);
+        }
     }
 }

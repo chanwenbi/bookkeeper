@@ -18,6 +18,7 @@
 package org.apache.bookkeeper.proto;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.util.ArrayDeque;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -29,6 +30,7 @@ import org.apache.bookkeeper.net.BookieSocketAddress;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.GenericCallback;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.ReadEntryCallback;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.WriteCallback;
+import org.apache.bookkeeper.ssl.SSLContextFactory;
 import org.apache.bookkeeper.util.MathUtils;
 import org.apache.bookkeeper.util.OrderedSafeExecutor;
 import org.apache.bookkeeper.util.SafeRunnable;
@@ -50,6 +52,7 @@ import org.jboss.netty.handler.codec.frame.CorruptedFrameException;
 import org.jboss.netty.handler.codec.frame.LengthFieldBasedFrameDecoder;
 import org.jboss.netty.handler.codec.frame.LengthFieldPrepender;
 import org.jboss.netty.handler.codec.frame.TooLongFrameException;
+import org.jboss.netty.handler.ssl.SslHandler;
 import org.jboss.netty.handler.timeout.ReadTimeoutException;
 import org.jboss.netty.handler.timeout.ReadTimeoutHandler;
 import org.jboss.netty.util.HashedWheelTimer;
@@ -74,6 +77,7 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
     ClientSocketChannelFactory channelFactory;
     OrderedSafeExecutor executor;
     private Timer readTimeoutTimer;
+    private final SSLContextFactory sslContextFactory;
 
     ConcurrentHashMap<CompletionKey, AddCompletion> addCompletions = new ConcurrentHashMap<CompletionKey, AddCompletion>();
     ConcurrentHashMap<CompletionKey, ReadCompletion> readCompletions = new ConcurrentHashMap<CompletionKey, ReadCompletion>();
@@ -87,17 +91,74 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
 
     private enum ConnectionState {
         DISCONNECTED, CONNECTING, CONNECTED, CLOSED
-            };
+    };
 
     private volatile ConnectionState state;
     private final ClientConfiguration conf;
 
+    class ConnectionFutureListener implements ChannelFutureListener {
+
+        final boolean sslHandshake;
+
+        ConnectionFutureListener(boolean sslHandshake) {
+            this.sslHandshake = sslHandshake;
+        }
+
+        @Override
+        public void operationComplete(ChannelFuture future) throws Exception {
+            int rc;
+            Queue<GenericCallback<Void>> oldPendingOps;
+
+            synchronized (PerChannelBookieClient.this) {
+                if (future.isSuccess() && state == ConnectionState.CONNECTING) {
+                    if (sslHandshake) {
+                        LOG.info("Successfully established ssl connectiong to bookie: {}", future.getChannel());
+                    } else {
+                        LOG.info("Successfully connected to bookie: {}", future.getChannel());
+                    }
+                    if (!sslHandshake && null != sslContextFactory) {
+                        // return here, since we need ssl handshake before mark the channel as connected.
+                        return;
+                    }
+                    rc = BKException.Code.OK;
+                    channel = future.getChannel();
+                    state = ConnectionState.CONNECTED;
+                } else if (future.isSuccess()
+                        && (state == ConnectionState.CLOSED || state == ConnectionState.DISCONNECTED)) {
+                    LOG.error("Closed before connection completed, clean up: " + addr);
+                    future.getChannel().close();
+                    rc = BKException.Code.BookieHandleNotAvailableException;
+                    channel = null;
+                } else {
+                    LOG.error("Could not connect to bookie: " + addr);
+                    rc = BKException.Code.BookieHandleNotAvailableException;
+                    channel = null;
+                    if (state != ConnectionState.CLOSED) {
+                        state = ConnectionState.DISCONNECTED;
+                    }
+                }
+
+                // trick to not do operations under the lock, take the list
+                // of pending ops and assign it to a new variable, while
+                // emptying the pending ops by just assigning it to a new
+                // list
+                oldPendingOps = pendingOps;
+                pendingOps = new ArrayDeque<GenericCallback<Void>>();
+            }
+
+            for (GenericCallback<Void> pendingOp : oldPendingOps) {
+                pendingOp.operationComplete(rc, null);
+            }
+        }
+    }
+
     public PerChannelBookieClient(OrderedSafeExecutor executor, ClientSocketChannelFactory channelFactory,
                                   BookieSocketAddress addr, AtomicLong totalBytesOutstanding) {
-        this(new ClientConfiguration(), executor, channelFactory, addr, totalBytesOutstanding);
+        this(new ClientConfiguration(), executor, channelFactory, null, addr, totalBytesOutstanding);
     }
-            
-    public PerChannelBookieClient(ClientConfiguration conf, OrderedSafeExecutor executor, ClientSocketChannelFactory channelFactory,
+
+    public PerChannelBookieClient(ClientConfiguration conf, OrderedSafeExecutor executor,
+                                  ClientSocketChannelFactory channelFactory, SSLContextFactory sslContextFactory,
                                   BookieSocketAddress addr, AtomicLong totalBytesOutstanding) {
         this.conf = conf;
         this.addr = addr;
@@ -106,6 +167,7 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
         this.channelFactory = channelFactory;
         this.state = ConnectionState.DISCONNECTED;
         this.readTimeoutTimer = null;
+        this.sslContextFactory = null != sslContextFactory && addr.isSSLEnabled() ? sslContextFactory : null;
     }
 
     private void connect() {
@@ -118,49 +180,10 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
         bootstrap.setOption("tcpNoDelay", conf.getClientTcpNoDelay());
         bootstrap.setOption("keepAlive", true);
 
-        ChannelFuture future = bootstrap.connect(addr.getSocketAddress());
+        InetSocketAddress address = null == sslContextFactory ? addr.getSocketAddress() : addr.getSSLSocketAddress();
+        ChannelFuture future = bootstrap.connect(address);
 
-        future.addListener(new ChannelFutureListener() {
-            @Override
-            public void operationComplete(ChannelFuture future) throws Exception {
-                int rc;
-                Queue<GenericCallback<Void>> oldPendingOps;
-
-                synchronized (PerChannelBookieClient.this) {
-
-                    if (future.isSuccess() && state == ConnectionState.CONNECTING) {
-                        LOG.info("Successfully connected to bookie: " + addr);
-                        rc = BKException.Code.OK;
-                        channel = future.getChannel();
-                        state = ConnectionState.CONNECTED;
-                    } else if (future.isSuccess() && (state == ConnectionState.CLOSED
-                                                      || state == ConnectionState.DISCONNECTED)) {
-                        LOG.error("Closed before connection completed, clean up: " + addr);
-                        future.getChannel().close();
-                        rc = BKException.Code.BookieHandleNotAvailableException;
-                        channel = null;
-                    } else {
-                        LOG.error("Could not connect to bookie: " + addr);
-                        rc = BKException.Code.BookieHandleNotAvailableException;
-                        channel = null;
-                        if (state != ConnectionState.CLOSED) {
-                            state = ConnectionState.DISCONNECTED;
-                        }
-                    }
-
-                    // trick to not do operations under the lock, take the list
-                    // of pending ops and assign it to a new variable, while
-                    // emptying the pending ops by just assigning it to a new
-                    // list
-                    oldPendingOps = pendingOps;
-                    pendingOps = new ArrayDeque<GenericCallback<Void>>();
-                }
-
-                for (GenericCallback<Void> pendingOp : oldPendingOps) {
-                    pendingOp.operationComplete(rc, null);
-                }
-            }
-        });
+        future.addListener(new ConnectionFutureListener(false));
     }
 
     void connectIfNeededAndDoOp(GenericCallback<Void> op) {
@@ -422,6 +445,10 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
             readTimeoutTimer = new HashedWheelTimer();
         }
 
+        if (null != sslContextFactory) {
+            pipeline.addLast("ssl", new SslHandler(sslContextFactory.getEngine()));
+        }
+
         pipeline.addLast("readTimeout", new ReadTimeoutHandler(readTimeoutTimer, 
                                                                conf.getReadTimeout()));
         pipeline.addLast("lengthbasedframedecoder", new LengthFieldBasedFrameDecoder(MAX_FRAME_LENGTH, 0, 4, 0, 4));
@@ -432,6 +459,14 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
 
         pipeline.addLast("mainhandler", this);
         return pipeline;
+    }
+
+    @Override
+    public void channelConnected(ChannelHandlerContext ctx, ChannelStateEvent e) throws Exception {
+        if (null != sslContextFactory) {
+            LOG.debug("Initiating SSL handshake to {}", ctx.getChannel());
+            ctx.getPipeline().get(SslHandler.class).handshake().addListener(new ConnectionFutureListener(true));
+        }
     }
 
     /**

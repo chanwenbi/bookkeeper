@@ -103,8 +103,7 @@ public class BookieInitializationTest {
                 .setLedgerDirNames(new String[] { tmpDir.getPath() });
 
         final String bkRegPath = conf.getZkAvailableBookiesPath() + "/"
-                + InetAddress.getLocalHost().getHostAddress() + ":"
-                + conf.getBookiePort();
+                + Bookie.getBookieAddress(conf);
 
         MockBookie b = new MockBookie(conf);
         b.zk = zkc;
@@ -169,8 +168,7 @@ public class BookieInitializationTest {
                         new String[] { tmpDir.getPath() });
 
         String bkRegPath = conf.getZkAvailableBookiesPath() + "/"
-                + InetAddress.getLocalHost().getHostAddress() + ":"
-                + conf.getBookiePort();
+                + Bookie.getBookieAddress(conf);
 
         MockBookie b = new MockBookie(conf);
         b.zk = zkc;

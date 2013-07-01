@@ -37,7 +37,9 @@ import org.apache.bookkeeper.net.BookieSocketAddress;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.GenericCallback;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.ReadEntryCallback;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.WriteCallback;
+import org.apache.bookkeeper.ssl.SSLContextFactory;
 import org.apache.bookkeeper.util.OrderedSafeExecutor;
+import org.apache.bookkeeper.util.ReflectionUtils;
 import org.apache.bookkeeper.util.SafeRunnable;
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.buffer.ChannelBuffers;
@@ -63,6 +65,7 @@ public class BookieClient {
     private final ClientConfiguration conf;
     private volatile boolean closed;
     private ReentrantReadWriteLock closeLock;
+    private final SSLContextFactory sslContextFactory;
 
     public BookieClient(ClientConfiguration conf, ClientSocketChannelFactory channelFactory, OrderedSafeExecutor executor) {
         this.conf = conf;
@@ -70,6 +73,27 @@ public class BookieClient {
         this.executor = executor;
         this.closed = false;
         this.closeLock = new ReentrantReadWriteLock();
+        this.sslContextFactory = instantiateSSLContextFactory(conf);
+    }
+
+    private static SSLContextFactory instantiateSSLContextFactory(ClientConfiguration conf) {
+        Class<? extends SSLContextFactory> sslContextFactoryCls = conf.getSSLContextFactoryClass();
+        SSLContextFactory sslContextFactory = null;
+        if (null != sslContextFactoryCls) {
+            try {
+                sslContextFactory = ReflectionUtils.newInstance(sslContextFactoryCls);
+                if (!sslContextFactory.isClient()) {
+                    LOG.warn("Load a server ssl context factory in client side, disable ssl...");
+                    sslContextFactory = null;
+                } else {
+                    sslContextFactory.initialize(conf);
+                }
+            } catch (Throwable t) {
+                LOG.warn("Failed to load ssl context factory, disable ssl : ", t);
+                sslContextFactory = null;
+            }
+        }
+        return sslContextFactory;
     }
 
     public PerChannelBookieClient lookupClient(BookieSocketAddress addr) {
@@ -81,7 +105,8 @@ public class BookieClient {
                 if (closed) {
                     return null;
                 }
-                channel = new PerChannelBookieClient(conf, executor, channelFactory, addr, totalBytesOutstanding);
+                channel = new PerChannelBookieClient(conf, executor, channelFactory, sslContextFactory, addr,
+                        totalBytesOutstanding);
                 PerChannelBookieClient prevChannel = channels.putIfAbsent(addr, channel);
                 if (prevChannel != null) {
                     channel = prevChannel;

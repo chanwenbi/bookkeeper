@@ -149,7 +149,8 @@ public class ReadOnlyBookieTest extends BookKeeperClusterTestCase {
 
     private void startNewBookieWithMultipleLedgerDirs(int numOfLedgerDirs)
             throws Exception {
-        ServerConfiguration conf = bsConfs.get(1);
+        int newPort = PortManager.nextFreePort();
+        int newSSLPort = PortManager.nextFreePort();
         killBookie(1);
 
         File[] ledgerDirs = new File[numOfLedgerDirs];
@@ -162,7 +163,7 @@ public class ReadOnlyBookieTest extends BookKeeperClusterTestCase {
         }
 
         ServerConfiguration newConf = newServerConfiguration(
-                conf.getBookiePort() + 1, zkUtil.getZooKeeperConnectString(),
+                newPort, newSSLPort, zkUtil.getZooKeeperConnectString(),
                 ledgerDirs[0], ledgerDirs);
         bsConfs.add(newConf);
         bs.add(startBookie(newConf));

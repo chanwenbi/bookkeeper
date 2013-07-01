@@ -20,25 +20,25 @@
  */
 package org.apache.bookkeeper.test;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
 import java.io.File;
-
-import java.util.Enumeration;
-import java.util.Arrays;
 import java.net.InetAddress;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import org.junit.Test;
-import org.junit.Before;
-import org.junit.After;
-import static org.junit.Assert.*;
+import java.util.Arrays;
+import java.util.Enumeration;
 
 import org.apache.bookkeeper.bookie.Bookie;
 import org.apache.bookkeeper.bookie.BookieException;
 import org.apache.bookkeeper.bookie.FileSystemUpgrade;
 import org.apache.bookkeeper.client.BookKeeperAdmin;
 import org.apache.bookkeeper.conf.ClientConfiguration;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class TestBackwardCompat {
     static Logger LOG = LoggerFactory.getLogger(TestBackwardCompat.class);
@@ -239,6 +239,98 @@ public class TestBackwardCompat {
             while (entries.hasMoreElements()) {
                 assertTrue("entry data doesn't match",
                            Arrays.equals(entries.nextElement().getEntry(), ENTRY_DATA));
+                count++;
+            }
+            return count;
+        }
+
+        void close() throws Exception {
+            try {
+                if (lh != null) {
+                    lh.close();
+                }
+            } finally {
+                if (bk != null) {
+                    bk.close();
+                }
+            }
+        }
+    }
+
+    /**
+     * Current verion classes
+     */
+    static class Server420 {
+        org.apache.bk_v4_2_0.bookkeeper.conf.ServerConfiguration conf;
+        org.apache.bk_v4_2_0.bookkeeper.proto.BookieServer server = null;
+
+        Server420(File journalDir, File ledgerDir, int port) throws Exception {
+            conf = new org.apache.bk_v4_2_0.bookkeeper.conf.ServerConfiguration();
+            conf.setBookiePort(port);
+            conf.setZkServers(zkUtil.getZooKeeperConnectString());
+            conf.setJournalDirName(journalDir.getPath());
+            conf.setLedgerDirNames(new String[] { ledgerDir.getPath() });
+        }
+
+        void start() throws Exception {
+            server = new org.apache.bk_v4_2_0.bookkeeper.proto.BookieServer(conf);
+            server.start();
+            waitUp(conf.getBookiePort());
+        }
+
+        org.apache.bk_v4_2_0.bookkeeper.conf.ServerConfiguration getConf() {
+            return conf;
+        }
+
+        void stop() throws Exception {
+            if (server != null) {
+                server.shutdown();
+            }
+        }
+    }
+
+    static class Ledger420 {
+        org.apache.bk_v4_2_0.bookkeeper.client.BookKeeper bk;
+        org.apache.bk_v4_2_0.bookkeeper.client.LedgerHandle lh;
+
+        private Ledger420(org.apache.bk_v4_2_0.bookkeeper.client.BookKeeper bk,
+                org.apache.bk_v4_2_0.bookkeeper.client.LedgerHandle lh) {
+            this.bk = bk;
+            this.lh = lh;
+        }
+
+        static Ledger420 newLedger() throws Exception {
+            org.apache.bk_v4_2_0.bookkeeper.client.BookKeeper newbk = new org.apache.bk_v4_2_0.bookkeeper.client.BookKeeper(
+                    zkUtil.getZooKeeperConnectString());
+            org.apache.bk_v4_2_0.bookkeeper.client.LedgerHandle newlh = newbk.createLedger(1, 1,
+                    org.apache.bk_v4_2_0.bookkeeper.client.BookKeeper.DigestType.CRC32, "foobar".getBytes());
+            return new Ledger420(newbk, newlh);
+        }
+
+        static Ledger420 openLedger(long id) throws Exception {
+            org.apache.bk_v4_2_0.bookkeeper.client.BookKeeper newbk = new org.apache.bk_v4_2_0.bookkeeper.client.BookKeeper(
+                    zkUtil.getZooKeeperConnectString());
+            org.apache.bk_v4_2_0.bookkeeper.client.LedgerHandle newlh = newbk.openLedger(id,
+                    org.apache.bk_v4_2_0.bookkeeper.client.BookKeeper.DigestType.CRC32, "foobar".getBytes());
+            return new Ledger420(newbk, newlh);
+        }
+
+        long getId() {
+            return lh.getId();
+        }
+
+        void write100() throws Exception {
+            for (int i = 0; i < 100; i++) {
+                lh.addEntry(ENTRY_DATA);
+            }
+        }
+
+        long readAll() throws Exception {
+            long count = 0;
+            Enumeration<org.apache.bk_v4_2_0.bookkeeper.client.LedgerEntry> entries = lh.readEntries(0,
+                    lh.getLastAddConfirmed());
+            while (entries.hasMoreElements()) {
+                assertTrue("entry data doesn't match", Arrays.equals(entries.nextElement().getEntry(), ENTRY_DATA));
                 count++;
             }
             return count;

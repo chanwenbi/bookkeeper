@@ -280,25 +280,14 @@ public class Bookie extends Thread {
             return;
         }
         try {
-            String instanceId = getInstanceId(zk);
-            boolean newEnv = false;
-            Cookie masterCookie = Cookie.generateCookie(conf);
-            if (null != instanceId) {
-                masterCookie.setInstanceId(instanceId);
-            }
-            try {
-                Cookie zkCookie = Cookie.readFromZooKeeper(zk, conf);
-                masterCookie.verify(zkCookie);
-            } catch (KeeperException.NoNodeException nne) {
-                newEnv = true;
-            }
+            // read cookies first.
             List<File> missedCookieDirs = new ArrayList<File>();
-            checkDirectoryStructure(journalDirectory);
-
+            Map<File, Cookie> readCookies = new HashMap<File, Cookie>();
             // try to read cookie from journal directory
+            checkDirectoryStructure(journalDirectory);
             try {
                 Cookie journalCookie = Cookie.readFromDirectory(journalDirectory);
-                journalCookie.verify(masterCookie);
+                readCookies.put(journalDirectory, journalCookie);
             } catch (FileNotFoundException fnf) {
                 missedCookieDirs.add(journalDirectory);
             }
@@ -306,18 +295,59 @@ public class Bookie extends Thread {
                 checkDirectoryStructure(dir);
                 try {
                     Cookie c = Cookie.readFromDirectory(dir);
-                    c.verify(masterCookie);
+                    readCookies.put(dir, c);
                 } catch (FileNotFoundException fnf) {
                     missedCookieDirs.add(dir);
                 }
             }
+            if (!readCookies.isEmpty()) {
+                Cookie cookie = readCookies.values().iterator().next();
+                BookieSocketAddress bookieAddr = new BookieSocketAddress(cookie.getBookieHost());
+                if (!bookieAddr.isSSLEnabled() && null != conf.getSSLContextFactoryClass()) {
+                    LOG.info("Disable SSL connections. You'd need to upgrade cookie first, if to enable SSL.");
+                    conf.setSSLContextFactoryClass(null);
+                }
+            }
+            BookieSocketAddress addr = Bookie.getBookieAddress(conf);
+            // read zk cookie
+            Cookie zkCookie = null;
+            try {
+                zkCookie = Cookie.readFromZooKeeper(zk, conf.getZkLedgersRootPath(), addr);
+            } catch (KeeperException.NoNodeException nne) {
+            }
+            if (null == zkCookie) {
+                BookieSocketAddress newAddr;
+                if (addr.isSSLEnabled()) {
+                    newAddr = new BookieSocketAddress(addr.getHostname(), addr.getPort());
+                } else {
+                    newAddr = new BookieSocketAddress(addr.getHostname(), conf.getBookieSSLPort());
+                }
+                try {
+                    zkCookie = Cookie.readFromZooKeeper(zk, conf.getZkLedgersRootPath(), newAddr);
+                } catch (KeeperException.NoNodeException nne) {
+                }
+            }
 
-            if (!newEnv && missedCookieDirs.size() > 0){
+            String instanceId = getInstanceId(zk);
+            Cookie masterCookie = Cookie.generateCookie(conf);
+            if (null != instanceId) {
+                masterCookie.setInstanceId(instanceId);
+            }
+            if (null != zkCookie) {
+                masterCookie.verify(zkCookie);
+            }
+
+            // verify local cookies
+            for (Cookie cookie : readCookies.values()) {
+                cookie.verify(masterCookie);
+            }
+
+            if (null != zkCookie && missedCookieDirs.size() > 0) {
                 LOG.error("Cookie exists in zookeeper, but not in all local directories. "
                         + " Directories missing cookie file are " + missedCookieDirs);
                 throw new BookieException.InvalidCookieException();
             }
-            if (newEnv) {
+            if (null == zkCookie) {
                 if (missedCookieDirs.size() > 0) {
                     LOG.debug("Directories missing cookie file are {}", missedCookieDirs);
                     masterCookie.writeToDirectory(journalDirectory);
@@ -352,7 +382,13 @@ public class Bookie extends Thread {
             iface = "default";
         }
         InetSocketAddress inetAddr = new InetSocketAddress(DNS.getDefaultHost(iface), conf.getBookiePort());
-        BookieSocketAddress addr = new BookieSocketAddress(inetAddr.getAddress().getHostAddress(), conf.getBookiePort());
+        String hostname = inetAddr.getAddress().getHostAddress();
+        BookieSocketAddress addr;
+        if (null == conf.getSSLContextFactoryClass()) {
+            addr = new BookieSocketAddress(hostname, conf.getBookiePort());
+        } else {
+            addr = new BookieSocketAddress(hostname, conf.getBookiePort(), conf.getBookieSSLPort());
+        }
         if (addr.getSocketAddress().getAddress().isLoopbackAddress()
             && !conf.getAllowLoopback()) {
             throw new UnknownHostException("Trying to listen on loopback address, "
@@ -409,7 +445,7 @@ public class Bookie extends Thread {
         this.zk = instantiateZookeeperClient(conf);
         checkEnvironment(this.zk);
         ledgerManagerFactory = LedgerManagerFactory.newLedgerManagerFactory(conf, this.zk);
-        LOG.info("instantiate ledger manager {}", ledgerManagerFactory.getClass().getName());
+        LOG.info("Bookie {} : instantiate ledger manager {}", getMyId(), ledgerManagerFactory.getClass().getName());
         ledgerManager = ledgerManagerFactory.newLedgerManager();
 
         // instantiate the journal
@@ -620,7 +656,6 @@ public class Bookie extends Thread {
         }
 
         // ZK ephemeral node for this Bookie.
-        String zkBookieRegPath = this.bookieRegistrationPath + getBookieAddress(conf);
         final CountDownLatch prevNodeLatch = new CountDownLatch(1);
         try{
             Watcher zkPrevRegNodewatcher = new Watcher() {
@@ -649,6 +684,7 @@ public class Bookie extends Thread {
             // Create the ZK ephemeral node for this Bookie.
             zk.create(zkBookieRegPath, new byte[0], Ids.OPEN_ACL_UNSAFE,
                     CreateMode.EPHEMERAL);
+            LOG.info("Register bookie itself as {}.", zkBookieRegPath);
         } catch (KeeperException ke) {
             LOG.error("ZK exception registering ephemeral Znode for Bookie!",
                     ke);

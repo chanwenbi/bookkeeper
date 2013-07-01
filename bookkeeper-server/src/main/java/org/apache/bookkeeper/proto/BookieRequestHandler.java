@@ -33,12 +33,15 @@ import org.apache.bookkeeper.conf.ServerConfiguration;
 import org.apache.bookkeeper.net.BookieSocketAddress;
 import org.apache.bookkeeper.util.MathUtils;
 import org.jboss.netty.channel.Channel;
+import org.jboss.netty.channel.ChannelFuture;
+import org.jboss.netty.channel.ChannelFutureListener;
 import org.jboss.netty.channel.ChannelHandlerContext;
 import org.jboss.netty.channel.ChannelStateEvent;
 import org.jboss.netty.channel.ExceptionEvent;
 import org.jboss.netty.channel.MessageEvent;
 import org.jboss.netty.channel.SimpleChannelHandler;
 import org.jboss.netty.channel.group.ChannelGroup;
+import org.jboss.netty.handler.ssl.SslHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,18 +57,25 @@ class BookieRequestHandler extends SimpleChannelHandler
 
     private final BKStats bkStats = BKStats.getInstance();
     private final boolean statsEnabled;
+    private final boolean isSSLEnabled;
 
-    BookieRequestHandler(ServerConfiguration conf, Bookie bookie, ChannelGroup allChannels) {
+    BookieRequestHandler(ServerConfiguration conf, Bookie bookie, ChannelGroup allChannels, boolean isSSLEnabled) {
         this.bookie = bookie;
         this.allChannels = allChannels;
         this.statsEnabled = conf.isStatisticsEnabled();
+        this.isSSLEnabled = isSSLEnabled;
     }
 
     @Override
     public void channelOpen(ChannelHandlerContext ctx,
                             ChannelStateEvent e)
             throws Exception {
-        allChannels.add(ctx.getChannel());
+        // if SSL is not enabled, then we can add this channel to the ChannelGroup.
+        // Otherwise, that is done when the channel is connected and the SSL handshake has
+        // completed successfully.
+        if (!isSSLEnabled) {
+            allChannels.add(ctx.getChannel());
+        }
     }
 
     @Override
@@ -78,6 +88,21 @@ class BookieRequestHandler extends SimpleChannelHandler
     public void channelConnected(ChannelHandlerContext ctx, ChannelStateEvent e)
             throws Exception {
         LOG.debug("Channel connected {}", e);
+        if (isSSLEnabled) {
+            ctx.getPipeline().get(SslHandler.class).handshake().addListener(new ChannelFutureListener() {
+
+                @Override
+                public void operationComplete(ChannelFuture future) throws Exception {
+                    if (future.isSuccess()) {
+                        LOG.debug("SSL handshake for channel {} has completed successfully!", future.getChannel());
+                        allChannels.add(future.getChannel());
+                    } else {
+                        LOG.error("Fail to ssl handshake for channel {} : ", future.getChannel(), future.getCause());
+                    }
+                }
+
+            });
+        }
     }
 
     public void channelDisconnected(ChannelHandlerContext ctx, ChannelStateEvent e)

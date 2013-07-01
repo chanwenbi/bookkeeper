@@ -17,6 +17,8 @@
  */
 package org.apache.bookkeeper.conf;
 
+import static com.google.common.base.Charsets.UTF_8;
+
 import java.util.List;
 
 import org.apache.bookkeeper.client.BookKeeper.DigestType;
@@ -25,7 +27,6 @@ import org.apache.bookkeeper.client.RackawareEnsemblePlacementPolicy;
 import org.apache.bookkeeper.util.ReflectionUtils;
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.lang.StringUtils;
-import static com.google.common.base.Charsets.UTF_8;
 
 /**
  * Configuration settings for client side
@@ -342,4 +343,5 @@ public class ClientConfiguration extends AbstractConfiguration {
         setProperty(ENSEMBLE_PLACEMENT_POLICY, policyClass.getName());
         return this;
     }
+
 }

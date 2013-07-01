@@ -182,13 +182,16 @@ public abstract class BookKeeperClusterTestCase extends TestCase {
         f.mkdir();
 
         int port = PortManager.nextFreePort();
-        return newServerConfiguration(port, zkUtil.getZooKeeperConnectString(),
+        int sslPort = PortManager.nextFreePort();
+        return newServerConfiguration(port, sslPort, zkUtil.getZooKeeperConnectString(),
                                       f, new File[] { f });
     }
 
-    protected ServerConfiguration newServerConfiguration(int port, String zkServers, File journalDir, File[] ledgerDirs) {
+    protected ServerConfiguration newServerConfiguration(int port, int sslPort, String zkServers, File journalDir,
+            File[] ledgerDirs) {
         ServerConfiguration conf = new ServerConfiguration(baseConf);
         conf.setBookiePort(port);
+        conf.setBookieSSLPort(sslPort);
         conf.setZkServers(zkServers);
         conf.setJournalDirName(journalDir.getPath());
         conf.setAllowLoopback(true);
@@ -401,15 +404,13 @@ public abstract class BookKeeperClusterTestCase extends TestCase {
             throws Exception {
         BookieServer server = new BookieServer(conf);
         server.start();
+        BookieSocketAddress bookieAddr = Bookie.getBookieAddress(conf);
 
-        int port = conf.getBookiePort();
-        while(bkc.getZkHandle().exists("/ledgers/available/" + InetAddress.getLocalHost().getHostAddress() + ":" + port, false) == null) {
+        while (bkc.getZkHandle().exists("/ledgers/available/" + bookieAddr, false) == null) {
             Thread.sleep(500);
         }
 
         bkc.readBookiesBlocking();
-        LOG.info("New bookie on port " + port + " has been created.");
-
         try {
             startAutoRecovery(server, conf);
         } catch (CompatibilityException ce) {

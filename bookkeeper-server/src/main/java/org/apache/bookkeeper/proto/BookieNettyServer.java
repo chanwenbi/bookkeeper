@@ -28,6 +28,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.bookkeeper.bookie.Bookie;
 import org.apache.bookkeeper.bookie.BookieException;
 import org.apache.bookkeeper.conf.ServerConfiguration;
+import org.apache.bookkeeper.net.BookieSocketAddress;
+import org.apache.bookkeeper.ssl.SSLContextFactory;
+import org.apache.bookkeeper.util.ReflectionUtils;
 import org.apache.zookeeper.KeeperException;
 import org.jboss.netty.bootstrap.ServerBootstrap;
 import org.jboss.netty.channel.Channel;
@@ -41,6 +44,9 @@ import org.jboss.netty.channel.group.DefaultChannelGroup;
 import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
 import org.jboss.netty.handler.codec.frame.LengthFieldBasedFrameDecoder;
 import org.jboss.netty.handler.codec.frame.LengthFieldPrepender;
+import org.jboss.netty.handler.ssl.SslHandler;
+import org.jboss.netty.logging.InternalLoggerFactory;
+import org.jboss.netty.logging.Log4JLoggerFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,7 +68,8 @@ class BookieNettyServer {
     Object suspensionLock = new Object();
     boolean suspended = false;
 
-    final InetSocketAddress bindAddress;
+    final BookieSocketAddress bookieAddr;
+    final SSLContextFactory sslContextFactory;
 
     BookieNettyServer(ServerConfiguration conf, Bookie bookie)
             throws IOException, KeeperException, InterruptedException, BookieException  {
@@ -74,12 +81,28 @@ class BookieNettyServer {
         serverChannelFactory = new NioServerSocketChannelFactory(
                 Executors.newCachedThreadPool(tfb.setNameFormat(base + "-boss-%d").build()),
                 Executors.newCachedThreadPool(tfb.setNameFormat(base + "-worker-%d").build()));
-        if (conf.getListeningInterface() == null) {
-            // listen on all interfaces
-            bindAddress = new InetSocketAddress(conf.getBookiePort());
-        } else {
-            bindAddress = Bookie.getBookieAddress(conf).getSocketAddress();
+        bookieAddr = Bookie.getBookieAddress(conf);
+        sslContextFactory = instantiateSSLContextFactory(conf);
+        InternalLoggerFactory.setDefaultFactory(new Log4JLoggerFactory());
+    }
+
+    private static SSLContextFactory instantiateSSLContextFactory(ServerConfiguration conf) throws IOException {
+        Class<? extends SSLContextFactory> sslContextFactoryCls = conf.getSSLContextFactoryClass();
+        SSLContextFactory sslContextFactory = null;
+        if (null != sslContextFactoryCls) {
+            try {
+                sslContextFactory = ReflectionUtils.newInstance(sslContextFactoryCls);
+            } catch (Throwable t) {
+                sslContextFactory = null;
+            }
+            if (null == sslContextFactory || (null != sslContextFactory && sslContextFactory.isClient())) {
+                throw new IOException("Failed to load ssl context factory : " + sslContextFactoryCls);
+            }
+            if (null != sslContextFactory) {
+                sslContextFactory.initialize(conf);
+            }
         }
+        return sslContextFactory;
     }
 
     boolean isRunning() {
@@ -104,15 +127,39 @@ class BookieNettyServer {
     }
 
     void start() {
-        ServerBootstrap bootstrap = new ServerBootstrap(serverChannelFactory);
-        bootstrap.setPipelineFactory(new BookiePipelineFactory());
-        bootstrap.setOption("child.tcpNoDelay", conf.getServerTcpNoDelay());
-        bootstrap.setOption("child.soLinger", 2);
-
-        Channel listen = bootstrap.bind(bindAddress);
-
-        allChannels.add(listen);
+        listenOn(null);
+        if (null != sslContextFactory) {
+            listenOn(sslContextFactory);
+        }
         isRunning.set(true);
+    }
+
+    void listenOn(SSLContextFactory sslContextFactory) {
+        InetSocketAddress addr;
+        if (conf.getListeningInterface() == null) {
+            // listening on all interfaces.
+            if (null == sslContextFactory) {
+                addr = new InetSocketAddress(conf.getBookiePort());
+            } else {
+                addr = new InetSocketAddress(conf.getBookieSSLPort());
+            }
+        } else {
+            if (null == sslContextFactory) {
+                addr = bookieAddr.getSocketAddress();
+            } else {
+                addr = bookieAddr.getSSLSocketAddress();
+            }
+        }
+        ServerBootstrap bootstrap = new ServerBootstrap(serverChannelFactory);
+        bootstrap.setPipelineFactory(new BookiePipelineFactory(sslContextFactory));
+        bootstrap.setOption("child.tcpNoDelay", conf.getServerTcpNoDelay());
+        bootstrap.setOption("child.keepAlive", true);
+        bootstrap.setOption("child.soLinger", 2);
+        bootstrap.setOption("reuseAddress", true);
+
+        Channel listen = bootstrap.bind(addr);
+        allChannels.add(listen);
+        LOG.info("Bookie listens on : {}", addr);
     }
 
     void shutdown() {
@@ -122,6 +169,12 @@ class BookieNettyServer {
     }
 
     private class BookiePipelineFactory implements ChannelPipelineFactory {
+        final SSLContextFactory sslContextFactory;
+
+        BookiePipelineFactory(SSLContextFactory sslContextFactory) {
+            this.sslContextFactory = sslContextFactory;
+        }
+
         public ChannelPipeline getPipeline() throws Exception {
             synchronized (suspensionLock) {
                 while (suspended) {
@@ -129,14 +182,17 @@ class BookieNettyServer {
                 }
             }
             ChannelPipeline pipeline = Channels.pipeline();
+            if (null != sslContextFactory) {
+                pipeline.addLast("ssl", new SslHandler(sslContextFactory.getEngine()));
+            }
             pipeline.addLast("lengthbaseddecoder",
                              new LengthFieldBasedFrameDecoder(maxMessageSize, 0, 4, 0, 4));
             pipeline.addLast("lengthprepender", new LengthFieldPrepender(4));
 
             pipeline.addLast("bookieProtoDecoder", new BookieProtoEncoding.RequestDecoder());
             pipeline.addLast("bookieProtoEncoder", new BookieProtoEncoding.ResponseEncoder());
-            pipeline.addLast("bookieRequestHandler", new BookieRequestHandler(conf, bookie,
-                                                                              allChannels));
+            pipeline.addLast("bookieRequestHandler", new BookieRequestHandler(conf, bookie, allChannels,
+                    null != sslContextFactory));
             return pipeline;
         }
     }
