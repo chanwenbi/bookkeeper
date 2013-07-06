@@ -69,6 +69,10 @@ public class ServerConfiguration extends AbstractConfiguration {
     protected final static String AUDITOR_PERIODIC_CHECK_INTERVAL = "auditorPeriodicCheckInterval";
     protected final static String AUTO_RECOVERY_DAEMON_ENABLED = "autoRecoveryDaemonEnabled";
 
+    // Worker Thread parameters.
+    protected final static String NUM_ADD_WORKER_THREADS = "numAddWorkerThreads";
+    protected final static String NUM_READ_WORKER_THREADS = "numReadWorkerThreads";
+
     /**
      * Construct a default configuration object
      */
@@ -643,6 +647,48 @@ public class ServerConfiguration extends AbstractConfiguration {
     public long getOpenLedgerRereplicationGracePeriod() {
         return getLong(OPEN_LEDGER_REREPLICATION_GRACE_PERIOD, 30000);
     }
+
+    /**
+     * Set the number of threads that would handle write requests.
+     * 
+     * @param numThreads
+     *          number of threads to handle write requests.
+     * @return server configuration
+     */
+    public ServerConfiguration setNumAddWorkerThreads(int numThreads) {
+        setProperty(NUM_ADD_WORKER_THREADS, numThreads);
+        return this;
+    }
+
+    /**
+     * Get the number of threads that should handle write requests.
+     *
+     * @return the number of threads that handle write requests.
+     */
+    public int getNumAddWorkerThreads() {
+        return getInt(NUM_ADD_WORKER_THREADS, 1);
+    }
+
+    /**
+     * Set the number of threads that would handle read requests.
+     *
+     * @param numThreads
+     *          Number of threads to handle read requests.
+     * @return server configuration
+     */
+    public ServerConfiguration setNumReadWorkerThreads(int numThreads) {
+        setProperty(NUM_READ_WORKER_THREADS, numThreads);
+        return this;
+    }
+
+    /**
+     * Get the number of threads that should handle read requests.
+     */
+    public int getNumReadWorkerThreads() {
+        return getInt(NUM_READ_WORKER_THREADS, 8);
+    }
+
+    /**
 
     /**
      * Set whether the bookie is able to go into read-only mode.

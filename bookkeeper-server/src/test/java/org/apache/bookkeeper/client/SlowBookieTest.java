@@ -21,29 +21,27 @@
 
 package org.apache.bookkeeper.client;
 
-import java.util.Set;
-import java.util.List;
-
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.net.InetSocketAddress;
-import org.junit.Test;
-import static org.junit.Assert.*;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import junit.framework.TestCase;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
+import org.apache.bookkeeper.conf.ClientConfiguration;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.GenericCallback;
 import org.apache.bookkeeper.test.BookKeeperClusterTestCase;
-import org.apache.bookkeeper.conf.ClientConfiguration;
+import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class SlowBookieTest extends BookKeeperClusterTestCase {
     static Logger LOG = LoggerFactory.getLogger(SlowBookieTest.class);
 
     public SlowBookieTest() {
         super(4);
+        baseConf.setNumAddWorkerThreads(0);
+        baseConf.setNumReadWorkerThreads(0);
     }
 
     @Test(timeout=60000)
@@ -98,7 +96,6 @@ public class SlowBookieTest extends BookKeeperClusterTestCase {
 
         byte[] pwd = new byte[] {};
         final LedgerHandle lh = bkc.createLedger(4, 3, 2, BookKeeper.DigestType.CRC32, pwd);
-        long lid = lh.getId();
         final AtomicBoolean finished = new AtomicBoolean(false);
         final AtomicBoolean failTest = new AtomicBoolean(false);
         final byte[] entry = "Test Entry".getBytes();
@@ -153,7 +150,6 @@ public class SlowBookieTest extends BookKeeperClusterTestCase {
 
         byte[] pwd = new byte[] {};
         final LedgerHandle lh = bkc.createLedger(4, 3, 1, BookKeeper.DigestType.CRC32, pwd);
-        long lid = lh.getId();
         final AtomicBoolean finished = new AtomicBoolean(false);
         final AtomicBoolean failTest = new AtomicBoolean(false);
         final byte[] entry = "Test Entry".getBytes();
