@@ -650,7 +650,7 @@ public class ServerConfiguration extends AbstractConfiguration {
 
     /**
      * Set the number of threads that would handle write requests.
-     * 
+     *
      * @param numThreads
      *          number of threads to handle write requests.
      * @return server configuration
