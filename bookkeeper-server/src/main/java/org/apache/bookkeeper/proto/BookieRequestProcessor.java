@@ -20,6 +20,7 @@
  */
 package org.apache.bookkeeper.proto;
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -69,8 +70,12 @@ public class BookieRequestProcessor implements RequestProcessor, BookkeeperInter
     public BookieRequestProcessor(ServerConfiguration serverCfg, Bookie bookie) {
         this.serverCfg = serverCfg;
         this.bookie = bookie;
-        this.readThreadPool = createExecutor(this.serverCfg.getNumReadWorkerThreads());
-        this.writeThreadPool = createExecutor(this.serverCfg.getNumAddWorkerThreads());
+        this.readThreadPool =
+            createExecutor(this.serverCfg.getNumReadWorkerThreads(),
+                           "BookieWriteThread-" + serverCfg.getBookiePort() + "-%d");
+        this.writeThreadPool =
+            createExecutor(this.serverCfg.getNumAddWorkerThreads(),
+                           "BookieReadThread-" + serverCfg.getBookiePort() + "-%d");
         this.statsEnabled = serverCfg.isStatisticsEnabled();
     }
 
@@ -80,11 +85,12 @@ public class BookieRequestProcessor implements RequestProcessor, BookkeeperInter
         shutdownExecutor(readThreadPool);
     }
 
-    private ExecutorService createExecutor(int numThreads) {
+    private ExecutorService createExecutor(int numThreads, String nameFormat) {
         if (numThreads <= 0) {
             return null;
         } else {
-            return Executors.newFixedThreadPool(numThreads);
+            return Executors.newFixedThreadPool(numThreads,
+                new ThreadFactoryBuilder().setNameFormat(nameFormat).build());
         }
     }
 
