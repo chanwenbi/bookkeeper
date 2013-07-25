@@ -42,6 +42,10 @@ Trunk (unreleased changes)
 
       BOOKKEEPER-636: Latest txn logs might be deleted in a race condition which is not recoverable if BK goes down before next txn log created. (vinay via ivank)
 
+      BOOKKEEPER-635: jenkins build should highlight which lines of the patch cause raw analysis errors (ivank via sijie)
+
+      BOOKKEEPER-653: Timeout option is missing in few testcases (Rakesh via ivank)
+
       bookkeeper-server:
 
         BOOKKEEPER-567: ReadOnlyBookieTest hangs on shutdown (sijie via ivank)
@@ -70,9 +74,25 @@ Trunk (unreleased changes)
 
         BOOKKEEPER-633: ConcurrentModificationException in RackawareEnsemblePlacementPolicy when a bookie is removed from available list (vinay via sijie)
 
+        BOOKKEEPER-563: Avoid Journal polluting page cache (Robin Dhamankar via sijie)
+
+        BOOKKEEPER-646: BookieShell readjournal command is throwing BufferUnderflowException (Rakesh via sijie)
+
+        BOOKKEEPER-652: Logger class name is wrong in LedgerCacheImpl.java (Rakesh via sijie)
+
+        BOOKKEEPER-642: Bookie returns incorrect exitcode, ExitCode.ZK_REG_FAIL is getting overridden (Rakesh via ivank)
+
+      hedwig-server:
+
+        BOOKKEEPER-601: readahead cache size isn't updated correctly (sijie via fpj)
+
+        BOOKKEEPER-607: Filtered Messages Require ACK from Client Causes User Being Throttled Incorrectly Forever (sijie via ivank)
+
       hedwig-client:
 
         BOOKKEEPER-598: Fails to compile - RESUBSCRIBE_EXCEPTION conflict (Matthew Farrellee via sijie)
+
+	BOOKKEEPER-600: shouldClaim flag isn't cleared for hedwig multiplex java client (sijie via fpj)
 
     IMPROVEMENTS:
 
@@ -109,6 +129,8 @@ Trunk (unreleased changes)
       BOOKKEEPER-627: LedgerDirsMonitor is missing thread name (rakesh via fpj)
 
       BOOKKEEPER-618: Better resolution of bookie address (ivank via fpj)
+
+      BOOKKEEPER-610: Make SyncThread use an executor (ivank via sijie)
 
     NEW FEATURE:
 
