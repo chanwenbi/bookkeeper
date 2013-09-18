@@ -44,6 +44,7 @@ import org.apache.bookkeeper.client.LedgerHandle;
 import org.apache.bookkeeper.client.BKException;
 import org.apache.bookkeeper.client.LedgerChecker;
 import org.apache.bookkeeper.client.LedgerFragment;
+import org.apache.bookkeeper.client.BookiesListener;
 import org.apache.bookkeeper.util.StringUtils;
 
 import org.apache.bookkeeper.util.ZkUtils;
@@ -63,11 +64,8 @@ import org.apache.commons.collections.CollectionUtils;
 import com.google.common.collect.Sets;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.WatchedEvent;
-import org.apache.zookeeper.Watcher;
 import org.apache.zookeeper.ZooKeeper;
 import org.apache.zookeeper.AsyncCallback;
-import org.apache.zookeeper.Watcher.Event.EventType;
-import org.apache.zookeeper.Watcher.Event.KeeperState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -78,10 +76,11 @@ import org.slf4j.LoggerFactory;
  * re-replication activities by keeping all the corresponding ledgers of the
  * failed bookie as underreplicated znode in zk.
  */
-public class Auditor implements Watcher {
+public class Auditor implements BookiesListener {
     private static final Logger LOG = LoggerFactory.getLogger(Auditor.class);
     private final ServerConfiguration conf;
-    private final ZooKeeper zkc;
+    private BookKeeper bkc;
+    private BookKeeperAdmin admin;
     private BookieLedgerIndexer bookieLedgerIndexer;
     private LedgerManager ledgerManager;
     private LedgerUnderreplicationManager ledgerUnderreplicationManager;
@@ -91,7 +90,6 @@ public class Auditor implements Watcher {
     public Auditor(final String bookieIdentifier, ServerConfiguration conf,
                    ZooKeeper zkc) throws UnavailableException {
         this.conf = conf;
-        this.zkc = zkc;
         initialize(conf, zkc);
 
         executor = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
@@ -114,6 +112,9 @@ public class Auditor implements Watcher {
 
             this.ledgerUnderreplicationManager = ledgerManagerFactory
                     .newLedgerUnderreplicationManager();
+
+            this.bkc = new BookKeeper(new ClientConfiguration(conf), zkc);
+            this.admin = new BookKeeperAdmin(bkc);
 
         } catch (CompatibilityException ce) {
             throw new UnavailableException(
@@ -174,8 +175,8 @@ public class Auditor implements Watcher {
                                 Map<String, Set<Long>> ledgerDetails = generateBookie2LedgersIndex();
                                 handleLostBookies(lostBookies, ledgerDetails);
                             }
-                        } catch (KeeperException ke) {
-                            LOG.error("Exception while watching available bookies", ke);
+                        } catch (BKException bke) {
+                            LOG.error("Exception getting bookie list", bke);
                         } catch (InterruptedException ie) {
                             Thread.currentThread().interrupt();
                             LOG.error("Interrupted while watching available bookies ", ie);
@@ -238,6 +239,9 @@ public class Auditor implements Watcher {
                         try {
                             knownBookies = getAvailableBookies();
                             auditingBookies(knownBookies);
+                        } catch (BKException bke) {
+                            LOG.error("Exception getting bookie list", bke);
+                            submitShutdownTask();
                         } catch (KeeperException ke) {
                             LOG.error("Exception while watching available bookies", ke);
                             submitShutdownTask();
@@ -262,10 +266,21 @@ public class Auditor implements Watcher {
             cb.await();
         }
     }
-    
-    private List<String> getAvailableBookies() throws KeeperException,
-            InterruptedException {
-        return zkc.getChildren(conf.getZkAvailableBookiesPath(), this);
+
+    private List<String> getAvailableBookies() throws BKException {
+        // Get the available bookies, also watch for further changes
+        // Watching on only available bookies is sufficient, as changes in readonly bookies also changes in available
+        // bookies
+        admin.notifyBookiesChanged(this);
+        Collection<InetSocketAddress> availableBkAddresses = admin.getAvailableBookies();
+        Collection<InetSocketAddress> readOnlyBkAddresses = admin.getReadOnlyBookies();
+        availableBkAddresses.addAll(readOnlyBkAddresses);
+
+        List<String> availableBookies = new ArrayList<String>();
+        for (InetSocketAddress addr : availableBkAddresses) {
+            availableBookies.add(StringUtils.addrToString(addr));
+        }
+        return availableBookies;
     }
 
     @SuppressWarnings("unchecked")
@@ -289,8 +304,7 @@ public class Auditor implements Watcher {
     }
 
     private void handleLostBookies(Collection<String> lostBookies,
-            Map<String, Set<Long>> ledgerDetails) throws BKAuditException,
-            KeeperException, InterruptedException {
+            Map<String, Set<Long>> ledgerDetails) throws BKAuditException {
         LOG.info("Following are the failed bookies: " + lostBookies
                 + " and searching its ledgers for re-replication");
 
@@ -302,7 +316,7 @@ public class Auditor implements Watcher {
     }
 
     private void publishSuspectedLedgers(String bookieIP, Set<Long> ledgers)
-            throws KeeperException, InterruptedException, BKAuditException {
+            throws BKAuditException {
         if (null == ledgers || ledgers.size() == 0) {
             // there is no ledgers available for this bookie and just
             // ignoring the bookie failures
@@ -351,12 +365,7 @@ public class Auditor implements Watcher {
             } catch (BKException bke) {
                 LOG.error("Error closing lh", bke);
                 if (rc == BKException.Code.OK) {
-                    rc = BKException.Code.ZKException;
-                }
-            } catch (KeeperException ke) {
-                LOG.error("Couldn't publish suspected ledger", ke);
-                if (rc == BKException.Code.OK) {
-                    rc = BKException.Code.ZKException;
+                    rc = BKException.Code.ReplicationException;
                 }
             } catch (InterruptedException ie) {
                 LOG.error("Interrupted publishing suspected ledger", ie);
@@ -367,7 +376,7 @@ public class Auditor implements Watcher {
             } catch (BKAuditException bkae) {
                 LOG.error("Auditor exception publishing suspected ledger", bkae);
                 if (rc == BKException.Code.OK) {
-                    rc = BKException.Code.ZKException;
+                    rc = BKException.Code.ReplicationException;
                 }
             }
 
@@ -471,14 +480,8 @@ public class Auditor implements Watcher {
     }
 
     @Override
-    public void process(WatchedEvent event) {
-        // listen children changed event from ZooKeeper
-        if (event.getState() == KeeperState.Disconnected
-                || event.getState() == KeeperState.Expired) {
-            submitShutdownTask();
-        } else if (event.getType() == EventType.NodeChildrenChanged) {
-            submitAuditTask();
-        }
+    public void availableBookiesChanged() {
+        submitAuditTask();
     }
 
     /**
@@ -493,9 +496,13 @@ public class Auditor implements Watcher {
                 LOG.warn("Executor not shutting down, interrupting");
                 executor.shutdownNow();
             }
+            admin.close();
+            bkc.close();
         } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
             LOG.warn("Interrupted while shutting down auditor bookie", ie);
+        } catch (BKException bke) {
+            LOG.warn("Exception while shutting down auditor bookie", bke);
         }
     }
 

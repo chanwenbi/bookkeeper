@@ -365,10 +365,16 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
             public void safeRun() {
 
                 ReadCompletion readCompletion = readCompletions.remove(key);
+                String bAddress = "null";
+                Channel c = channel;
+                if(c != null) {
+                    bAddress = c.getRemoteAddress().toString();
+                }
 
                 if (readCompletion != null) {
-                    LOG.error("Could not write  request for reading entry: " + key.entryId + " ledger-id: "
-                              + key.ledgerId + " bookie: " + channel.getRemoteAddress());
+                    LOG.debug("Could not write request for reading entry: {}"
+                              + " ledger-id: {} bookie: {}",
+                              new Object[] { key.entryId, key.ledgerId, bAddress });
 
                     readCompletion.cb.readEntryComplete(BKException.Code.BookieHandleNotAvailableException,
                                                         key.ledgerId, key.entryId, null, readCompletion.ctx);
@@ -387,14 +393,16 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
 
                 if (addCompletion != null) {
                     String bAddress = "null";
-                    if(channel != null)
-                        bAddress = channel.getRemoteAddress().toString();
-                    LOG.error("Could not write request for adding entry: " + key.entryId + " ledger-id: "
-                              + key.ledgerId + " bookie: " + bAddress);
+                    Channel c = channel;
+                    if(c != null) {
+                        bAddress = c.getRemoteAddress().toString();
+                    }
+                    LOG.debug("Could not write request for adding entry: {} ledger-id: {} bookie: {}",
+                              new Object[] { key.entryId, key.ledgerId, bAddress });
 
                     addCompletion.cb.writeComplete(BKException.Code.BookieHandleNotAvailableException, key.ledgerId,
                                                    key.entryId, addr, addCompletion.ctx);
-                    LOG.error("Invoked callback method: " + key.entryId);
+                    LOG.debug("Invoked callback method: {}", key.entryId);
                 }
             }
 
@@ -459,9 +467,8 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
         if (c != null) {
             closeChannel(c);
         }
-        if (this.channel == c) {
-            errorOutOutstandingEntries();
-        }
+
+        errorOutOutstandingEntries();
 
         synchronized (this) {
             if (this.channel == c
@@ -482,8 +489,8 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
     public void exceptionCaught(ChannelHandlerContext ctx, ExceptionEvent e) throws Exception {
         Throwable t = e.getCause();
         if (t instanceof CorruptedFrameException || t instanceof TooLongFrameException) {
-            LOG.error("Corrupted fram received from bookie: "
-                      + e.getChannel().getRemoteAddress());
+            LOG.error("Corrupted frame received from bookie: {}",
+                      e.getChannel().getRemoteAddress());
             return;
         }
         if (t instanceof ReadTimeoutException) {
@@ -507,7 +514,14 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
             return;
         }
 
-        LOG.error("Unexpected exception caught by bookie client channel handler", t);
+        synchronized (this) {
+            if (state == ConnectionState.CLOSED) {
+                LOG.debug("Unexpected exception caught by bookie client channel handler, "
+                          + "but the client is closed, so it isn't important", t);
+            } else {
+                LOG.error("Unexpected exception caught by bookie client channel handler", t);
+            }
+        }
         // Since we are a library, cant terminate App here, can we?
     }
 
@@ -567,7 +581,7 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
             rc = BKException.Code.WriteOnReadOnlyBookieException;
             break;
         default:
-            LOG.error("Add failed {}", a);
+            LOG.warn("Add failed {}", a);
             rc = BKException.Code.WriteException;
             break;
         }
@@ -576,7 +590,7 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
         ac = addCompletions.remove(new CompletionKey(a.getLedgerId(),
                                                      a.getEntryId()));
         if (ac == null) {
-            LOG.error("Unexpected add response from bookie {} for {}", addr, a);
+            LOG.debug("Unexpected add response from bookie {} for {}", addr, a);
             return;
         }
 
@@ -608,7 +622,7 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
             rc = BKException.Code.UnauthorizedAccessException;
             break;
         default:
-            LOG.error("Read error for {}", rr);
+            LOG.warn("Read error for {}", rr);
             rc = BKException.Code.ReadException;
             break;
         }
@@ -628,7 +642,7 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
         }
 
         if (readCompletion == null) {
-            LOG.error("Unexpected read response received from bookie: {} for {}", addr, rr);
+            LOG.debug("Unexpected read response received from bookie: {} for {}", addr, rr);
             return;
         }
 

@@ -20,6 +20,7 @@
  */
 package org.apache.bookkeeper.proto;
 
+import java.nio.channels.ClosedChannelException;
 import org.apache.bookkeeper.conf.ServerConfiguration;
 import org.apache.bookkeeper.processor.RequestProcessor;
 import org.jboss.netty.channel.Channel;
@@ -56,6 +57,10 @@ class BookieRequestHandler extends SimpleChannelHandler {
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, ExceptionEvent e) throws Exception {
         Throwable throwable = e.getCause();
+        if (throwable instanceof ClosedChannelException) {
+            LOG.debug("Client died before request could be completed", throwable);
+            return;
+        }
         LOG.error("Unhandled exception occurred in I/O thread or handler", throwable);
     }
 

@@ -19,14 +19,16 @@ package org.apache.bookkeeper.meta;
  */
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.NavigableSet;
+import java.util.NoSuchElementException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.Iterator;
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.SortedSet;
 
+import org.apache.bookkeeper.client.BKException;
 import org.apache.bookkeeper.client.LedgerMetadata;
 import org.apache.bookkeeper.conf.AbstractConfiguration;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.GenericCallback;
@@ -40,7 +42,6 @@ import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.KeeperException.Code;
 import org.apache.zookeeper.ZooDefs.Ids;
 import org.apache.zookeeper.ZooKeeper;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -102,14 +103,14 @@ class HierarchicalLedgerManager extends AbstractZkLedgerManager {
 
     @Override
     public void createLedger(final LedgerMetadata metadata, final GenericCallback<Long> ledgerCb) {
-        ZkUtils.createFullPathOptimistic(zk, idGenPath, new byte[0], Ids.OPEN_ACL_UNSAFE,
+        ZkUtils.asyncCreateFullPathOptimistic(zk, idGenPath, new byte[0], Ids.OPEN_ACL_UNSAFE,
             CreateMode.EPHEMERAL_SEQUENTIAL, new StringCallback() {
             @Override
             public void processResult(int rc, String path, Object ctx, final String idPathName) {
                 if (rc != KeeperException.Code.OK.intValue()) {
                     LOG.error("Could not generate new ledger id",
                               KeeperException.create(KeeperException.Code.get(rc), path));
-                    ledgerCb.operationComplete(rc, null);
+                    ledgerCb.operationComplete(BKException.Code.ZKException, null);
                     return;
                 }
                 /*
@@ -120,7 +121,7 @@ class HierarchicalLedgerManager extends AbstractZkLedgerManager {
                     ledgerId = getLedgerIdFromGenPath(idPathName);
                 } catch (IOException e) {
                     LOG.error("Could not extract ledger-id from id gen path:" + path, e);
-                    ledgerCb.operationComplete(KeeperException.Code.SYSTEMERROR.intValue(), null);
+                    ledgerCb.operationComplete(BKException.Code.ZKException, null);
                     return;
                 }
                 String ledgerPath = getLedgerPath(ledgerId);
@@ -132,15 +133,15 @@ class HierarchicalLedgerManager extends AbstractZkLedgerManager {
                         if (rc != KeeperException.Code.OK.intValue()) {
                             LOG.error("Could not create node for ledger",
                                       KeeperException.create(KeeperException.Code.get(rc), path));
-                            ledgerCb.operationComplete(rc, null);
+                            ledgerCb.operationComplete(BKException.Code.ZKException, null);
                         } else {
                             // update version
                             metadata.setVersion(new ZkVersion(0));
-                            ledgerCb.operationComplete(rc, lid);
+                            ledgerCb.operationComplete(BKException.Code.OK, lid);
                         }
                     }
                 };
-                ZkUtils.createFullPathOptimistic(zk, ledgerPath, metadata.serialize(),
+                ZkUtils.asyncCreateFullPathOptimistic(zk, ledgerPath, metadata.serialize(),
                     Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT, scb, null);
                 // delete the znode for id generation
                 scheduler.submit(new Runnable() {
@@ -402,6 +403,7 @@ class HierarchicalLedgerManager extends AbstractZkLedgerManager {
                     continue;
                 }
                 List<String> l2Nodes = zk.getChildren(ledgerRootPath + "/" + curL1Nodes, null);
+                Collections.sort(l2Nodes);
                 l2NodesIter = l2Nodes.iterator();
                 if (!l2NodesIter.hasNext()) {
                     l2NodesIter = null;
@@ -420,6 +422,8 @@ class HierarchicalLedgerManager extends AbstractZkLedgerManager {
                         hasMoreElements = nextL1Node();
                     } else if (l2NodesIter == null || !l2NodesIter.hasNext()) {
                         hasMoreElements = nextL1Node();
+                    } else {
+                        hasMoreElements = true;
                     }
                 } catch (KeeperException ke) {
                     throw new IOException("Error preloading next range", ke);
@@ -475,13 +479,14 @@ class HierarchicalLedgerManager extends AbstractZkLedgerManager {
             } catch (InterruptedException e) {
                 throw new IOException("Error when get child nodes from zk", e);
             }
-            SortedSet<Long> zkActiveLedgers = ledgerListToSet(ledgerNodes, nodePath);
+            NavigableSet<Long> zkActiveLedgers = ledgerListToSet(ledgerNodes, nodePath);
             if (LOG.isDebugEnabled()) {
                 LOG.debug("All active ledgers from ZK for hash node "
                           + level1 + "/" + level2 + " : " + zkActiveLedgers);
             }
-            return new LedgerRange(zkActiveLedgers.subSet(getStartLedgerIdByLevel(level1, level2),
-                                                          getEndLedgerIdByLevel(level1, level2)));
+
+            return new LedgerRange(zkActiveLedgers.subSet(getStartLedgerIdByLevel(level1, level2), true,
+                                                          getEndLedgerIdByLevel(level1, level2), true));
         }
     }
 }
