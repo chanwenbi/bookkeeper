@@ -40,7 +40,7 @@ public interface BookieProtocol {
     /**
      * Current version of the protocol, which client will use. 
      */
-    public static final byte CURRENT_PROTOCOL_VERSION = 2;
+    public static final byte CURRENT_PROTOCOL_VERSION = 3;
 
     /**
      * Entry Entry ID. To be used when no valid entry id can be assigned.

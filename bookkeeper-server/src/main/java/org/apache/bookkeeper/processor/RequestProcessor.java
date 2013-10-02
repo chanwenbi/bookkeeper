@@ -20,7 +20,7 @@
  */
 package org.apache.bookkeeper.processor;
 
-import org.apache.bookkeeper.proto.BookieProtocol;
+import org.apache.bookkeeper.proto.BookkeeperProtocol.Request;
 import org.jboss.netty.channel.Channel;
 
 public interface RequestProcessor {
@@ -33,11 +33,11 @@ public interface RequestProcessor {
     /**
      * Process request.
      *
-     * @param r
+     * @param request
      *          request to process
      * @param channel
      *          channel received the given request <i>r</i>
      */
-    public void processRequest(BookieProtocol.Request r, Channel channel);
+    public void processRequest(Request request, Channel channel);
 
 }
