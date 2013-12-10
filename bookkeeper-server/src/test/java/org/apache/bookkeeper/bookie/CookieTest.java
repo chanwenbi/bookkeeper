@@ -312,7 +312,7 @@ public class CookieTest {
         }
 
         // Now format the Bookie and restart.
-        Bookie.format(bookieConf, false, true);
+        BookieAdmin.format(bookieConf, false, true);
         // After bookie format bookie should be able to start again.
         new Bookie(bookieConf);
     }

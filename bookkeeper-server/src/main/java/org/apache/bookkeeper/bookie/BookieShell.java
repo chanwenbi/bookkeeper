@@ -205,7 +205,7 @@ public class BookieShell implements Tool {
             boolean force = cmdLine.hasOption("f");
 
             ServerConfiguration conf = new ServerConfiguration(bkConf);
-            boolean result = Bookie.format(conf, interactive, force);
+            boolean result = BookieAdmin.format(conf, interactive, force);
             return (result) ? 0 : 1;
         }
     }

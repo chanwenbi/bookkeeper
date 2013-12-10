@@ -30,9 +30,13 @@ import java.io.OutputStreamWriter;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.StringReader;
-
 import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.List;
 
+import com.google.common.base.Preconditions;
+import org.apache.bookkeeper.util.ZkUtils;
+import org.apache.zookeeper.Transaction;
 import org.apache.zookeeper.ZooKeeper;
 import org.apache.zookeeper.data.Stat;
 import org.apache.zookeeper.KeeperException;
@@ -66,15 +70,104 @@ import com.google.protobuf.TextFormat;
 class Cookie {
     private final static Logger LOG = LoggerFactory.getLogger(Cookie.class);
 
-    static final int CURRENT_COOKIE_LAYOUT_VERSION = 4;
-    private int layoutVersion = 0;
-    private String bookieHost = null;
-    private String journalDir = null;
-    private String ledgerDirs = null;
-    private int znodeVersion = -1;
-    private String instanceId = null;
+    static class Mutator {
+        private String bookieHost = null;
+        private String journalDir = null;
+        private String[] ledgerDirs = null;
+        private String instanceId = null;
+        private final int znodeVersion;
 
-    private Cookie() {
+        Mutator(Cookie cookie) {
+            this.bookieHost = cookie.bookieHost;
+            this.journalDir = cookie.journalDir;
+            this.ledgerDirs = cookie.ledgerDirs;
+            this.instanceId = cookie.instanceId;
+            this.znodeVersion = cookie.znodeVersion;
+        }
+
+        Mutator setBookieHost(String bookieHost) {
+            this.bookieHost = bookieHost;
+            return this;
+        }
+
+        Mutator setJournalDir(String journalDir) {
+            this.journalDir = journalDir;
+            return this;
+        }
+
+        Mutator setLedgerDirs(String[] ledgerDirs) {
+            this.ledgerDirs = ledgerDirs;
+            return this;
+        }
+
+        Mutator removeLedgerDir(String ledgerDir) {
+            Preconditions.checkNotNull(ledgerDirs);
+            List<String> result = new ArrayList<String>(ledgerDirs.length);
+            for (String dir : ledgerDirs) {
+                if (dir.equals(ledgerDir)) {
+                    continue;
+                }
+                result.add(dir);
+            }
+            this.ledgerDirs = result.toArray(new String[result.size()]);
+            return this;
+        }
+
+        Mutator addLedgerDir(String ledgerDir) {
+            Preconditions.checkNotNull(ledgerDirs);
+            String[] newLedgerDirs = new String[ledgerDirs.length + 1];
+            System.arraycopy(ledgerDirs, 0, newLedgerDirs, 0, ledgerDirs.length);
+            newLedgerDirs[ledgerDirs.length] = ledgerDir;
+            this.ledgerDirs = newLedgerDirs;
+            return this;
+        }
+
+        Mutator replaceLedgerDir(String oldDir, String newDir) {
+            Preconditions.checkNotNull(ledgerDirs);
+            List<String> result = new ArrayList<String>(ledgerDirs.length);
+            for (String dir : ledgerDirs) {
+                if (dir.equals(oldDir)) {
+                    result.add(newDir);
+                } else {
+                    result.add(dir);
+                }
+            }
+            this.ledgerDirs = result.toArray(new String[result.size()]);
+            return this;
+        }
+
+        Mutator setInstanceId(String instanceId) {
+            this.instanceId = instanceId;
+            return this;
+        }
+
+        Cookie build() {
+            Preconditions.checkNotNull(bookieHost);
+            Preconditions.checkNotNull(journalDir);
+            Preconditions.checkNotNull(ledgerDirs);
+            return new Cookie(bookieHost, journalDir, ledgerDirs, CURRENT_COOKIE_LAYOUT_VERSION)
+                    .setInstanceId(instanceId).setZkVersion(znodeVersion);
+        }
+    }
+
+    static final int CURRENT_COOKIE_LAYOUT_VERSION = 4;
+    private final int layoutVersion;
+    private final String bookieHost;
+    private final String journalDir;
+    private final String[] ledgerDirs;
+    private String instanceId = null;
+    private int znodeVersion = -1;
+
+    private Cookie(String bookieHost, String journalDir, String[] ledgerDirs,
+                   int layoutVersion) {
+        this.bookieHost = bookieHost;
+        this.journalDir = journalDir;
+        this.ledgerDirs = ledgerDirs;
+        this.layoutVersion = layoutVersion;
+    }
+
+    public Mutator newMutator() {
+        return new Mutator(this);
     }
 
     public void verify(Cookie c) throws BookieException.InvalidCookieException {
@@ -84,8 +177,7 @@ class Cookie {
             LOG.error(errMsg);
             throw new BookieException.InvalidCookieException(errMsg);
         } else if (!(c.layoutVersion >= 3 && c.bookieHost.equals(bookieHost)
-                && c.journalDir.equals(journalDir) && c.ledgerDirs
-                    .equals(ledgerDirs))) {
+                && c.journalDir.equals(journalDir) && compareDirs(c.ledgerDirs, ledgerDirs))) {
             errMsg = "Cookie [" + this + "] is not matching with [" + c + "]";
             throw new BookieException.InvalidCookieException(errMsg);
         } else if ((instanceId == null && c.instanceId != null)
@@ -104,7 +196,7 @@ class Cookie {
         CookieFormat.Builder builder = CookieFormat.newBuilder();
         builder.setBookieHost(bookieHost);
         builder.setJournalDir(journalDir);
-        builder.setLedgerDirs(ledgerDirs);
+        builder.setLedgerDirs(serializeDirs(ledgerDirs));
         if (null != instanceId) {
             builder.setInstanceId(instanceId);
         }
@@ -119,39 +211,44 @@ class Cookie {
         b.append(CURRENT_COOKIE_LAYOUT_VERSION).append("\n")
             .append(bookieHost).append("\n")
             .append(journalDir).append("\n")
-            .append(ledgerDirs).append("\n");
+            .append(serializeDirs(ledgerDirs)).append("\n");
         return b.toString();
     }
 
     private static Cookie parse(BufferedReader reader) throws IOException {
-        Cookie c = new Cookie();
         String line = reader.readLine();
         if (null == line) {
             throw new EOFException("Exception in parsing cookie");
         }
+        int layoutVersion;
+        String bookieHost = null;
+        String journalDir = null;
+        String ledgerDirs = null;
+        String instanceId = null;
         try {
-            c.layoutVersion = Integer.parseInt(line.trim());
+            layoutVersion = Integer.parseInt(line.trim());
         } catch (NumberFormatException e) {
             throw new IOException("Invalid string '" + line.trim()
                     + "', cannot parse cookie.");
         }
-        if (c.layoutVersion == 3) {
-            c.bookieHost = reader.readLine();
-            c.journalDir = reader.readLine();
-            c.ledgerDirs = reader.readLine();
-        } else if (c.layoutVersion >= 4) {
+        if (layoutVersion == 3) {
+            bookieHost = reader.readLine();
+            journalDir = reader.readLine();
+            ledgerDirs = reader.readLine();
+        } else if (layoutVersion >= 4) {
             CookieFormat.Builder builder = CookieFormat.newBuilder();
             TextFormat.merge(reader, builder);
             CookieFormat data = builder.build();
-            c.bookieHost = data.getBookieHost();
-            c.journalDir = data.getJournalDir();
-            c.ledgerDirs = data.getLedgerDirs();
+            bookieHost = data.getBookieHost();
+            journalDir = data.getJournalDir();
+            ledgerDirs = data.getLedgerDirs();
             // Since InstanceId is optional
             if (null != data.getInstanceId() && !data.getInstanceId().isEmpty()) {
-                c.instanceId = data.getInstanceId();
+                instanceId = data.getInstanceId();
             }
         }
-        return c;
+        return new Cookie(bookieHost, journalDir, deserializeDirs(ledgerDirs), layoutVersion)
+                .setInstanceId(instanceId);
     }
 
     void writeToDirectory(File directory) throws IOException {
@@ -173,26 +270,18 @@ class Cookie {
 
     void writeToZooKeeper(ZooKeeper zk, ServerConfiguration conf)
             throws KeeperException, InterruptedException, UnknownHostException {
-        String bookieCookiePath = conf.getZkLedgersRootPath() + "/"
-                + BookKeeperConstants.COOKIE_NODE;
-        String zkPath = getZkPath(conf);
+        writeToZooKeeper(zk, getZkPath(conf));
+    }
+
+    void writeToZooKeeper(ZooKeeper zk, String bookieCookiePath)
+            throws KeeperException, InterruptedException {
         byte[] data = toString().getBytes(UTF_8);
         if (znodeVersion != -1) {
-            zk.setData(zkPath, data, znodeVersion);
+            zk.setData(bookieCookiePath, data, znodeVersion);
         } else {
-            if (zk.exists(bookieCookiePath, false) == null) {
-                try {
-                    zk.create(bookieCookiePath, new byte[0],
-                              Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
-                } catch (KeeperException.NodeExistsException nne) {
-                    LOG.info("More than one bookie tried to create {} at once. Safe to ignore",
-                             bookieCookiePath);
-                }
-            }
-            zk.create(zkPath, data,
-                      Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
-            Stat stat = zk.exists(zkPath, false);
-            this.znodeVersion = stat.getVersion();
+            ZkUtils.createFullPathOptimistic(zk, bookieCookiePath, data,
+                    Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+            this.znodeVersion = 0;
         }
     }
 
@@ -205,20 +294,21 @@ class Cookie {
         znodeVersion = -1;
     }
 
+    void renameInZooKeeper(ZooKeeper zk, String oldPath, String newPath)
+            throws KeeperException, InterruptedException {
+        byte[] data = toString().getBytes(UTF_8);
+        Transaction txn = zk.transaction();
+        txn.delete(oldPath, znodeVersion);
+        txn.create(newPath, data, Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+        txn.commit();
+    }
+
     static Cookie generateCookie(ServerConfiguration conf)
             throws UnknownHostException {
-        Cookie c = new Cookie();
-        c.layoutVersion = CURRENT_COOKIE_LAYOUT_VERSION;
-        c.bookieHost = StringUtils.addrToString(Bookie.getBookieAddress(conf));
-        c.journalDir = conf.getJournalDirName();
-        StringBuilder b = new StringBuilder();
-        String[] dirs = conf.getLedgerDirNames();
-        b.append(dirs.length);
-        for (String d : dirs) {
-            b.append("\t").append(d);
-        }
-        c.ledgerDirs = b.toString();
-        return c;
+        int layoutVersion = CURRENT_COOKIE_LAYOUT_VERSION;
+        String bookieHost = StringUtils.addrToString(Bookie.getBookieAddress(conf));
+        String journalDir = conf.getJournalDirName();
+        return new Cookie(bookieHost, journalDir, conf.getLedgerDirNames(), layoutVersion);
     }
 
     static Cookie readFromZooKeeper(ZooKeeper zk, ServerConfiguration conf)
@@ -249,8 +339,55 @@ class Cookie {
         }
     }
 
-    public void setInstanceId(String instanceId) {
+    Cookie setInstanceId(String instanceId) {
         this.instanceId = instanceId;
+        return this;
+    }
+
+    Cookie setZkVersion(int zkVersion) {
+        this.znodeVersion = zkVersion;
+        return this;
+    }
+
+    private static boolean compareDirs(String[] dirs1, String[] dirs2) {
+        if (dirs1 == null && dirs2 == null) {
+            return true;
+        } else if (dirs1 != null && dirs2 != null) {
+            if (dirs1.length != dirs2.length) {
+                return false;
+            }
+            for (int i = 0; i < dirs1.length; i++) {
+                if (!dirs1[i].equals(dirs2[i])) {
+                    return false;
+                }
+            }
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    private static String serializeDirs(String[] dirs) {
+        StringBuilder b = new StringBuilder();
+        b.append(dirs.length);
+        for (String d : dirs) {
+            b.append("\t").append(d);
+        }
+        return b.toString();
+    }
+
+    private static String[] deserializeDirs(String line) throws IOException {
+        String[] parts = org.apache.commons.lang.StringUtils.split(line, '\t');
+        if (null == parts || parts.length <= 0) {
+            throw new IOException("Invalid dirs : " + line);
+        }
+        int numDirs = Integer.parseInt(parts[0]);
+        if (parts.length != numDirs + 1) {
+            throw new IOException("Invalid dirs : " + line);
+        }
+        String[] dirs = new String[numDirs];
+        System.arraycopy(parts, 1, dirs, 0, numDirs);
+        return dirs;
     }
 
     private static String getZkPath(ServerConfiguration conf)

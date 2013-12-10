@@ -29,7 +29,7 @@ import java.net.InetAddress;
 import java.util.Arrays;
 import java.util.Enumeration;
 
-import org.apache.bookkeeper.bookie.Bookie;
+import org.apache.bookkeeper.bookie.BookieAdmin;
 import org.apache.bookkeeper.bookie.BookieException;
 import org.apache.bookkeeper.bookie.FileSystemUpgrade;
 import org.apache.bookkeeper.client.BookKeeperAdmin;
@@ -397,7 +397,7 @@ public class TestBackwardCompat {
 
         // Format the bookie also and restart
         assertTrue("Format should be success",
-                Bookie.format(currentServer.conf, false, true));
+                BookieAdmin.format(currentServer.conf, false, true));
         try {
             currentServer = null;
             currentServer = new ServerCurrent(journalDir, ledgerDir, port);

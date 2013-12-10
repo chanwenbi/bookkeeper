@@ -50,13 +50,11 @@ import org.apache.bookkeeper.meta.LedgerManager;
 import org.apache.bookkeeper.meta.LedgerManagerFactory;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.WriteCallback;
 import org.apache.bookkeeper.util.BookKeeperConstants;
-import org.apache.bookkeeper.util.IOUtils;
 import org.apache.bookkeeper.util.MathUtils;
 import org.apache.bookkeeper.util.StringUtils;
 import org.apache.bookkeeper.util.ZkUtils;
 import org.apache.bookkeeper.util.net.DNS;
 import org.apache.bookkeeper.zookeeper.ZooKeeperWatcherBase;
-import org.apache.commons.io.FileUtils;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.KeeperException.NodeExistsException;
@@ -892,14 +890,14 @@ public class Bookie extends BookieCriticalThread {
         return this.exitCode;
     }
 
-    /** 
+    /**
      * Retrieve the ledger descriptor for the ledger which entry should be added to.
-     * The LedgerDescriptor returned from this method should be eventually freed with 
+     * The LedgerDescriptor returned from this method should be eventually freed with
      * #putHandle().
      *
      * @throws BookieException if masterKey does not match the master key of the ledger
      */
-    private LedgerDescriptor getLedgerForEntry(ByteBuffer entry, byte[] masterKey) 
+    private LedgerDescriptor getLedgerForEntry(ByteBuffer entry, byte[] masterKey)
             throws IOException, BookieException {
         long ledgerId = entry.getLong();
         LedgerDescriptor l = handles.getHandle(ledgerId, masterKey);
@@ -927,7 +925,7 @@ public class Bookie extends BookieCriticalThread {
     }
 
     /**
-     * Add an entry to a ledger as specified by handle. 
+     * Add an entry to a ledger as specified by handle.
      */
     private void addEntryInternal(LedgerDescriptor handle, ByteBuffer entry, WriteCallback cb, Object ctx)
             throws IOException, BookieException {
@@ -942,11 +940,11 @@ public class Bookie extends BookieCriticalThread {
 
     /**
      * Add entry to a ledger, even if the ledger has previous been fenced. This should only
-     * happen in bookie recovery or ledger recovery cases, where entries are being replicates 
+     * happen in bookie recovery or ledger recovery cases, where entries are being replicates
      * so that they exist on a quorum of bookies. The corresponding client side call for this
      * is not exposed to users.
      */
-    public void recoveryAddEntry(ByteBuffer entry, WriteCallback cb, Object ctx, byte[] masterKey) 
+    public void recoveryAddEntry(ByteBuffer entry, WriteCallback cb, Object ctx, byte[] masterKey)
             throws IOException, BookieException {
         try {
             LedgerDescriptor handle = getLedgerForEntry(entry, masterKey);
@@ -958,8 +956,8 @@ public class Bookie extends BookieCriticalThread {
             throw new IOException(e);
         }
     }
-    
-    /** 
+
+    /**
      * Add entry to a ledger.
      * @throws BookieException.LedgerFencedException if the ledger is fenced
      */
@@ -1040,97 +1038,11 @@ public class Bookie extends BookieCriticalThread {
     }
 
     /**
-     * Format the bookie server data
-     * 
-     * @param conf
-     *            ServerConfiguration
-     * @param isInteractive
-     *            Whether format should ask prompt for confirmation if old data
-     *            exists or not.
-     * @param force
-     *            If non interactive and force is true, then old data will be
-     *            removed without confirm prompt.
-     * @return Returns true if the format is success else returns false
-     */
-    public static boolean format(ServerConfiguration conf,
-            boolean isInteractive, boolean force) {
-        File journalDir = conf.getJournalDir();
-        if (journalDir.exists() && journalDir.isDirectory()
-                && journalDir.list().length != 0) {
-            try {
-                boolean confirm = false;
-                if (!isInteractive) {
-                    // If non interactive and force is set, then delete old
-                    // data.
-                    if (force) {
-                        confirm = true;
-                    } else {
-                        confirm = false;
-                    }
-                } else {
-                    confirm = IOUtils
-                            .confirmPrompt("Are you sure to format Bookie data..?");
-                }
-
-                if (!confirm) {
-                    LOG.error("Bookie format aborted!!");
-                    return false;
-                }
-            } catch (IOException e) {
-                LOG.error("Error during bookie format", e);
-                return false;
-            }
-        }
-        if (!cleanDir(journalDir)) {
-            LOG.error("Formatting journal directory failed");
-            return false;
-        }
-
-        File[] ledgerDirs = conf.getLedgerDirs();
-        for (File dir : ledgerDirs) {
-            if (!cleanDir(dir)) {
-                LOG.error("Formatting ledger directory " + dir + " failed");
-                return false;
-            }
-        }
-
-        // Clean up index directories if they are separate from the ledger dirs
-        File[] indexDirs = conf.getIndexDirs();
-        if (null != indexDirs) {
-            for (File dir : indexDirs) {
-                if (!cleanDir(dir)) {
-                    LOG.error("Formatting ledger directory " + dir + " failed");
-                    return false;
-                }
-            }
-        }
-
-        LOG.info("Bookie format completed successfully");
-        return true;
-    }
-
-    private static boolean cleanDir(File dir) {
-        if (dir.exists()) {
-            for (File child : dir.listFiles()) {
-                boolean delete = FileUtils.deleteQuietly(child);
-                if (!delete) {
-                    LOG.error("Not able to delete " + child);
-                    return false;
-                }
-            }
-        } else if (!dir.mkdirs()) {
-            LOG.error("Not able to create the directory " + dir);
-            return false;
-        }
-        return true;
-    }
-
-    /**
      * @param args
      * @throws IOException
      * @throws InterruptedException
      */
-    public static void main(String[] args) 
+    public static void main(String[] args)
             throws IOException, InterruptedException, BookieException, KeeperException {
         Bookie b = new Bookie(new ServerConfiguration());
         b.start();
