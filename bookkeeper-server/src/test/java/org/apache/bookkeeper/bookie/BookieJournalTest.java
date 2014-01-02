@@ -195,12 +195,12 @@ public class BookieJournalTest {
         File journalDir = File.createTempFile("bookie", "journal");
         journalDir.delete();
         journalDir.mkdir();
-        Bookie.checkDirectoryStructure(Bookie.getCurrentDirectory(journalDir));
+        BookieAdmin.checkDirectoryStructure(Bookie.getCurrentDirectory(journalDir));
 
         File ledgerDir = File.createTempFile("bookie", "ledger");
         ledgerDir.delete();
         ledgerDir.mkdir();
-        Bookie.checkDirectoryStructure(Bookie.getCurrentDirectory(ledgerDir));
+        BookieAdmin.checkDirectoryStructure(Bookie.getCurrentDirectory(ledgerDir));
 
         writePreV2Journal(Bookie.getCurrentDirectory(journalDir), 100);
         writeIndexFileForLedger(Bookie.getCurrentDirectory(ledgerDir), 1, "testPasswd".getBytes());
@@ -234,12 +234,12 @@ public class BookieJournalTest {
         File journalDir = File.createTempFile("bookie", "journal");
         journalDir.delete();
         journalDir.mkdir();
-        Bookie.checkDirectoryStructure(Bookie.getCurrentDirectory(journalDir));
+        BookieAdmin.checkDirectoryStructure(Bookie.getCurrentDirectory(journalDir));
 
         File ledgerDir = File.createTempFile("bookie", "ledger");
         ledgerDir.delete();
         ledgerDir.mkdir();
-        Bookie.checkDirectoryStructure(Bookie.getCurrentDirectory(ledgerDir));
+        BookieAdmin.checkDirectoryStructure(Bookie.getCurrentDirectory(ledgerDir));
 
         writeJunkJournal(Bookie.getCurrentDirectory(journalDir));
 
@@ -272,12 +272,12 @@ public class BookieJournalTest {
         File journalDir = File.createTempFile("bookie", "journal");
         journalDir.delete();
         journalDir.mkdir();
-        Bookie.checkDirectoryStructure(Bookie.getCurrentDirectory(journalDir));
+        BookieAdmin.checkDirectoryStructure(Bookie.getCurrentDirectory(journalDir));
 
         File ledgerDir = File.createTempFile("bookie", "ledger");
         ledgerDir.delete();
         ledgerDir.mkdir();
-        Bookie.checkDirectoryStructure(Bookie.getCurrentDirectory(ledgerDir));
+        BookieAdmin.checkDirectoryStructure(Bookie.getCurrentDirectory(ledgerDir));
 
         writePreV2Journal(Bookie.getCurrentDirectory(journalDir), 0);
 
@@ -298,12 +298,12 @@ public class BookieJournalTest {
         File journalDir = File.createTempFile("bookie", "journal");
         journalDir.delete();
         journalDir.mkdir();
-        Bookie.checkDirectoryStructure(Bookie.getCurrentDirectory(journalDir));
+        BookieAdmin.checkDirectoryStructure(Bookie.getCurrentDirectory(journalDir));
 
         File ledgerDir = File.createTempFile("bookie", "ledger");
         ledgerDir.delete();
         ledgerDir.mkdir();
-        Bookie.checkDirectoryStructure(Bookie.getCurrentDirectory(ledgerDir));
+        BookieAdmin.checkDirectoryStructure(Bookie.getCurrentDirectory(ledgerDir));
 
         writePostV2Journal(Bookie.getCurrentDirectory(journalDir), 0);
 
@@ -324,12 +324,12 @@ public class BookieJournalTest {
         File journalDir = File.createTempFile("bookie", "journal");
         journalDir.delete();
         journalDir.mkdir();
-        Bookie.checkDirectoryStructure(Bookie.getCurrentDirectory(journalDir));
+        BookieAdmin.checkDirectoryStructure(Bookie.getCurrentDirectory(journalDir));
 
         File ledgerDir = File.createTempFile("bookie", "ledger");
         ledgerDir.delete();
         ledgerDir.mkdir();
-        Bookie.checkDirectoryStructure(Bookie.getCurrentDirectory(ledgerDir));
+        BookieAdmin.checkDirectoryStructure(Bookie.getCurrentDirectory(ledgerDir));
 
         JournalChannel jc = writePostV2Journal(Bookie.getCurrentDirectory(journalDir), 0);
         jc.getBufferedChannel().write(ByteBuffer.wrap("JunkJunkJunk".getBytes()));
@@ -363,12 +363,12 @@ public class BookieJournalTest {
         File journalDir = File.createTempFile("bookie", "journal");
         journalDir.delete();
         journalDir.mkdir();
-        Bookie.checkDirectoryStructure(Bookie.getCurrentDirectory(journalDir));
+        BookieAdmin.checkDirectoryStructure(Bookie.getCurrentDirectory(journalDir));
 
         File ledgerDir = File.createTempFile("bookie", "ledger");
         ledgerDir.delete();
         ledgerDir.mkdir();
-        Bookie.checkDirectoryStructure(Bookie.getCurrentDirectory(ledgerDir));
+        BookieAdmin.checkDirectoryStructure(Bookie.getCurrentDirectory(ledgerDir));
 
         JournalChannel jc = writePostV2Journal(
                 Bookie.getCurrentDirectory(journalDir), 100);
@@ -411,12 +411,12 @@ public class BookieJournalTest {
         File journalDir = File.createTempFile("bookie", "journal");
         journalDir.delete();
         journalDir.mkdir();
-        Bookie.checkDirectoryStructure(Bookie.getCurrentDirectory(journalDir));
+        BookieAdmin.checkDirectoryStructure(Bookie.getCurrentDirectory(journalDir));
 
         File ledgerDir = File.createTempFile("bookie", "ledger");
         ledgerDir.delete();
         ledgerDir.mkdir();
-        Bookie.checkDirectoryStructure(Bookie.getCurrentDirectory(ledgerDir));
+        BookieAdmin.checkDirectoryStructure(Bookie.getCurrentDirectory(ledgerDir));
 
         JournalChannel jc = writePostV2Journal(
                 Bookie.getCurrentDirectory(journalDir), 100);
@@ -484,12 +484,12 @@ public class BookieJournalTest {
         File journalDir = File.createTempFile("bookie", "journal");
         journalDir.delete();
         journalDir.mkdir();
-        Bookie.checkDirectoryStructure(Bookie.getCurrentDirectory(journalDir));
+        BookieAdmin.checkDirectoryStructure(Bookie.getCurrentDirectory(journalDir));
 
         File ledgerDir = File.createTempFile("bookie", "ledger");
         ledgerDir.delete();
         ledgerDir.mkdir();
-        Bookie.checkDirectoryStructure(Bookie.getCurrentDirectory(journalDir));
+        BookieAdmin.checkDirectoryStructure(Bookie.getCurrentDirectory(journalDir));
 
         writePreV2Journal(Bookie.getCurrentDirectory(journalDir), 100);
         writePartialIndexFileForLedger(Bookie.getCurrentDirectory(ledgerDir),
@@ -544,12 +544,12 @@ public class BookieJournalTest {
         File journalDir = File.createTempFile("bookie", "journal");
         journalDir.delete();
         journalDir.mkdir();
-        Bookie.checkDirectoryStructure(Bookie.getCurrentDirectory(journalDir));
+        BookieAdmin.checkDirectoryStructure(Bookie.getCurrentDirectory(journalDir));
 
         File ledgerDir = File.createTempFile("bookie", "ledger");
         ledgerDir.delete();
         ledgerDir.mkdir();
-        Bookie.checkDirectoryStructure(Bookie.getCurrentDirectory(ledgerDir));
+        BookieAdmin.checkDirectoryStructure(Bookie.getCurrentDirectory(ledgerDir));
 
         byte[] masterKey = "testPasswd".getBytes();
 

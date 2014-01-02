@@ -45,7 +45,7 @@ public class TestLedgerDirsManager extends TestCase {
         tmpDir.delete();
         tmpDir.mkdir();
         curDir = Bookie.getCurrentDirectory(tmpDir);
-        Bookie.checkDirectoryStructure(curDir);
+        BookieAdmin.checkDirectoryStructure(curDir);
 
         ServerConfiguration conf = TestBKConfiguration.newServerConfiguration();
         conf.setLedgerDirNames(new String[] {tmpDir.toString()});

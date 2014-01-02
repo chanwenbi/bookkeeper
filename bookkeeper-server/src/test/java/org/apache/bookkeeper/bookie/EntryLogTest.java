@@ -52,7 +52,7 @@ public class EntryLogTest extends TestCase {
         tmpDir.delete();
         tmpDir.mkdir();
         File curDir = Bookie.getCurrentDirectory(tmpDir);
-        Bookie.checkDirectoryStructure(curDir);
+        BookieAdmin.checkDirectoryStructure(curDir);
 
         int gcWaitTime = 1000;
         ServerConfiguration conf = TestBKConfiguration.newServerConfiguration();
@@ -104,7 +104,7 @@ public class EntryLogTest extends TestCase {
         tmpDir.delete();
         tmpDir.mkdir();
         File curDir = Bookie.getCurrentDirectory(tmpDir);
-        Bookie.checkDirectoryStructure(curDir);
+        BookieAdmin.checkDirectoryStructure(curDir);
 
         ServerConfiguration conf = TestBKConfiguration.newServerConfiguration();
         conf.setLedgerDirNames(new String[] {tmpDir.toString()});

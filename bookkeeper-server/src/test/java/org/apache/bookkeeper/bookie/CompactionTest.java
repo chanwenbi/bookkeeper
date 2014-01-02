@@ -199,7 +199,7 @@ public class CompactionTest extends BookKeeperClusterTestCase {
 
         // entry logs ([0,1,2].log) should be compacted.
         for (File ledgerDirectory : tmpDirs) {
-            assertFalse("Found entry log file ([0,1,2].log that should have not been compacted in ledgerDirectory: " 
+            assertFalse("Found entry log file ([0,1,2].log that should have not been compacted in ledgerDirectory: "
                             + ledgerDirectory, TestUtils.hasLogFiles(ledgerDirectory, true, 0, 1, 2));
         }
 
@@ -326,7 +326,7 @@ public class CompactionTest extends BookKeeperClusterTestCase {
         tmpDir.delete();
         tmpDir.mkdir();
         File curDir = Bookie.getCurrentDirectory(tmpDir);
-        Bookie.checkDirectoryStructure(curDir);
+        BookieAdmin.checkDirectoryStructure(curDir);
         conf.setLedgerDirNames(new String[] {tmpDir.toString()});
 
         conf.setEntryLogSizeLimit(EntryLogger.LOGFILE_HEADER_SIZE + 3 * (4+ENTRY_SIZE));
@@ -467,7 +467,7 @@ public class CompactionTest extends BookKeeperClusterTestCase {
         tmpDir.delete();
         tmpDir.mkdir();
         File curDir = Bookie.getCurrentDirectory(tmpDir);
-        Bookie.checkDirectoryStructure(curDir);
+        BookieAdmin.checkDirectoryStructure(curDir);
         conf.setLedgerDirNames(new String[] { tmpDir.toString() });
 
         LedgerDirsManager dirs = new LedgerDirsManager(conf, conf.getLedgerDirs());

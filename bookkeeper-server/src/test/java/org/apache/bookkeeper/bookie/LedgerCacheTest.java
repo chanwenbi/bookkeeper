@@ -220,7 +220,7 @@ public class LedgerCacheTest extends TestCase {
 
             // flush all first to clean previous dirty ledgers
             ledgerCache.flushLedger(true);
-            // flush all 
+            // flush all
             ledgerCache.flushLedger(true);
 
             // delete serveral ledgers
@@ -308,12 +308,12 @@ public class LedgerCacheTest extends TestCase {
         File journalDir = File.createTempFile("bookie", "journal");
         journalDir.delete();
         journalDir.mkdir();
-        Bookie.checkDirectoryStructure(Bookie.getCurrentDirectory(journalDir));
+        BookieAdmin.checkDirectoryStructure(Bookie.getCurrentDirectory(journalDir));
 
         File ledgerDir = File.createTempFile("bookie", "ledger");
         ledgerDir.delete();
         ledgerDir.mkdir();
-        Bookie.checkDirectoryStructure(Bookie.getCurrentDirectory(ledgerDir));
+        BookieAdmin.checkDirectoryStructure(Bookie.getCurrentDirectory(ledgerDir));
 
         ServerConfiguration conf = TestBKConfiguration.newServerConfiguration()
             .setZkServers(null)
