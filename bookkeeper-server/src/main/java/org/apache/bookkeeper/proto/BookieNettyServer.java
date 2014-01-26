@@ -33,9 +33,12 @@ import org.apache.zookeeper.KeeperException;
 import org.jboss.netty.bootstrap.ServerBootstrap;
 import org.jboss.netty.channel.Channel;
 import org.jboss.netty.channel.ChannelFactory;
+import org.jboss.netty.channel.ChannelHandlerContext;
 import org.jboss.netty.channel.ChannelPipeline;
 import org.jboss.netty.channel.ChannelPipelineFactory;
+import org.jboss.netty.channel.ChannelStateEvent;
 import org.jboss.netty.channel.Channels;
+import org.jboss.netty.channel.SimpleChannelHandler;
 import org.jboss.netty.channel.group.ChannelGroup;
 import org.jboss.netty.channel.group.ChannelGroupFuture;
 import org.jboss.netty.channel.group.DefaultChannelGroup;
@@ -52,7 +55,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
  * Netty server for serving bookie requests
  */
 class BookieNettyServer {
-    static Logger LOG = LoggerFactory.getLogger(BookieNettyServer.class);
+    private final static Logger LOG = LoggerFactory.getLogger(BookieNettyServer.class);
 
     final static int maxMessageSize = 0xfffff;
     final ServerConfiguration conf;
@@ -75,12 +78,14 @@ class BookieNettyServer {
         serverChannelFactory = new NioServerSocketChannelFactory(
                 Executors.newCachedThreadPool(tfb.setNameFormat(base + "-boss-%d").build()),
                 Executors.newCachedThreadPool(tfb.setNameFormat(base + "-worker-%d").build()));
+        InetSocketAddress bindAddress;
         if (conf.getListeningInterface() == null) {
             // listen on all interfaces
             bindAddress = new InetSocketAddress(conf.getBookiePort());
         } else {
             bindAddress = Bookie.getBookieAddress(conf);
         }
+        listenOn(bindAddress);
     }
 
     boolean isRunning() {
@@ -104,19 +109,22 @@ class BookieNettyServer {
         }
     }
 
-    void start() {
+    private void listenOn(InetSocketAddress address) {
         ServerBootstrap bootstrap = new ServerBootstrap(serverChannelFactory);
         bootstrap.setPipelineFactory(new BookiePipelineFactory());
         bootstrap.setOption("child.tcpNoDelay", conf.getServerTcpNoDelay());
         bootstrap.setOption("child.soLinger", 2);
 
-        Channel listen = bootstrap.bind(bindAddress);
-
+        Channel listen = bootstrap.bind(address);
         allChannels.add(listen);
+    }
+
+    void start() {
         isRunning.set(true);
     }
 
     void shutdown() {
+        LOG.info("Shutting down BookieNettyServer");
         isRunning.set(false);
         allChannels.close().awaitUninterruptibly();
         serverChannelFactory.releaseExternalResources();
@@ -136,10 +144,21 @@ class BookieNettyServer {
 
             pipeline.addLast("bookieProtoDecoder", new BookieProtoEncoding.RequestDecoder());
             pipeline.addLast("bookieProtoEncoder", new BookieProtoEncoding.ResponseEncoder());
-            pipeline.addLast("bookieRequestHandler", new BookieRequestHandler(conf, requestProcessor,
-                                                                              allChannels));
+            SimpleChannelHandler requestHandler = isRunning.get() ?
+                    new BookieRequestHandler(conf, requestProcessor, allChannels)
+                    : new RejectRequestHandler();
+            pipeline.addLast("bookieRequestHandler", requestHandler);
             return pipeline;
         }
+    }
+
+    private static class RejectRequestHandler extends SimpleChannelHandler {
+
+        @Override
+        public void channelOpen(ChannelHandlerContext ctx, ChannelStateEvent e) throws Exception {
+            ctx.getChannel().close();
+        }
+
     }
 
     private static class CleanupChannelGroup extends DefaultChannelGroup {

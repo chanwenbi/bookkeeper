@@ -21,31 +21,37 @@ package org.apache.bookkeeper.proto;
  *
  */
 
-import java.util.Set;
-import java.util.HashSet;
+import static com.google.common.base.Charsets.UTF_8;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
-import org.apache.bookkeeper.conf.ClientConfiguration;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+
 import org.apache.bookkeeper.client.BKException;
-import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.ReadEntryCallback;
+import org.apache.bookkeeper.conf.ClientConfiguration;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.GenericCallback;
+import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.ReadEntryCallback;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.WriteCallback;
+import org.apache.bookkeeper.stats.NullStatsLogger;
+import org.apache.bookkeeper.stats.StatsLogger;
 import org.apache.bookkeeper.util.OrderedSafeExecutor;
 import org.apache.bookkeeper.util.SafeRunnable;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.buffer.ChannelBuffers;
 import org.jboss.netty.channel.socket.ClientSocketChannelFactory;
 import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-import static com.google.common.base.Charsets.UTF_8;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 /**
  * Implements the client-side part of the BookKeeper protocol.
  *
@@ -54,22 +60,32 @@ public class BookieClient {
     static final Logger LOG = LoggerFactory.getLogger(BookieClient.class);
 
     // This is global state that should be across all BookieClients
-    AtomicLong totalBytesOutstanding = new AtomicLong();
+    final AtomicLong totalBytesOutstanding = new AtomicLong();
 
-    OrderedSafeExecutor executor;
-    ClientSocketChannelFactory channelFactory;
-    ConcurrentHashMap<InetSocketAddress, PerChannelBookieClient> channels = new ConcurrentHashMap<InetSocketAddress, PerChannelBookieClient>();
-
+    final OrderedSafeExecutor executor;
+    final ClientSocketChannelFactory channelFactory;
+    final ConcurrentHashMap<InetSocketAddress, PerChannelBookieClient> channels =
+        new ConcurrentHashMap<InetSocketAddress, PerChannelBookieClient>();
+    final ScheduledExecutorService timeoutExecutor = Executors
+            .newSingleThreadScheduledExecutor(new ThreadFactoryBuilder()
+                    .setNameFormat("BKClient-TimeoutTaskExecutor-%d").build());
     private final ClientConfiguration conf;
     private volatile boolean closed;
-    private ReentrantReadWriteLock closeLock;
+    private final ReentrantReadWriteLock closeLock;
+    private final StatsLogger statsLogger;
 
     public BookieClient(ClientConfiguration conf, ClientSocketChannelFactory channelFactory, OrderedSafeExecutor executor) {
+        this(conf, channelFactory, executor, NullStatsLogger.INSTANCE);
+    }
+
+    public BookieClient(ClientConfiguration conf, ClientSocketChannelFactory channelFactory, OrderedSafeExecutor executor,
+                        StatsLogger statsLogger) {
         this.conf = conf;
         this.channelFactory = channelFactory;
         this.executor = executor;
         this.closed = false;
         this.closeLock = new ReentrantReadWriteLock();
+        this.statsLogger = statsLogger;
     }
 
     public PerChannelBookieClient lookupClient(InetSocketAddress addr) {
@@ -81,7 +97,8 @@ public class BookieClient {
                 if (closed) {
                     return null;
                 }
-                channel = new PerChannelBookieClient(conf, executor, channelFactory, addr, totalBytesOutstanding);
+                channel = new PerChannelBookieClient(conf, executor, channelFactory, addr, totalBytesOutstanding,
+                        timeoutExecutor, statsLogger);
                 PerChannelBookieClient prevChannel = channels.putIfAbsent(addr, channel);
                 if (prevChannel != null) {
                     channel = prevChannel;
@@ -209,6 +226,16 @@ public class BookieClient {
         } finally {
             closeLock.writeLock().unlock();
         }
+        timeoutExecutor.shutdown();
+        try {
+            if (!timeoutExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                LOG.warn("BKClient-TimeoutTaskExecutor did not shutdown cleanly!");
+            }
+        } catch (InterruptedException ie) {
+            LOG.warn(
+                    "Interrupted when shutting down BKClient-TimeoutTaskExecutor",
+                    ie);
+        }
     }
 
     private static class Counter {
@@ -260,9 +287,14 @@ public class BookieClient {
         Counter counter = new Counter();
         byte hello[] = "hello".getBytes(UTF_8);
         long ledger = Long.parseLong(args[2]);
-        ClientSocketChannelFactory channelFactory = new NioClientSocketChannelFactory(Executors.newCachedThreadPool(), Executors
-                .newCachedThreadPool());
-        OrderedSafeExecutor executor = new OrderedSafeExecutor(1);
+        ThreadFactoryBuilder tfb = new ThreadFactoryBuilder();
+        ClientSocketChannelFactory channelFactory = new NioClientSocketChannelFactory(
+                Executors.newCachedThreadPool(tfb.setNameFormat(
+                        "BookKeeper-NIOBoss-%d").build()),
+                Executors.newCachedThreadPool(tfb.setNameFormat(
+                        "BookKeeper-NIOWorker-%d").build()));
+        OrderedSafeExecutor executor = new OrderedSafeExecutor(1,
+                "BookieClientWorker");
         BookieClient bc = new BookieClient(new ClientConfiguration(), channelFactory, executor);
         InetSocketAddress addr = new InetSocketAddress(args[0], Integer.parseInt(args[1]));
 

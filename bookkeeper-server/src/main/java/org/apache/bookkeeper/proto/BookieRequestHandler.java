@@ -40,7 +40,7 @@ import org.slf4j.LoggerFactory;
  */
 class BookieRequestHandler extends SimpleChannelHandler {
 
-    static Logger LOG = LoggerFactory.getLogger(BookieRequestHandler.class);
+    private final static Logger LOG = LoggerFactory.getLogger(BookieRequestHandler.class);
     private final RequestProcessor requestProcessor;
     private final ChannelGroup allChannels;
 

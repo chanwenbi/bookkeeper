@@ -24,16 +24,22 @@ import com.google.common.annotations.Beta;
 
 import org.apache.commons.lang.StringUtils;
 
+import com.google.common.annotations.Beta;
+
 /**
  * Configuration manages server-side settings
  */
 public class ServerConfiguration extends AbstractConfiguration {
     // Entry Log Parameters
     protected final static String ENTRY_LOG_SIZE_LIMIT = "logSizeLimit";
+    protected final static String ENTRY_LOG_FILE_PREALLOCATION_ENABLED = "entryLogFilePreallocationEnabled";
     protected final static String MINOR_COMPACTION_INTERVAL = "minorCompactionInterval";
     protected final static String MINOR_COMPACTION_THRESHOLD = "minorCompactionThreshold";
     protected final static String MAJOR_COMPACTION_INTERVAL = "majorCompactionInterval";
     protected final static String MAJOR_COMPACTION_THRESHOLD = "majorCompactionThreshold";
+    protected final static String COMPACTION_MAX_OUTSTANDING_REQUESTS
+        = "compactionMaxOutstandingRequests";
+    protected final static String COMPACTION_RATE = "compactionRate";
 
     // Gc Parameters
     protected final static String GC_WAIT_TIME = "gcWaitTime";
@@ -48,7 +54,14 @@ public class ServerConfiguration extends AbstractConfiguration {
     // Journal Parameters
     protected final static String MAX_JOURNAL_SIZE = "journalMaxSizeMB";
     protected final static String MAX_BACKUP_JOURNALS = "journalMaxBackups";
+    protected final static String JOURNAL_ADAPTIVE_GROUP_WRITES = "journalAdaptiveGroupWrites";
+    protected final static String JOURNAL_MAX_GROUP_WAIT_MSEC = "journalMaxGroupWaitMSec";
+    protected final static String JOURNAL_BUFFERED_WRITES_THRESHOLD = "journalBufferedWritesThreshold";
+    protected final static String JOURNAL_FLUSH_WHEN_QUEUE_EMPTY = "journalFlushWhenQueueEmpty";
     protected final static String JOURNAL_REMOVE_FROM_PAGE_CACHE = "journalRemoveFromPageCache";
+    protected final static String JOURNAL_PRE_ALLOC_SIZE = "journalPreAllocSizeMB";
+    protected final static String JOURNAL_WRITE_BUFFER_SIZE = "journalWriteBufferSizeKB";
+    protected final static String NUM_JOURNAL_CALLBACK_THREADS = "numJournalCallbackThreads";
     // Bookie Parameters
     protected final static String BOOKIE_PORT = "bookiePort";
     protected final static String LISTENING_INTERFACE = "listeningInterface";
@@ -56,6 +69,7 @@ public class ServerConfiguration extends AbstractConfiguration {
 
     protected final static String JOURNAL_DIR = "journalDirectory";
     protected final static String LEDGER_DIRS = "ledgerDirectories";
+    protected final static String INDEX_DIRS = "indexDirectories";
     // NIO Parameters
     protected final static String SERVER_TCP_NODELAY = "serverTcpNoDelay";
     // Zookeeper Parameters
@@ -68,6 +82,7 @@ public class ServerConfiguration extends AbstractConfiguration {
     protected final static String READ_ONLY_MODE_ENABLED = "readOnlyModeEnabled";
     //Disk utilization
     protected final static String DISK_USAGE_THRESHOLD = "diskUsageThreshold";
+    protected final static String DISK_USAGE_WARN_THRESHOLD = "diskUsageWarnThreshold";
     protected final static String DISK_CHECK_INTERVAL = "diskCheckInterval";
     protected final static String AUDITOR_PERIODIC_CHECK_INTERVAL = "auditorPeriodicCheckInterval";
     protected final static String AUTO_RECOVERY_DAEMON_ENABLED = "autoRecoveryDaemonEnabled";
@@ -75,6 +90,9 @@ public class ServerConfiguration extends AbstractConfiguration {
     // Worker Thread parameters.
     protected final static String NUM_ADD_WORKER_THREADS = "numAddWorkerThreads";
     protected final static String NUM_READ_WORKER_THREADS = "numReadWorkerThreads";
+
+    protected final static String READ_BUFFER_SIZE = "readBufferSizeBytes";
+    protected final static String WRITE_BUFFER_SIZE = "writeBufferSizeBytes";
 
     /**
      * Construct a default configuration object
@@ -111,6 +129,27 @@ public class ServerConfiguration extends AbstractConfiguration {
      */
     public ServerConfiguration setEntryLogSizeLimit(long logSizeLimit) {
         this.setProperty(ENTRY_LOG_SIZE_LIMIT, Long.toString(logSizeLimit));
+        return this;
+    }
+
+    /**
+     * Is entry log file preallocation enabled.
+     *
+     * @return whether entry log file preallocation is enabled or not.
+     */
+    public boolean isEntryLogFilePreAllocationEnabled() {
+        return this.getBoolean(ENTRY_LOG_FILE_PREALLOCATION_ENABLED, true);
+    }
+
+    /**
+     * Enable/disable entry log file preallocation.
+     *
+     * @param enabled
+     *          enable/disable entry log file preallocation.
+     * @return server configuration object.
+     */
+    public ServerConfiguration setEntryLogFilePreAllocationEnabled(boolean enabled) {
+        this.setProperty(ENTRY_LOG_FILE_PREALLOCATION_ENABLED, enabled);
         return this;
     }
 
@@ -235,7 +274,7 @@ public class ServerConfiguration extends AbstractConfiguration {
      *
      * @return max journal file size
      */
-    public long getMaxJournalSize() {
+    public long getMaxJournalSizeMB() {
         return this.getLong(MAX_JOURNAL_SIZE, 2 * 1024);
     }
 
@@ -246,9 +285,27 @@ public class ServerConfiguration extends AbstractConfiguration {
      *          new max journal file size
      * @return server configuration
      */
-    public ServerConfiguration setMaxJournalSize(long maxJournalSize) {
+    public ServerConfiguration setMaxJournalSizeMB(long maxJournalSize) {
         this.setProperty(MAX_JOURNAL_SIZE, Long.toString(maxJournalSize));
         return this;
+    }
+
+    /**
+     * How much space should we pre-allocate at a time in the journal
+     *
+     * @return journal pre-allocation size in MB
+     */
+    public int getJournalPreAllocSizeMB() {
+        return this.getInt(JOURNAL_PRE_ALLOC_SIZE, 16);
+    }
+
+    /**
+     * Size of the write buffers used for the journal
+     *
+     * @return journal write buffer size in KB
+     */
+    public int getJournalWriteBufferSizeKB() {
+        return this.getInt(JOURNAL_WRITE_BUFFER_SIZE, 64);
     }
 
     /**
@@ -426,6 +483,47 @@ public class ServerConfiguration extends AbstractConfiguration {
             ledgerDirs[i] = new File(ledgerDirNames[i]);
         }
         return ledgerDirs;
+    }
+
+    /** 
+     * Get dir name to store index files.
+     *   
+     * @return ledger index dir name, if no index dirs provided return null
+     */  
+    public String[] getIndexDirNames() {
+        if (!this.containsKey(INDEX_DIRS)) {
+            return null;
+        }
+        return this.getStringArray(INDEX_DIRS);
+    }   
+
+    /** 
+     * Set dir name to store index files.
+     *
+     * @param indexDirs
+     *          Index dir names
+     * @return server configuration.
+     */
+    public ServerConfiguration setIndexDirName(String[] indexDirs) {
+        this.setProperty(INDEX_DIRS, indexDirs);
+        return this;
+    }
+
+    /**
+     * Get index dir to store ledger index files.
+     *
+     * @return index dirs, if no index dirs provided return null
+     */
+    public File[] getIndexDirs() {
+        String[] idxDirNames = getIndexDirNames();
+        if (null == idxDirNames) {
+            return null;
+        }
+        File[] idxDirs = new File[idxDirNames.length];
+        for (int i=0; i<idxDirNames.length; i++) {
+            idxDirs[i] = new File(idxDirNames[i]);
+        }
+        return idxDirs;
     }
 
     /**
@@ -652,6 +750,29 @@ public class ServerConfiguration extends AbstractConfiguration {
     }
 
     /**
+     * Get the number of bytes we should use as capacity for the {@link
+     * org.apache.bookkeeper.bookie.BufferedReadChannel}
+     * Default is 512 bytes
+     * @return read buffer size
+     */
+    public int getReadBufferBytes() {
+        return getInt(READ_BUFFER_SIZE, 512);
+    }
+
+    /**
+     * Set the number of bytes we should use as capacity for the {@link
+     * org.apache.bookkeeper.bookie.BufferedReadChannel}
+     *
+     * @param readBufferSize
+     *          Read Buffer Size
+     * @return server configuration
+     */
+    public ServerConfiguration setReadBufferBytes(int readBufferSize) {
+        setProperty(READ_BUFFER_SIZE, readBufferSize);
+        return this;
+    }
+
+    /**
      * Set the number of threads that would handle write requests.
      *
      * @param numThreads
@@ -692,6 +813,103 @@ public class ServerConfiguration extends AbstractConfiguration {
     }
 
     /**
+     * Get the number of bytes used as capacity for the write buffer. Default is
+     * 64KB.
+     * NOTE: Make sure this value is greater than the maximum message size.
+     * @return
+     */
+    public int getWriteBufferBytes() {
+        return getInt(WRITE_BUFFER_SIZE, 65536);
+    }
+
+    /**
+     * Set the number of bytes used as capacity for the write buffer.
+     *
+     * @param writeBufferBytes
+     *          Write Buffer Bytes
+     * @return server configuration
+     */
+    public ServerConfiguration setWriteBufferBytes(int writeBufferBytes) {
+        setProperty(WRITE_BUFFER_SIZE, writeBufferBytes);
+        return this;
+    }
+
+    /**
+     * Set the number of threads that would handle journal callbacks.
+     *
+     * @param numThreads
+     *          number of threads to handle journal callbacks.
+     * @return server configuration
+     */
+    public ServerConfiguration setNumJournalCallbackThreads(int numThreads) {
+        setProperty(NUM_JOURNAL_CALLBACK_THREADS, numThreads);
+        return this;
+    }
+
+    /**
+     * Get the number of threads that should handle journal callbacks.
+     *
+     * @return the number of threads that handle journal callbacks.
+     */
+    public int getNumJournalCallbackThreads() {
+        return getInt(NUM_JOURNAL_CALLBACK_THREADS, 1);
+    }
+
+
+    /**
+     * Should we group journal force writes
+     *
+     * @return group journal force writes
+     */
+    public boolean getJournalAdaptiveGroupWrites() {
+        return getBoolean(JOURNAL_ADAPTIVE_GROUP_WRITES, true);
+    }
+
+    /**
+     * Enable/disable group journal force writes
+     *
+     * @param enabled flag to enable/disable group journal force writes
+     */
+    public ServerConfiguration setJournalAdaptiveGroupWrites(boolean enabled) {
+        setProperty(JOURNAL_ADAPTIVE_GROUP_WRITES, enabled);
+        return this;
+    }
+
+    /**
+     * Maximum latency to impose on a journal write to achieve grouping
+     *
+     * @return max wait for grouping
+     */
+    public long getJournalMaxGroupWaitMSec() {
+        return getLong(JOURNAL_MAX_GROUP_WAIT_MSEC, 200);
+    }
+
+    /**
+     * Maximum latency to impose on a journal write to achieve grouping
+     *
+     * @return max wait for grouping
+     */
+    public long getJournalBufferedWritesThreshold() {
+        return getLong(JOURNAL_BUFFERED_WRITES_THRESHOLD, 512 * 1024);
+    }
+
+
+    /**
+     * Set if we should flush the journal when queue is empty
+     */
+    public ServerConfiguration setJournalFlushWhenQueueEmpty(boolean enabled) {
+        setProperty(JOURNAL_FLUSH_WHEN_QUEUE_EMPTY, enabled);
+        return this;
+    }
+
+    /**
+     * Should we flush the journal when queue is empty
+     *
+     * @return flush when queue is empty
+     */
+    public boolean getJournalFlushWhenQueueEmpty() {
+        return getBoolean(JOURNAL_FLUSH_WHEN_QUEUE_EMPTY, false);
+    }
 
     /**
      * Set whether the bookie is able to go into read-only mode.
@@ -714,6 +932,27 @@ public class ServerConfiguration extends AbstractConfiguration {
      */
     public boolean isReadOnlyModeEnabled() {
         return getBoolean(READ_ONLY_MODE_ENABLED, false);
+    }
+
+    /**
+     * Set the warning threshold for disk usage.
+     *
+     * @param threshold warning threshold to force gc.
+     *
+     * @return ServerConfiguration
+     */
+    public ServerConfiguration setDiskUsageWarnThreshold(float threshold) {
+        setProperty(DISK_USAGE_WARN_THRESHOLD, threshold);
+        return this;
+    }
+
+    /**
+     * Returns the warning threshold for disk usage. If disk usage
+     * goes beyond this, a garbage collection cycle will be forced.
+     * @return
+     */
+    public float getDiskUsageWarnThreshold() {
+        return getFloat(DISK_USAGE_WARN_THRESHOLD, 0.90f);
     }
 
     /**
@@ -801,6 +1040,58 @@ public class ServerConfiguration extends AbstractConfiguration {
      */
     public boolean isAutoRecoveryDaemonEnabled() {
         return getBoolean(AUTO_RECOVERY_DAEMON_ENABLED, false);
+    }
+
+    /**
+     * Get the maximum number of entries which can be compacted without flushing.
+     * Default is 100,000.
+     *
+     * @return the maximum number of unflushed entries
+     */
+    public int getCompactionMaxOutstandingRequests() {
+        return getInt(COMPACTION_MAX_OUTSTANDING_REQUESTS, 100000);
+    }
+
+    /**
+     * Set the maximum number of entries which can be compacted without flushing.
+     *
+     * When compacting, the entries are written to the entrylog and the new offsets
+     * are cached in memory. Once the entrylog is flushed the index is updated with
+     * the new offsets. This parameter controls the number of entries added to the
+     * entrylog before a flush is forced. A higher value for this parameter means
+     * more memory will be used for offsets. Each offset consists of 3 longs.
+     *
+     * This parameter should _not_ be modified unless you know what you're doing.
+     * The default is 100,000.
+     *
+     * @param maxOutstandingRequests number of entries to compact before flushing
+     *
+     * @return ServerConfiguration
+     */
+    public ServerConfiguration setCompactionMaxOutstandingRequests(int maxOutstandingRequests) {
+        setProperty(COMPACTION_MAX_OUTSTANDING_REQUESTS, maxOutstandingRequests);
+        return this;
+    }
+
+    /**
+     * Get the rate of compaction adds. Default is 1,000.
+     *
+     * @return rate of compaction (adds per second)
+     */
+    public int getCompactionRate() {
+        return getInt(COMPACTION_RATE, 1000);
+    }
+
+    /**
+     * Set the rate of compaction adds.
+     *
+     * @param rate rate of compaction adds (adds per second)
+     *
+     * @return ServerConfiguration
+     */
+    public ServerConfiguration setCompactionRate(int rate) {
+        setProperty(COMPACTION_RATE, rate);
+        return this;
     }
 
     /**

@@ -21,45 +21,35 @@ package org.apache.bookkeeper.bookie;
  *
  */
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.fail;
+
 import java.io.File;
-import java.io.RandomAccessFile;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.util.ArrayList;
-import java.util.Enumeration;
-import java.util.Random;
-import java.util.Set;
 import java.util.Arrays;
+import java.util.Random;
 
-import org.apache.bookkeeper.conf.ServerConfiguration;
-import org.apache.bookkeeper.client.AsyncCallback.AddCallback;
-import org.apache.bookkeeper.client.BKException;
-import org.apache.bookkeeper.client.BookKeeperTestClient;
-import org.apache.bookkeeper.client.LedgerEntry;
 import org.apache.bookkeeper.client.ClientUtil;
 import org.apache.bookkeeper.client.LedgerHandle;
-import org.apache.bookkeeper.client.AsyncCallback.ReadCallback;
-import org.apache.bookkeeper.client.BookKeeper.DigestType;
-import org.apache.bookkeeper.proto.BookieServer;
+import org.apache.bookkeeper.conf.ServerConfiguration;
+import org.apache.bookkeeper.conf.TestBKConfiguration;
+import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.apache.zookeeper.KeeperException;
-import org.apache.zookeeper.WatchedEvent;
-import org.apache.zookeeper.Watcher;
-import org.junit.Before;
-import org.junit.Test;
-import static org.junit.Assert.*;
 
 public class BookieJournalTest {
-    static Logger LOG = LoggerFactory.getLogger(BookieJournalTest.class);
+    private final static Logger LOG = LoggerFactory.getLogger(BookieJournalTest.class);
 
     final Random r = new Random(System.currentTimeMillis());
 
     private void writeIndexFileForLedger(File indexDir, long ledgerId,
                                          byte[] masterKey)
             throws Exception {
-        File fn = new File(indexDir, LedgerCacheImpl.getLedgerName(ledgerId));
+        File fn = new File(indexDir, IndexPersistenceMgr.getLedgerName(ledgerId));
         fn.getParentFile().mkdirs();
         FileInfo fi = new FileInfo(fn, masterKey);
         // force creation of index file
@@ -70,7 +60,7 @@ public class BookieJournalTest {
     private void writePartialIndexFileForLedger(File indexDir, long ledgerId,
                                                 byte[] masterKey, boolean truncateToMasterKey)
             throws Exception {
-        File fn = new File(indexDir, LedgerCacheImpl.getLedgerName(ledgerId));
+        File fn = new File(indexDir, IndexPersistenceMgr.getLedgerName(ledgerId));
         fn.getParentFile().mkdirs();
         FileInfo fi = new FileInfo(fn, masterKey);
         // force creation of index file
@@ -215,7 +205,7 @@ public class BookieJournalTest {
         writePreV2Journal(Bookie.getCurrentDirectory(journalDir), 100);
         writeIndexFileForLedger(Bookie.getCurrentDirectory(ledgerDir), 1, "testPasswd".getBytes());
 
-        ServerConfiguration conf = new ServerConfiguration()
+        ServerConfiguration conf = TestBKConfiguration.newServerConfiguration()
             .setZkServers(null)
             .setJournalDirName(journalDir.getPath())
             .setLedgerDirNames(new String[] { ledgerDir.getPath() });
@@ -253,7 +243,7 @@ public class BookieJournalTest {
 
         writeJunkJournal(Bookie.getCurrentDirectory(journalDir));
 
-        ServerConfiguration conf = new ServerConfiguration()
+        ServerConfiguration conf = TestBKConfiguration.newServerConfiguration()
             .setZkServers(null)
             .setJournalDirName(journalDir.getPath())
             .setLedgerDirNames(new String[] { ledgerDir.getPath() });
@@ -291,7 +281,7 @@ public class BookieJournalTest {
 
         writePreV2Journal(Bookie.getCurrentDirectory(journalDir), 0);
 
-        ServerConfiguration conf = new ServerConfiguration()
+        ServerConfiguration conf = TestBKConfiguration.newServerConfiguration()
             .setZkServers(null)
             .setJournalDirName(journalDir.getPath())
             .setLedgerDirNames(new String[] { ledgerDir.getPath() });
@@ -317,7 +307,7 @@ public class BookieJournalTest {
 
         writePostV2Journal(Bookie.getCurrentDirectory(journalDir), 0);
 
-        ServerConfiguration conf = new ServerConfiguration()
+        ServerConfiguration conf = TestBKConfiguration.newServerConfiguration()
             .setZkServers(null)
             .setJournalDirName(journalDir.getPath())
             .setLedgerDirNames(new String[] { ledgerDir.getPath() });
@@ -347,7 +337,7 @@ public class BookieJournalTest {
 
         writeIndexFileForLedger(ledgerDir, 1, "testPasswd".getBytes());
 
-        ServerConfiguration conf = new ServerConfiguration()
+        ServerConfiguration conf = TestBKConfiguration.newServerConfiguration()
             .setZkServers(null)
             .setJournalDirName(journalDir.getPath())
             .setLedgerDirNames(new String[] { ledgerDir.getPath() });
@@ -391,7 +381,7 @@ public class BookieJournalTest {
         writeIndexFileForLedger(Bookie.getCurrentDirectory(ledgerDir),
                                 1, "testPasswd".getBytes());
 
-        ServerConfiguration conf = new ServerConfiguration()
+        ServerConfiguration conf = TestBKConfiguration.newServerConfiguration()
             .setZkServers(null)
             .setJournalDirName(journalDir.getPath())
             .setLedgerDirNames(new String[] { ledgerDir.getPath() });
@@ -439,7 +429,7 @@ public class BookieJournalTest {
         writeIndexFileForLedger(Bookie.getCurrentDirectory(ledgerDir),
                                 1, "testPasswd".getBytes());
 
-        ServerConfiguration conf = new ServerConfiguration()
+        ServerConfiguration conf = TestBKConfiguration.newServerConfiguration()
             .setZkServers(null)
             .setJournalDirName(journalDir.getPath())
             .setLedgerDirNames(new String[] { ledgerDir.getPath() });
@@ -505,7 +495,7 @@ public class BookieJournalTest {
         writePartialIndexFileForLedger(Bookie.getCurrentDirectory(ledgerDir),
                                        1, "testPasswd".getBytes(), truncateMasterKey);
 
-        ServerConfiguration conf = new ServerConfiguration()
+        ServerConfiguration conf = TestBKConfiguration.newServerConfiguration()
             .setZkServers(null)
             .setJournalDirName(journalDir.getPath())
             .setLedgerDirNames(new String[] { ledgerDir.getPath() });
@@ -567,7 +557,7 @@ public class BookieJournalTest {
         writePartialIndexFileForLedger(Bookie.getCurrentDirectory(ledgerDir), 1, masterKey,
                                        truncateMasterKey);
 
-        ServerConfiguration conf = new ServerConfiguration()
+        ServerConfiguration conf = TestBKConfiguration.newServerConfiguration()
             .setZkServers(null)
             .setJournalDirName(journalDir.getPath())
             .setLedgerDirNames(new String[] { ledgerDir.getPath() });

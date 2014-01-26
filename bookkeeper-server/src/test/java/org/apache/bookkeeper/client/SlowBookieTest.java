@@ -25,18 +25,22 @@ import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.net.InetSocketAddress;
+import org.junit.Test;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.apache.bookkeeper.conf.ClientConfiguration;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.GenericCallback;
 import org.apache.bookkeeper.test.BookKeeperClusterTestCase;
-import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("deprecation")
 public class SlowBookieTest extends BookKeeperClusterTestCase {
-    static Logger LOG = LoggerFactory.getLogger(SlowBookieTest.class);
+    private final static Logger LOG = LoggerFactory.getLogger(SlowBookieTest.class);
 
     public SlowBookieTest() {
         super(4);
@@ -59,6 +63,7 @@ public class SlowBookieTest extends BookKeeperClusterTestCase {
         }
         final CountDownLatch b0latch = new CountDownLatch(1);
         final CountDownLatch b1latch = new CountDownLatch(1);
+        final CountDownLatch addEntrylatch = new CountDownLatch(1);
         List<InetSocketAddress> curEns = lh.getLedgerMetadata().currentEnsemble;
         try {
             sleepBookie(curEns.get(0), b0latch);
@@ -71,19 +76,21 @@ public class SlowBookieTest extends BookKeeperClusterTestCase {
             AsyncCallback.AddCallback cb = new AsyncCallback.AddCallback() {
                     public void addComplete(int rc, LedgerHandle lh, long entryId, Object ctx) {
                         i.set(rc);
+                        addEntrylatch.countDown();
                     }
                 };
             lh.asyncAddEntry(entry, cb, null);
 
-            Thread.sleep(1000); // sleep a second to allow time to complete
-            assertEquals(i.get(), 0xdeadbeef);
+            Thread.sleep(3000); // sleep 3 seconds to allow time to complete
+            assertEquals("Successfully added entry!", 0xdeadbeef, i.get());
             b0latch.countDown();
             b1latch.countDown();
-            Thread.sleep(2000);
-            assertEquals(i.get(), BKException.Code.OK);
+            addEntrylatch.await(4000, TimeUnit.MILLISECONDS);
+            assertEquals("Failed to add entry!", BKException.Code.OK, i.get());
         } finally {
             b0latch.countDown();
             b1latch.countDown();
+            addEntrylatch.countDown();
         }
     }
 

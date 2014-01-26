@@ -21,11 +21,14 @@
 
 package org.apache.bookkeeper.bookie;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import org.apache.bookkeeper.bookie.CheckpointSource.Checkpoint;
 import org.apache.bookkeeper.bookie.EntryLogger.EntryLogListener;
+import org.apache.bookkeeper.bookie.LedgerDirsManager;
+import org.apache.bookkeeper.bookie.LedgerDirsManager.LedgerDirsListener;
 import org.apache.bookkeeper.conf.ServerConfiguration;
 import org.apache.bookkeeper.jmx.BKMBeanInfo;
 import org.apache.bookkeeper.meta.LedgerManager;
@@ -40,7 +43,7 @@ import org.slf4j.LoggerFactory;
  * file and maintains an index file for each ledger.
  */
 class InterleavedLedgerStorage implements LedgerStorage, EntryLogListener {
-    final static Logger LOG = LoggerFactory.getLogger(InterleavedLedgerStorage.class);
+    private final static Logger LOG = LoggerFactory.getLogger(InterleavedLedgerStorage.class);
 
     // Hold the last checkpoint
     static class CheckpointHolder {
@@ -80,14 +83,64 @@ class InterleavedLedgerStorage implements LedgerStorage, EntryLogListener {
     private volatile boolean somethingWritten = false;
 
     InterleavedLedgerStorage(ServerConfiguration conf, LedgerManager ledgerManager,
-            LedgerDirsManager ledgerDirsManager, CheckpointSource checkpointSource,
-            GarbageCollectorThread.SafeEntryAdder safeEntryAdder) throws IOException {
+                             LedgerDirsManager ledgerDirsManager, CheckpointSource checkpointSource)
+            throws IOException {
+        this(conf, ledgerManager, ledgerDirsManager, ledgerDirsManager, checkpointSource);
+    }
+
+    InterleavedLedgerStorage(ServerConfiguration conf, LedgerManager ledgerManager,
+                             LedgerDirsManager ledgerDirsManager, LedgerDirsManager indexDirsManager,
+                             CheckpointSource checkpointSource)
+            throws IOException {
         activeLedgers = new SnapshotMap<Long, Boolean>();
         this.checkpointSource = checkpointSource;
         entryLogger = new EntryLogger(conf, ledgerDirsManager, this);
-        ledgerCache = new LedgerCacheImpl(conf, activeLedgers, ledgerDirsManager);
+        ledgerCache = new LedgerCacheImpl(conf, activeLedgers,
+                null == indexDirsManager ? ledgerDirsManager : indexDirsManager);
         gcThread = new GarbageCollectorThread(conf, ledgerCache, entryLogger,
-                activeLedgers, safeEntryAdder, ledgerManager);
+                activeLedgers, ledgerManager);
+        ledgerDirsManager.addLedgerDirsListener(getLedgerDirsListener());
+    }
+
+    private LedgerDirsListener getLedgerDirsListener() {
+        return new LedgerDirsListener() {
+            @Override
+            public void diskFailed(File disk) {
+                // do nothing.
+            }
+
+            @Override
+            public void diskAlmostFull(File disk) {
+                gcThread.enableForceGC();
+            }
+
+            @Override
+            public void diskFull(File disk) {
+                gcThread.enableForceGC();
+            }
+
+            @Override
+            public void allDisksFull() {
+                gcThread.enableForceGC();
+            }
+
+            @Override
+            public void fatalError() {
+                // do nothing.
+            }
+
+            @Override
+            public void diskWritable(File disk) {
+                // we have enough space now, disable force gc.
+                gcThread.disableForceGC();
+            }
+
+            @Override
+            public void diskJustWritable(File disk) {
+                // if a disk is just writable, we still need force gc.
+                gcThread.enableForceGC();
+            }
+        };
     }
 
     @Override
@@ -99,6 +152,7 @@ class InterleavedLedgerStorage implements LedgerStorage, EntryLogListener {
     public void shutdown() throws InterruptedException {
         // shut down gc thread, which depends on zookeeper client
         // also compaction will write entries again to entry log file
+        LOG.info("Shutting down InterleavedLedgerStorage");
         gcThread.shutdown();
         entryLogger.shutdown();
         try {
@@ -206,6 +260,7 @@ class InterleavedLedgerStorage implements LedgerStorage, EntryLogListener {
         // current entry logger file isn't flushed yet.
         flushOrCheckpoint(true);
         // after the ledger storage finished checkpointing, try to clear the done checkpoint
+
         checkpointHolder.clearLastCheckpoint(lastCheckpoint);
         return lastCheckpoint;
     }

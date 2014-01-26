@@ -1,5 +1,3 @@
-package org.apache.bookkeeper.bookie;
-
 /*
  *
  * Licensed to the Apache Software Foundation (ASF) under one
@@ -20,27 +18,44 @@ package org.apache.bookkeeper.bookie;
  * under the License.
  *
  */
+package org.apache.bookkeeper.bookie;
+
 import java.io.File;
-import java.util.Arrays;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Collections;
 import java.util.Enumeration;
 
+import org.apache.bookkeeper.client.BookKeeper.DigestType;
 import org.apache.bookkeeper.client.LedgerEntry;
 import org.apache.bookkeeper.client.LedgerHandle;
-import org.apache.bookkeeper.client.BookKeeper.DigestType;
+import org.apache.bookkeeper.client.LedgerMetadata;
+import org.apache.bookkeeper.conf.ServerConfiguration;
+import org.apache.bookkeeper.meta.LedgerManager;
+import org.apache.bookkeeper.meta.LedgerManagerFactory;
+import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.GenericCallback;
+import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.LedgerMetadataListener;
+import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.Processor;
 import org.apache.bookkeeper.test.BookKeeperClusterTestCase;
+import org.apache.bookkeeper.util.MathUtils;
 import org.apache.bookkeeper.util.TestUtils;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.bookkeeper.versioning.Version;
+import org.apache.zookeeper.AsyncCallback;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * This class tests the entry log compaction functionality.
  */
 public class CompactionTest extends BookKeeperClusterTestCase {
-    static Logger LOG = LoggerFactory.getLogger(CompactionTest.class);
+    private final static Logger LOG = LoggerFactory.getLogger(CompactionTest.class);
     DigestType digestType;
 
     static int ENTRY_SIZE = 1024;
@@ -80,11 +95,13 @@ public class CompactionTest extends BookKeeperClusterTestCase {
     public void setUp() throws Exception {
         // Set up the configuration properties needed.
         baseConf.setEntryLogSizeLimit(numEntries * ENTRY_SIZE);
+        // Disable skip list for compaction
         baseConf.setGcWaitTime(gcWaitTime);
         baseConf.setMinorCompactionThreshold(minorCompactionThreshold);
         baseConf.setMajorCompactionThreshold(majorCompactionThreshold);
         baseConf.setMinorCompactionInterval(minorCompactionInterval);
         baseConf.setMajorCompactionInterval(majorCompactionInterval);
+        baseConf.setEntryLogFilePreAllocationEnabled(false);
 
         super.setUp();
     }
@@ -161,6 +178,46 @@ public class CompactionTest extends BookKeeperClusterTestCase {
     }
 
     @Test(timeout=60000)
+    public void testForceGarbageCollection() throws Exception {
+        ServerConfiguration conf = newServerConfiguration();
+        conf.setGcWaitTime(60000);
+        conf.setMinorCompactionInterval(120000);
+        conf.setMajorCompactionInterval(240000);
+        LedgerDirsManager dirManager = new LedgerDirsManager(conf, conf.getLedgerDirs());
+        CheckpointSource cp = new CheckpointSource() {
+            @Override
+            public Checkpoint newCheckpoint() {
+                // Do nothing.
+                return null;
+            }
+
+            @Override
+            public void checkpointComplete(Checkpoint checkPoint, boolean compact)
+                throws IOException {
+                // Do nothing.
+            }
+        };
+        Bookie.checkDirectoryStructure(conf.getJournalDir());
+        for (File dir : dirManager.getAllLedgerDirs()) {
+            Bookie.checkDirectoryStructure(dir);
+        }
+        InterleavedLedgerStorage storage = new InterleavedLedgerStorage(conf,
+                        LedgerManagerFactory.newLedgerManagerFactory(conf, zkc).newLedgerManager(),
+                        dirManager, cp);
+        storage.start();
+        long startTime = MathUtils.now();
+        Thread.sleep(2000);
+        storage.gcThread.enableForceGC();
+        Thread.sleep(1000);
+        // Minor and Major compaction times should be larger than when we started
+        // this test.
+        assertTrue("Minor or major compaction did not trigger even on forcing.",
+                storage.gcThread.lastMajorCompactionTime > startTime &&
+                storage.gcThread.lastMinorCompactionTime > startTime);
+        storage.shutdown();
+    }
+
+    @Test(timeout=60000)
     public void testMinorCompaction() throws Exception {
         // prepare data
         LedgerHandle[] lhs = prepareData(3, false);
@@ -185,7 +242,7 @@ public class CompactionTest extends BookKeeperClusterTestCase {
 
         // entry logs ([0,1,2].log) should be compacted.
         for (File ledgerDirectory : tmpDirs) {
-            assertFalse("Found entry log file ([0,1,2].log that should have not been compacted in ledgerDirectory: " 
+            assertFalse("Found entry log file ([0,1,2].log that should have not been compacted in ledgerDirectory: "
                             + ledgerDirectory, TestUtils.hasLogFiles(ledgerDirectory, true, 0, 1, 2));
         }
 
@@ -293,5 +350,211 @@ public class CompactionTest extends BookKeeperClusterTestCase {
         // even entry log files are removed, we still can access entries for ledger1
         // since those entries has been compacted to new entry log
         verifyLedger(lhs[0].getId(), 0, lhs[0].getLastAddConfirmed());
+    }
+
+    /**
+     * Test that compaction doesnt add to index without having persisted
+     * entrylog first. This is needed because compaction doesn't go through the journal.
+     * {@see https://issues.apache.org/jira/browse/BOOKKEEPER-530}
+     * {@see https://issues.apache.org/jira/browse/BOOKKEEPER-664}
+     */
+    @Test(timeout=60000)
+    public void testCompactionSafety() throws Exception {
+        tearDown(); // I dont want the test infrastructure
+        ServerConfiguration conf = new ServerConfiguration();
+        final Set<Long> ledgers = Collections.newSetFromMap(new ConcurrentHashMap<Long, Boolean>());
+        LedgerManager manager = getLedgerManager(ledgers);
+
+        File tmpDir = File.createTempFile("bkTest", ".dir");
+        tmpDir.delete();
+        tmpDir.mkdir();
+        File curDir = Bookie.getCurrentDirectory(tmpDir);
+        Bookie.checkDirectoryStructure(curDir);
+        conf.setLedgerDirNames(new String[] {tmpDir.toString()});
+
+        conf.setEntryLogSizeLimit(EntryLogger.LOGFILE_HEADER_SIZE + 3 * (4+ENTRY_SIZE));
+        conf.setGcWaitTime(100);
+        conf.setMinorCompactionThreshold(0.7f);
+        conf.setMajorCompactionThreshold(0.0f);
+        conf.setMinorCompactionInterval(1);
+        conf.setMajorCompactionInterval(10);
+        conf.setPageLimit(1);
+
+        CheckpointSource checkpointSource = new CheckpointSource() {
+                AtomicInteger idGen = new AtomicInteger(0);
+                class MyCheckpoint implements CheckpointSource.Checkpoint {
+                    int id = idGen.incrementAndGet();
+                    @Override
+                    public int compareTo(CheckpointSource.Checkpoint o) {
+                        if (o == CheckpointSource.Checkpoint.MAX) {
+                            return -1;
+                        } else if (o == CheckpointSource.Checkpoint.MIN) {
+                            return 1;
+                        }
+                        return id - ((MyCheckpoint)o).id;
+                    }
+                }
+
+                @Override
+                public CheckpointSource.Checkpoint newCheckpoint() {
+                    return new MyCheckpoint();
+                }
+
+                public void checkpointComplete(CheckpointSource.Checkpoint checkpoint, boolean compact)
+                        throws IOException {
+                }
+            };
+        final byte[] KEY = "foobar".getBytes();
+        File log0 = new File(curDir, "0.log");
+        LedgerDirsManager dirs = new LedgerDirsManager(conf, conf.getLedgerDirs());
+        assertFalse("Log shouldnt exist", log0.exists());
+        InterleavedLedgerStorage storage = new InterleavedLedgerStorage(conf, manager,
+                                                                        dirs, checkpointSource);
+        ledgers.add(1l);
+        ledgers.add(2l);
+        ledgers.add(3l);
+        storage.setMasterKey(1, KEY);
+        storage.setMasterKey(2, KEY);
+        storage.setMasterKey(3, KEY);
+        storage.addEntry(genEntry(1, 1, ENTRY_SIZE));
+        storage.addEntry(genEntry(2, 1, ENTRY_SIZE));
+        storage.addEntry(genEntry(2, 2, ENTRY_SIZE));
+        storage.addEntry(genEntry(3, 2, ENTRY_SIZE));
+        storage.flush();
+        storage.shutdown();
+
+        assertTrue("Log should exist", log0.exists());
+        ledgers.remove(2l);
+        ledgers.remove(3l);
+
+        storage = new InterleavedLedgerStorage(conf, manager, dirs, checkpointSource);
+        storage.start();
+        for (int i = 0; i < 10; i++) {
+            if (!log0.exists()) {
+                break;
+            }
+            Thread.sleep(1000);
+            storage.entryLogger.flush(); // simulate sync thread
+        }
+        assertFalse("Log shouldnt exist", log0.exists());
+
+        ledgers.add(4l);
+        storage.setMasterKey(4, KEY);
+        storage.addEntry(genEntry(4, 1, ENTRY_SIZE)); // force ledger 1 page to flush
+
+        storage = new InterleavedLedgerStorage(conf, manager, dirs, checkpointSource);
+        storage.getEntry(1, 1); // entry should exist
+    }
+
+    private LedgerManager getLedgerManager(final Set<Long> ledgers) {
+        LedgerManager manager = new LedgerManager() {
+                @Override
+                public void createLedger(LedgerMetadata metadata, GenericCallback<Long> cb) {
+                    unsupported();
+                }
+                @Override
+                public void removeLedgerMetadata(long ledgerId, Version version,
+                                                 GenericCallback<Void> vb) {
+                    unsupported();
+                }
+                @Override
+                public void readLedgerMetadata(long ledgerId, GenericCallback<LedgerMetadata> readCb) {
+                    unsupported();
+                }
+                @Override
+                public void writeLedgerMetadata(long ledgerId, LedgerMetadata metadata,
+                        GenericCallback<Void> cb) {
+                    unsupported();
+                }
+                @Override
+                public void asyncProcessLedgers(Processor<Long> processor,
+                                                AsyncCallback.VoidCallback finalCb,
+                        Object context, int successRc, int failureRc) {
+                    unsupported();
+                }
+                @Override
+                public void registerLedgerMetadataListener(long ledgerId,
+                        LedgerMetadataListener listener) {
+                    unsupported();
+                }
+                @Override
+                public void unregisterLedgerMetadataListener(long ledgerId,
+                        LedgerMetadataListener listener) {
+                    unsupported();
+                }
+                @Override
+                public void close() throws IOException {}
+
+                void unsupported() {
+                    LOG.error("Unsupported operation called", new Exception());
+                    throw new RuntimeException("Unsupported op");
+                }
+                @Override
+                public LedgerRangeIterator getLedgerRanges() {
+                    final AtomicBoolean hasnext = new AtomicBoolean(true);
+                    return new LedgerManager.LedgerRangeIterator() {
+                        @Override
+                        public boolean hasNext() throws IOException {
+                            return hasnext.get();
+                        }
+                        @Override
+                        public LedgerManager.LedgerRange next() throws IOException {
+                            hasnext.set(false);
+                            return new LedgerManager.LedgerRange(ledgers);
+                        }
+                    };
+                 }
+            };
+        return manager;
+    }
+
+    /**
+     * Test that compaction should execute silently when there is no entry logs
+     * to compact. {@see https://issues.apache.org/jira/browse/BOOKKEEPER-700}
+     */
+    @Test(timeout = 60000)
+    public void testWhenNoLogsToCompact() throws Exception {
+        tearDown(); // I dont want the test infrastructure
+        ServerConfiguration conf = new ServerConfiguration();
+        File tmpDir = File.createTempFile("bkTest", ".dir");
+        tmpDir.delete();
+        tmpDir.mkdir();
+        File curDir = Bookie.getCurrentDirectory(tmpDir);
+        Bookie.checkDirectoryStructure(curDir);
+        conf.setLedgerDirNames(new String[] { tmpDir.toString() });
+
+        LedgerDirsManager dirs = new LedgerDirsManager(conf, conf.getLedgerDirs());
+        final Set<Long> ledgers = Collections
+                .newSetFromMap(new ConcurrentHashMap<Long, Boolean>());
+        LedgerManager manager = getLedgerManager(ledgers);
+        CheckpointSource checkpointSource = new CheckpointSource() {
+
+            @Override
+            public Checkpoint newCheckpoint() {
+                return null;
+            }
+
+            @Override
+            public void checkpointComplete(Checkpoint checkpoint,
+                    boolean compact) throws IOException {
+            }
+        };
+        InterleavedLedgerStorage storage = new InterleavedLedgerStorage(conf,
+                manager, dirs, checkpointSource);
+
+        double threshold = 0.1;
+        // shouldn't throw exception
+        storage.gcThread.doCompactEntryLogs(threshold);
+    }
+
+    private ByteBuffer genEntry(long ledger, long entry, int size) {
+        ByteBuffer bb = ByteBuffer.wrap(new byte[size]);
+        bb.putLong(ledger);
+        bb.putLong(entry);
+        while (bb.hasRemaining()) {
+            bb.put((byte)0xFF);
+        }
+        bb.flip();
+        return bb;
     }
 }

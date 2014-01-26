@@ -21,18 +21,20 @@
 
 package org.apache.bookkeeper.bookie;
 
+import static com.google.common.base.Charsets.UTF_8;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
-import java.nio.ByteBuffer;
 import java.nio.BufferUnderflowException;
+import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-
-import static com.google.common.base.Charsets.UTF_8;
-import com.google.common.annotations.VisibleForTesting;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.common.annotations.VisibleForTesting;
 
 /**
  * This is the file handle for a ledger's index file that maps entry ids to location.
@@ -53,7 +55,7 @@ import org.slf4j.LoggerFactory;
  * </p>
  */
 class FileInfo {
-    static Logger LOG = LoggerFactory.getLogger(FileInfo.class);
+    private final static Logger LOG = LoggerFactory.getLogger(FileInfo.class);
 
     static final int NO_MASTER_KEY = -1;
     static final int STATE_FENCED_BIT = 0x1;
@@ -70,7 +72,7 @@ class FileInfo {
 
     static final long START_OF_DATA = 1024;
     private long size;
-    private int useCount;
+    private AtomicInteger useCount = new AtomicInteger(0);
     private boolean isClosed;
     private long sizeSinceLastwrite;
 
@@ -143,7 +145,7 @@ class FileInfo {
             throw new IOException(lf + " not found");
         }
 
-        if (!exists) { 
+        if (!exists) {
             if (create) {
                 // delayed the creation of parents directories
                 checkParents(lf);
@@ -220,18 +222,23 @@ class FileInfo {
         return rc;
     }
 
-    synchronized public int read(ByteBuffer bb, long position) throws IOException {
+    public int read(ByteBuffer bb, long position) throws IOException {
         return readAbsolute(bb, position + START_OF_DATA);
     }
 
     private int readAbsolute(ByteBuffer bb, long start) throws IOException {
         checkOpen(false);
-        if (fc == null) {
-            return 0;
+        synchronized (this) {
+            if (fc == null) {
+                return 0;
+            }
         }
         int total = 0;
+        int rc = 0;
         while(bb.remaining() > 0) {
-            int rc = fc.read(bb, start);
+            synchronized (this) {
+                rc = fc.read(bb, start);
+            }
             if (rc <= 0) {
                 throw new IOException("Short read");
             }
@@ -252,7 +259,7 @@ class FileInfo {
     synchronized public void close(boolean force) throws IOException {
         isClosed = true;
         checkOpen(force);
-        if (useCount == 0 && fc != null) {
+        if (useCount.get() == 0 && fc != null) {
             fc.close();
         }
     }
@@ -287,49 +294,51 @@ class FileInfo {
      */
     public synchronized void moveToNewLocation(File newFile, long size) throws IOException {
         checkOpen(false);
-        if (fc != null) {
-            if (size > fc.size()) {
-                size = fc.size();
+        // If the channel is null, or same file path, just return.
+        if (null == fc || isSameFile(newFile)) {
+            return;
+        }
+        if (size > fc.size()) {
+            size = fc.size();
+        }
+        File rlocFile = new File(newFile.getParentFile(), newFile.getName() + IndexPersistenceMgr.RLOC);
+        if (!rlocFile.exists()) {
+            checkParents(rlocFile);
+            if (!rlocFile.createNewFile()) {
+                throw new IOException("Creating new cache index file " + rlocFile + " failed ");
             }
-            File rlocFile = new File(newFile.getParentFile(), newFile.getName() + LedgerCacheImpl.RLOC);
-            if (!rlocFile.exists()) {
-                checkParents(rlocFile);
-                if (!rlocFile.createNewFile()) {
-                    throw new IOException("Creating new cache index file " + rlocFile + " failed ");
-                }
-            }
-            // copy contents from old.idx to new.idx.rloc
-            FileChannel newFc = new RandomAccessFile(rlocFile, "rw").getChannel();
-            try {
-                long written = 0;
-                while (written < size) {
-                    long count = fc.transferTo(written, size, newFc);
-                    if (count <= 0) {
-                        throw new IOException("Copying to new location " + rlocFile + " failed");
-                    }
-                    written += count;
-                }
-                if (written <= 0 && size > 0) {
+        }
+        // copy contents from old.idx to new.idx.rloc
+        FileChannel newFc = new RandomAccessFile(rlocFile, "rw").getChannel();
+        try {
+            long written = 0;
+            while (written < size) {
+                long count = fc.transferTo(written, size, newFc);
+                if (count <= 0) {
                     throw new IOException("Copying to new location " + rlocFile + " failed");
                 }
-            } finally {
-                newFc.force(true);
-                newFc.close();
+                written += count;
             }
-            // delete old.idx
-            fc.close();
-            if (!delete()) {
-                LOG.error("Failed to delete the previous index file " + lf);
-                throw new IOException("Failed to delete the previous index file " + lf);
+            if (written <= 0 && size > 0) {
+                throw new IOException("Copying to new location " + rlocFile + " failed");
             }
-
-            // rename new.idx.rloc to new.idx
-            if (!rlocFile.renameTo(newFile)) {
-                LOG.error("Failed to rename " + rlocFile + " to " + newFile);
-                throw new IOException("Failed to rename " + rlocFile + " to " + newFile);
-            }
-            fc = new RandomAccessFile(newFile, mode).getChannel();
+        } finally {
+            newFc.force(true);
+            newFc.close();
         }
+        // delete old.idx
+        fc.close();
+        if (!delete()) {
+            LOG.error("Failed to delete the previous index file " + lf);
+            throw new IOException("Failed to delete the previous index file " + lf);
+        }
+
+        // rename new.idx.rloc to new.idx
+        if (!rlocFile.renameTo(newFile)) {
+            LOG.error("Failed to rename " + rlocFile + " to " + newFile);
+            throw new IOException("Failed to rename " + rlocFile + " to " + newFile);
+        }
+        fc = new RandomAccessFile(newFile, mode).getChannel();
         lf = newFile;
     }
 
@@ -338,18 +347,18 @@ class FileInfo {
         return masterKey;
     }
 
-    synchronized public void use() {
-        useCount++;
+    public void use() {
+        useCount.incrementAndGet();
     }
 
     @VisibleForTesting
-    synchronized int getUseCount() {
-        return useCount;
+    int getUseCount() {
+        return useCount.get();
     }
 
     synchronized public void release() {
-        useCount--;
-        if (isClosed && useCount == 0 && fc != null) {
+        int count = useCount.decrementAndGet();
+        if (isClosed && (count == 0) && fc != null) {
             try {
                 fc.close();
             } catch (IOException e) {
@@ -370,5 +379,9 @@ class FileInfo {
         if (parent.mkdirs() == false) {
             throw new IOException("Counldn't mkdirs for " + parent);
         }
+    }
+
+    public boolean isSameFile(File f) {
+        return this.lf.equals(f);
     }
 }

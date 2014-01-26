@@ -39,7 +39,7 @@ import org.junit.Test;
  * client and the server side.
  */
 public class LedgerDeleteTest extends MultiLedgerManagerTestCase {
-    static Logger LOG = LoggerFactory.getLogger(LedgerDeleteTest.class);
+    private final static Logger LOG = LoggerFactory.getLogger(LedgerDeleteTest.class);
     DigestType digestType;
 
     public LedgerDeleteTest(String ledgerManagerFactory) {
@@ -57,6 +57,7 @@ public class LedgerDeleteTest extends MultiLedgerManagerTestCase {
         // Set up the configuration properties needed.
         baseConf.setEntryLogSizeLimit(2 * 1024 * 1024L);
         baseConf.setGcWaitTime(1000);
+        baseConf.setEntryLogFilePreAllocationEnabled(false);
         super.setUp();
     }
 

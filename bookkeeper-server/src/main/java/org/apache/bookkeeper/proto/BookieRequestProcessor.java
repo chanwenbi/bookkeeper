@@ -20,6 +20,7 @@
  */
 package org.apache.bookkeeper.proto;
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -44,8 +45,6 @@ import org.apache.bookkeeper.util.MathUtils;
 import org.jboss.netty.channel.Channel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 public class BookieRequestProcessor implements RequestProcessor, BookkeeperInternalCallbacks.WriteCallback {
 

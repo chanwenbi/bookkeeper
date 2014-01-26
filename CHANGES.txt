@@ -46,6 +46,16 @@ Trunk (unreleased changes)
 
       BOOKKEEPER-653: Timeout option is missing in few testcases (Rakesh via ivank)
 
+      BOOKKEEPER-686: Bookie startup will fail if one of the configured ledgerDir is full and the same is used for replaying the journal (Rakesh via sijie)
+
+      BOOKKEEPER-605: Use static Logger objects everywhere for bookkeeper (sijie via ivank)
+
+      BOOKKEEPER-614: Generic stats interface, which multiple providers can be plugged into (sijie & ivank via ivank)
+
+      BOOKKEEPER-615: Twitter stats implementation of stats interface (sijie via ivank)
+
+      BOOKKEEPER-719: Inconsistent synchronization of org.apache.bookkeeper.stats.CodahaleMetricsProvider.metrics (sijie via ivank)
+
       bookkeeper-server:
 
         BOOKKEEPER-567: ReadOnlyBookieTest hangs on shutdown (sijie via ivank)
@@ -102,11 +112,53 @@ Trunk (unreleased changes)
 
         BOOKKEEPER-675: Log noise fixup before cutting 4.2.2 (ivank)
 
+        BOOKKEEPER-638: Two bookies could start at the same time to access bookie data. (sijie via ivank)
+
+        BOOKKEEPER-676: Make add asynchrounous in ledger recovery (aniruddha via ivank)
+
+        BOOKKEEPER-673: Ledger length can be inaccurate in failure case (sijie via ivank)
+
+        BOOKKEEPER-688: NPE exception in PerChannelBookieClient (ivank via sijie)
+
+        BOOKKEEPER-659: LRU page management in ledger cache. (Aniruddha, Robin Dhamankar & sijie via ivank)
+
+        BOOKKEEPER-700: GarbageCollectorThread exsiting with ArrayIndexOutOfBoundsException (rakeshr via ivank)
+
+        BOOKKEEPER-678: BookieServer shutdown hangs indefinitely at NioServerSocketChannelFactory.releaseExternalResources (rakeshr via ivank)
+
+        BOOKKEEPER-565: Make an option to separate storing entry log files from index files. (sijie via ivank)
+
+        BOOKKEEPER-711: bookkeeper-daemon.sh will not remove the pid file one successful stop (vinay via sijie)
+
+        BOOKKEEPER-712: bookkeeper script should use 'java' from JAVA_HOME (vinay via sijie)
+
+	BOOKKEEPER-709: SlowBookieTest#testSlowBookie fails intermittently (Rakesh R via fpj)
+
+        BOOKKEEPER-714: Logging channel exceptions in PerChannelBookieClient (sijie)
+
+        BOOKKEEPER-662: Major GC should kick in immediately if remaining space reaches a warning threshold (sijie via ivank)
+
+        BOOKKEEPER-710: OpenLedgerNoRecovery should watch ensemble change. (sijie via ivank)
+
+        BOOKKEEPER-429: Provide separate read and write threads in the bookkeeper server (Aniruddha via sijie)
+
+        BOOKKEEPER-696: stats collection on bookkeeper client (Aniruddha, ivank via sijie)
+
+        BOOKKEEPER-661: Turn readonly back to writable if spaces are reclaimed. (sijie via ivank)
+
+        BOOKKEEPER-720: CheckpointSource.MIN#compareTo does exactly the opposite of what it should (ivank via sijie)
+
+        BOOKKEEPER-643: Improve concurrency of entry logger (sijie & Aniruddha via ivank)
+
+        BOOKKEEPER-703: Document all the settings added in BOOKKEEPER-656 (sijie)
+
       hedwig-server:
 
         BOOKKEEPER-601: readahead cache size isn't updated correctly (sijie via fpj)
 
         BOOKKEEPER-607: Filtered Messages Require ACK from Client Causes User Being Throttled Incorrectly Forever (sijie via ivank)
+
+        BOOKKEEPER-683: TestSubAfterCloseSub fails on 4.2 (jiannan via ivank)
 
       hedwig-client:
 
@@ -151,6 +203,26 @@ Trunk (unreleased changes)
       BOOKKEEPER-618: Better resolution of bookie address (ivank via fpj)
 
       BOOKKEEPER-610: Make SyncThread use an executor (ivank via sijie)
+
+      BOOKKEEPER-640: Log improvement - add shutdown/exit log message for the bookie services (rakesh via sijie)
+
+      BOOKKEEPER-666: Naming threads of ExecutorService (rakesh via sijie)
+
+      BOOKKEEPER-645: Bookkeeper shell command to get a list of readonly bookies (rakesh via sijie)
+
+      BOOKKEEPER-658: ledger cache refactor (Robin Dhamankar via sijie)
+
+      BOOKKEEPER-657: Journal Improvement (Robin Dhamankar via sijie)
+
+      BOOKKEEPER-664: Compaction increases latency on journal writes (ivank via sijie)
+
+      BOOKKEEPER-602: we should have request timeouts rather than channel timeout in PerChannelBookieClient (Aniruddha, ivank via sijie)
+
+      BOOKKEEPER-698: Bookie client closure is not considering timeoutExecutor (rakesh via sijie)
+
+      BOOKKEEPER-699: Codahale metrics implementation of stats API (ivank via sijie)
+
+      BOOKKEEPER-701: Improve exception handling of Bookkeeper threads (rakesh via sijie)
 
     NEW FEATURE:
 

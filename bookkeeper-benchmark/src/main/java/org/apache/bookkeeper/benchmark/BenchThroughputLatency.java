@@ -59,7 +59,7 @@ import org.slf4j.LoggerFactory;
 import static com.google.common.base.Charsets.UTF_8;
 
 public class BenchThroughputLatency implements AddCallback, Runnable {
-    static Logger LOG = LoggerFactory.getLogger(BenchThroughputLatency.class);
+    static final Logger LOG = LoggerFactory.getLogger(BenchThroughputLatency.class);
 
     BookKeeper bk;
     LedgerHandle lh[];
@@ -230,6 +230,7 @@ public class BenchThroughputLatency implements AddCallback, Runnable {
         }
     }
 
+    @SuppressWarnings("deprecation")
     public static void main(String[] args)
             throws KeeperException, IOException, InterruptedException, ParseException, BKException {
         Options options = new Options();

@@ -56,7 +56,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class BenchReadThroughputLatency {
-    static Logger LOG = LoggerFactory.getLogger(BenchReadThroughputLatency.class);
+    static final Logger LOG = LoggerFactory.getLogger(BenchReadThroughputLatency.class);
 
     private static final Pattern LEDGER_PATTERN = Pattern.compile("L([0-9]+)$");
 
@@ -151,6 +151,7 @@ public class BenchReadThroughputLatency {
         formatter.printHelp("BenchReadThroughputLatency <options>", options);
     }
 
+    @SuppressWarnings("deprecation")
     public static void main(String[] args) throws Exception {
         Options options = new Options();
         options.addOption("ledger", true, "Ledger to read. If empty, read all ledgers which come available. " 

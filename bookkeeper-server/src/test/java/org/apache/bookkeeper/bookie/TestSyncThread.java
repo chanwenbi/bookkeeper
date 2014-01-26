@@ -50,7 +50,7 @@ import org.junit.After;
 import static org.junit.Assert.*;
 
 public class TestSyncThread {
-    static Logger LOG = LoggerFactory.getLogger(TestSyncThread.class);
+    private static final Logger LOG = LoggerFactory.getLogger(TestSyncThread.class);
 
     ExecutorService executor = null;
 
@@ -326,6 +326,10 @@ public class TestSyncThread {
         }
 
         @Override
+        public void diskAlmostFull(File disk) {
+        }
+
+        @Override
         public void diskFull(File disk) {
         }
 
@@ -335,6 +339,14 @@ public class TestSyncThread {
 
         @Override
         public void fatalError() {
+        }
+
+        @Override
+        public void diskWritable(File disk) {
+        }
+
+        @Override
+        public void diskJustWritable(File disk) {
         }
     }
 }

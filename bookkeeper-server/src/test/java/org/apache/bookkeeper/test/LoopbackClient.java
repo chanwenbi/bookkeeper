@@ -46,7 +46,7 @@ import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
  */
 
 class LoopbackClient implements WriteCallback {
-    Logger LOG = LoggerFactory.getLogger(LoopbackClient.class);
+    private final static Logger LOG = LoggerFactory.getLogger(LoopbackClient.class);
     BookieClient client;
     static int recvTimeout = 2000;
     long begin = 0;
@@ -97,7 +97,7 @@ class LoopbackClient implements WriteCallback {
         LoopbackClient lb;
         ClientSocketChannelFactory channelFactory = new NioClientSocketChannelFactory(Executors.newCachedThreadPool(), Executors
                 .newCachedThreadPool());
-        OrderedSafeExecutor executor = new OrderedSafeExecutor(2);
+        OrderedSafeExecutor executor = new OrderedSafeExecutor(2, "BookieClientScheduler");
         try {
             InetSocketAddress addr = new InetSocketAddress("127.0.0.1", Integer.valueOf(args[2]).intValue());
             lb = new LoopbackClient(channelFactory, executor, begin, limit.intValue());

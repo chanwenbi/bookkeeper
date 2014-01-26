@@ -25,8 +25,13 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import junit.framework.TestCase;
+
+import junit.framework.TestCase;
+
 import org.apache.bookkeeper.bookie.Bookie.NoLedgerException;
 import org.apache.bookkeeper.conf.ServerConfiguration;
+import org.apache.bookkeeper.conf.TestBKConfiguration;
 import org.apache.bookkeeper.meta.LedgerManagerFactory;
 import org.apache.bookkeeper.util.BookKeeperConstants;
 import org.apache.bookkeeper.util.SnapshotMap;
@@ -38,17 +43,14 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import junit.framework.TestCase;
 
 /**
  * LedgerCache related test cases
  */
 public class LedgerCacheTest extends TestCase {
-    static Logger LOG = LoggerFactory.getLogger(LedgerCacheTest.class);
+    private final static Logger LOG = LoggerFactory.getLogger(LedgerCacheTest.class);
 
     SnapshotMap<Long, Boolean> activeLedgers;
     LedgerManagerFactory ledgerManagerFactory;
@@ -71,7 +73,7 @@ public class LedgerCacheTest extends TestCase {
         // create current dir
         new File(ledgerDir, BookKeeperConstants.CURRENT_DIR).mkdir();
 
-        conf = new ServerConfiguration();
+        conf = TestBKConfiguration.newServerConfiguration();
         conf.setZkServers(null);
         conf.setJournalDirName(txnDir.getPath());
         conf.setLedgerDirNames(new String[] { ledgerDir.getPath() });
@@ -101,7 +103,7 @@ public class LedgerCacheTest extends TestCase {
             ledgerCache.close();
         }
         ledgerCache = ((InterleavedLedgerStorage) bookie.ledgerStorage).ledgerCache = new LedgerCacheImpl(
-                conf, activeLedgers, bookie.getLedgerDirsManager());
+                conf, activeLedgers, bookie.getIndexDirsManager());
         flushThread = new Thread() {
                 public void run() {
                     while (true) {
@@ -257,7 +259,7 @@ public class LedgerCacheTest extends TestCase {
         ledgerDir1.delete();
         File ledgerDir2 = File.createTempFile("bkTest", ".dir");
         ledgerDir2.delete();
-        ServerConfiguration conf = new ServerConfiguration();
+        ServerConfiguration conf = TestBKConfiguration.newServerConfiguration();
         conf.setLedgerDirNames(new String[] { ledgerDir1.getAbsolutePath(), ledgerDir2.getAbsolutePath() });
 
         Bookie bookie = new Bookie(conf);
@@ -266,11 +268,11 @@ public class LedgerCacheTest extends TestCase {
         // Create ledger index file
         ledgerStorage.setMasterKey(1, "key".getBytes());
 
-        FileInfo fileInfo = ledgerCache.getFileInfo(Long.valueOf(1), null);
+        FileInfo fileInfo = ledgerCache.getIndexPersistenceManager().getFileInfo(Long.valueOf(1), null);
 
         // Simulate the flush failure
         FileInfo newFileInfo = new FileInfo(fileInfo.getLf(), fileInfo.getMasterKey());
-        ledgerCache.fileInfoCache.put(Long.valueOf(1), newFileInfo);
+        ledgerCache.getIndexPersistenceManager().fileInfoCache.put(Long.valueOf(1), newFileInfo);
         // Add entries
         ledgerStorage.addEntry(generateEntry(1, 1));
         ledgerStorage.addEntry(generateEntry(1, 2));
@@ -278,7 +280,7 @@ public class LedgerCacheTest extends TestCase {
 
         ledgerStorage.addEntry(generateEntry(1, 3));
         // add the dir to failed dirs
-        bookie.getLedgerDirsManager().addToFilledDirs(
+        bookie.getIndexDirsManager().addToFilledDirs(
                 newFileInfo.getLf().getParentFile().getParentFile().getParentFile());
         File before = newFileInfo.getLf();
         // flush after disk is added as failed.
@@ -313,7 +315,7 @@ public class LedgerCacheTest extends TestCase {
         ledgerDir.mkdir();
         Bookie.checkDirectoryStructure(Bookie.getCurrentDirectory(ledgerDir));
 
-        ServerConfiguration conf = new ServerConfiguration()
+        ServerConfiguration conf = TestBKConfiguration.newServerConfiguration()
             .setZkServers(null)
             .setJournalDirName(journalDir.getPath())
             .setLedgerDirNames(new String[] { ledgerDir.getPath() })
@@ -327,7 +329,7 @@ public class LedgerCacheTest extends TestCase {
             b.addEntry(packet, new Bookie.NopWriteCallback(), null, "passwd".getBytes());
         }
 
-        conf = new ServerConfiguration()
+        conf = TestBKConfiguration.newServerConfiguration()
             .setZkServers(null)
             .setJournalDirName(journalDir.getPath())
             .setLedgerDirNames(new String[] { ledgerDir.getPath() });
@@ -364,7 +366,7 @@ public class LedgerCacheTest extends TestCase {
     public void testSyncThreadNPE() throws IOException {
         newLedgerCache();
         try {
-            ((LedgerCacheImpl) ledgerCache).getLedgerEntryPage(0L, 0L, true);
+            ((LedgerCacheImpl) ledgerCache).getIndexPageManager().getLedgerEntryPage(0L, 0L, true);
         } catch (Exception e) {
             LOG.error("Exception when trying to get a ledger entry page", e);
             fail("Shouldn't have thrown an exception");

@@ -27,6 +27,7 @@ import java.net.MalformedURLException;
 import java.net.UnknownHostException;
 
 import org.apache.bookkeeper.bookie.Bookie;
+import org.apache.bookkeeper.bookie.BookieCriticalThread;
 import org.apache.bookkeeper.bookie.BookieException;
 import org.apache.bookkeeper.bookie.ExitCode;
 import org.apache.bookkeeper.conf.ServerConfiguration;
@@ -57,7 +58,7 @@ public class BookieServer {
     private volatile boolean running = false;
     Bookie bookie;
     DeathWatcher deathWatcher;
-    static Logger LOG = LoggerFactory.getLogger(BookieServer.class);
+    private final static Logger LOG = LoggerFactory.getLogger(BookieServer.class);
 
     int exitCode = ExitCode.OK;
 
@@ -122,6 +123,7 @@ public class BookieServer {
      */
     @VisibleForTesting
     public void suspendProcessing() {
+        LOG.debug("Suspending bookie server, port is {}", conf.getBookiePort());
         nettyServer.suspendProcessing();
     }
 
@@ -130,6 +132,7 @@ public class BookieServer {
      */
     @VisibleForTesting
     public void resumeProcessing() {
+        LOG.debug("Resuming bookie server, port is {}", conf.getBookiePort());
         nettyServer.resumeProcessing();
     }
 
@@ -137,6 +140,7 @@ public class BookieServer {
         if (!running) {
             return;
         }
+        LOG.info("Shutting down BookieServer");
         this.nettyServer.shutdown();
         exitCode = bookie.shutdown();
         if (isAutoRecoveryDaemonEnabled && this.autoRecoveryMain != null) {
@@ -207,7 +211,7 @@ public class BookieServer {
     /**
      * A thread to watch whether bookie & nioserver is still alive
      */
-    private class DeathWatcher extends Thread {
+    private class DeathWatcher extends BookieCriticalThread {
 
         private final int watchInterval;
 

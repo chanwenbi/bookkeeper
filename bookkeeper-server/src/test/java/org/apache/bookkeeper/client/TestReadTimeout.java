@@ -48,7 +48,7 @@ import org.slf4j.LoggerFactory;
  *
  */
 public class TestReadTimeout extends BookKeeperClusterTestCase {
-    static Logger LOG = LoggerFactory.getLogger(TestReadTimeout.class);
+    private final static Logger LOG = LoggerFactory.getLogger(TestReadTimeout.class);
 
     DigestType digestType;
 
@@ -57,6 +57,7 @@ public class TestReadTimeout extends BookKeeperClusterTestCase {
         this.digestType = DigestType.CRC32;
     }
 
+    @SuppressWarnings("deprecation")
     @Test(timeout=60000)
     public void testReadTimeout() throws Exception {
         final AtomicBoolean completed = new AtomicBoolean(false);

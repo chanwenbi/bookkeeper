@@ -43,6 +43,7 @@ import org.apache.bookkeeper.metastore.MetastoreScannableTable;
 import org.apache.bookkeeper.metastore.MetastoreTableItem;
 import org.apache.bookkeeper.metastore.Value;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.GenericCallback;
+import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.LedgerMetadataListener;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.Processor;
 import org.apache.bookkeeper.replication.ReplicationException;
 import org.apache.bookkeeper.util.StringUtils;
@@ -58,12 +59,14 @@ import org.apache.zookeeper.ZooKeeper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+
 /**
  * MetaStore Based Ledger Manager Factory
  */
 public class MSLedgerManagerFactory extends LedgerManagerFactory {
 
-    static Logger LOG = LoggerFactory.getLogger(MSLedgerManagerFactory.class);
+    private final static Logger LOG = LoggerFactory.getLogger(MSLedgerManagerFactory.class);
 
     public static final int CUR_VERSION = 1;
 
@@ -201,7 +204,20 @@ public class MSLedgerManagerFactory extends LedgerManagerFactory {
             maxEntriesPerScan = conf.getMetastoreMaxEntriesPerScan();
 
             this.idGenPath = conf.getZkLedgersRootPath() + IDGENERATION_PREFIX;
-            this.scheduler = Executors.newSingleThreadScheduledExecutor();
+            ThreadFactoryBuilder tfb = new ThreadFactoryBuilder()
+                    .setNameFormat("MSLedgerManagerScheduler-%d");
+            this.scheduler = Executors.newSingleThreadScheduledExecutor(tfb
+                    .build());
+        }
+
+        @Override
+        public void registerLedgerMetadataListener(long ledgerId, LedgerMetadataListener listener) {
+            // TODO: should provide ledger metadata listener in metadata store.
+        }
+
+        @Override
+        public void unregisterLedgerMetadataListener(long ledgerId, LedgerMetadataListener listener) {
+            // TODO: should provide ledger metadata listener in metadata store.
         }
 
         @Override
