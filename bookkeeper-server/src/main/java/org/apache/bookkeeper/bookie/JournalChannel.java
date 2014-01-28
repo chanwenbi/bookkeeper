@@ -21,21 +21,20 @@
 
 package org.apache.bookkeeper.bookie;
 
-import java.util.Arrays;
-
 import java.io.Closeable;
 import java.io.File;
 import java.io.RandomAccessFile;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.ByteBuffer;
-import org.apache.bookkeeper.util.NativeIO;
-
-import static com.google.common.base.Charsets.UTF_8;
+import java.util.Arrays;
 
 import org.apache.bookkeeper.util.NativeIO;
+import org.apache.bookkeeper.util.ZeroBuffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static com.google.common.base.Charsets.UTF_8;
 
 /**
  * Simple wrapper around FileChannel to add versioning
@@ -53,23 +52,37 @@ class JournalChannel implements Closeable {
 
     final byte[] MAGIC_WORD = "BKLG".getBytes(UTF_8);
 
+    final static int SECTOR_SIZE = 512;
     private final static int START_OF_FILE = -12345;
     private static long CACHE_DROP_LAG_BYTES = 8 * 1024 * 1024;
 
-    int HEADER_SIZE = 8; // 4byte magic word, 4 byte version
-    int MIN_COMPAT_JOURNAL_FORMAT_VERSION = 1;
-    int CURRENT_JOURNAL_FORMAT_VERSION = 4;
+    // No header
+    static final int V1 = 1;
+    // Adding header
+    static final int V2 = 2;
+    // Adding ledger key
+    static final int V3 = 3;
+    // Adding fencing key
+    static final int V4 = 4;
+    // 1) expanding header to 512
+    // 2) Padding writes to align sector size
+    static final int V5 = 5;
 
-    private long preAllocSize;
-    private boolean fRemoveFromPageCache;
-    public final static ByteBuffer zeros = ByteBuffer.allocate(512);
+    static final int HEADER_SIZE = SECTOR_SIZE; // align header to sector size
+    static final int VERSION_HEADER_SIZE = 8; // 4byte magic word, 4 byte version
+    static final int MIN_COMPAT_JOURNAL_FORMAT_VERSION = V1;
+    static final int CURRENT_JOURNAL_FORMAT_VERSION = V5;
+
+    private final long preAllocSize;
+    private final boolean fRemoveFromPageCache;
+    public final ByteBuffer zeros = ByteBuffer.allocate(SECTOR_SIZE);
 
     // The position of the file channel's last drop position
     private long lastDropPosition = 0L;
 
     // Mostly used by tests
     JournalChannel(File journalDirectory, long logId) throws IOException {
-        this(journalDirectory, logId, 4*1024*1024, 65536, START_OF_FILE);
+        this(journalDirectory, logId, 4 * 1024 * 1024, 65536, START_OF_FILE);
     }
 
     JournalChannel(File journalDirectory, long logId, long preAllocSize, int writeBufferSize) throws IOException {
@@ -88,7 +101,7 @@ class JournalChannel implements Closeable {
 
     JournalChannel(File journalDirectory, long logId,
                    long preAllocSize, int writeBufferSize, long position, boolean fRemoveFromPageCache) throws IOException {
-        this.preAllocSize = preAllocSize;
+        this.preAllocSize = preAllocSize - preAllocSize % SECTOR_SIZE;
         this.fRemoveFromPageCache = fRemoveFromPageCache;
         File fn = new File(journalDirectory, Long.toHexString(logId) + ".txn");
 
@@ -105,25 +118,27 @@ class JournalChannel implements Closeable {
             formatVersion = CURRENT_JOURNAL_FORMAT_VERSION;
 
             ByteBuffer bb = ByteBuffer.allocate(HEADER_SIZE);
+            ZeroBuffer.put(bb);
+            bb.clear();
             bb.put(MAGIC_WORD);
             bb.putInt(formatVersion);
-            bb.flip();
+            bb.clear();
             fc.write(bb);
 
             bc = new BufferedChannel(fc, writeBufferSize);
             forceWrite(true);
-            nextPrealloc = preAllocSize;
-            fc.write(zeros, nextPrealloc);
+            nextPrealloc = this.preAllocSize;
+            fc.write(zeros, nextPrealloc - SECTOR_SIZE);
         } else {  // open an existing file
             randomAccessFile = new RandomAccessFile(fn, "r");
             fc = randomAccessFile.getChannel();
             bc = null; // readonly
 
-            ByteBuffer bb = ByteBuffer.allocate(HEADER_SIZE);
+            ByteBuffer bb = ByteBuffer.allocate(VERSION_HEADER_SIZE);
             int c = fc.read(bb);
             bb.flip();
 
-            if (c == HEADER_SIZE) {
+            if (c == VERSION_HEADER_SIZE) {
                 byte[] first4 = new byte[4];
                 bb.get(first4);
 
@@ -131,11 +146,11 @@ class JournalChannel implements Closeable {
                     formatVersion = bb.getInt();
                 } else {
                     // pre magic word journal, reset to 0;
-                    formatVersion = 1;
+                    formatVersion = V1;
                 }
             } else {
                 // no header, must be old version
-                formatVersion = 1;
+                formatVersion = V1;
             }
 
             if (formatVersion < MIN_COMPAT_JOURNAL_FORMAT_VERSION
@@ -150,8 +165,10 @@ class JournalChannel implements Closeable {
 
             try {
                 if (position == START_OF_FILE) {
-                    if (formatVersion >= 2) {
+                    if (formatVersion >= V5) {
                         fc.position(HEADER_SIZE);
+                    } else if (formatVersion >= V2) {
+                        fc.position(VERSION_HEADER_SIZE);
                     } else {
                         fc.position(0);
                     }
@@ -176,11 +193,11 @@ class JournalChannel implements Closeable {
         return bc;
     }
 
-    void preAllocIfNeeded() throws IOException {
-        if (bc.position() > nextPrealloc) {
-            nextPrealloc = ((fc.size() + HEADER_SIZE) / preAllocSize + 1) * preAllocSize;
+    void preAllocIfNeeded(long size) throws IOException {
+        if (bc.position() + size > nextPrealloc) {
+            nextPrealloc += preAllocSize;
             zeros.clear();
-            fc.write(zeros, nextPrealloc);
+            fc.write(zeros, nextPrealloc - SECTOR_SIZE);
         }
     }
 
