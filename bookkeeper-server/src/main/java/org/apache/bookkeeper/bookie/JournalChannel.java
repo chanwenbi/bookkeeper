@@ -29,9 +29,7 @@ import java.io.RandomAccessFile;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.ByteBuffer;
-import org.apache.bookkeeper.util.NativeIO;
-
-import static com.google.common.base.Charsets.UTF_8;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.bookkeeper.util.NativeIO;
 import org.slf4j.Logger;

@@ -25,6 +25,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
+import org.apache.bookkeeper.stats.BookkeeperServerStatsLogger;
+import org.apache.bookkeeper.stats.ServerStatsProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -77,11 +79,18 @@ public class LedgerDescriptorImpl extends LedgerDescriptor {
         }
         entry.rewind();
 
+        ServerStatsProvider.getStatsLoggerInstance().getCounter(
+                BookkeeperServerStatsLogger.BookkeeperServerCounter.WRITE_BYTES)
+                .add(entry.remaining());
         return ledgerStorage.addEntry(entry);
     }
 
     @Override
     ByteBuffer readEntry(long entryId) throws IOException {
-        return ledgerStorage.getEntry(ledgerId, entryId);
+        ByteBuffer data = ledgerStorage.getEntry(ledgerId, entryId);
+        ServerStatsProvider.getStatsLoggerInstance().getCounter(
+                BookkeeperServerStatsLogger.BookkeeperServerCounter.READ_BYTES)
+                .add(data.remaining());
+        return data;
     }
 }
