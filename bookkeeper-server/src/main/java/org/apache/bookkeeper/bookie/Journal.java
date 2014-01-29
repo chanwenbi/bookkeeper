@@ -205,7 +205,7 @@ class Journal extends BookieCriticalThread implements CheckpointSource {
                     bb.clear();
                     mark.readLogMark(bb);
                     if (curMark.compare(mark) < 0) {
-                        curMark.setLogMark(mark.getLogFileId(), mark.logFileOffset);
+                        curMark.setLogMark(mark.getLogFileId(), mark.getLogFileOffset());
                     }
                 } catch (IOException e) {
                     LOG.error("Problems reading from " + file + " (this is okay if it is the first time starting this bookie");
@@ -308,9 +308,6 @@ class Journal extends BookieCriticalThread implements CheckpointSource {
             this.lastFlushedPosition = lastFlushedPosition;
             this.shouldClose = shouldClose;
             this.isMarker = isMarker;
-            ServerStatsProvider.getStatsLoggerInstance().getCounter(
-                    BookkeeperServerStatsLogger.BookkeeperServerCounter.JOURNAL_FORCE_WRITE_QUEUE_SIZE)
-                    .inc();
         }
 
         public int process(boolean shouldForceWrite) throws IOException {
@@ -384,10 +381,6 @@ class Journal extends BookieCriticalThread implements CheckpointSource {
                 ForceWriteRequest req = null;
                 try {
                     req = forceWriteRequests.take();
-
-                    ServerStatsProvider.getStatsLoggerInstance().getCounter(
-                            BookkeeperServerStatsLogger.BookkeeperServerCounter.JOURNAL_FORCE_WRITE_QUEUE_SIZE)
-                            .dec();
 
                     // Force write the file and then notify the write completions
                     //
@@ -500,6 +493,7 @@ class Journal extends BookieCriticalThread implements CheckpointSource {
         this.bufferedWritesThreshold = conf.getJournalBufferedWritesThreshold();
         this.bufferedEntriesThreshold = conf.getJournalBufferedEntriesThreshold();
         this.cbThreadPool = Executors.newFixedThreadPool(conf.getNumJournalCallbackThreads(),
+                                                         new DaemonThreadFactory());
 
         // Unless there is a cap on the max wait (which requires group force writes)
         // we cannot skip flushing for queue empty
@@ -686,7 +680,7 @@ class Journal extends BookieCriticalThread implements CheckpointSource {
      * new journal file using current timestamp, and continue persistence logic.
      * Those journals will be garbage collected in SyncThread.
      * </p>
-     * @see org.apache.bookkeeper.bookie.Bookie.SyncThread
+     * @see org.apache.bookkeeper.bookie.SyncThread
      */
     @Override
     public void run() {
@@ -694,8 +688,6 @@ class Journal extends BookieCriticalThread implements CheckpointSource {
         ByteBuffer lenBuff = ByteBuffer.allocate(4);
         JournalChannel logFile = null;
         forceWriteThread.start();
-        Stopwatch journalAllocationWatcher = new Stopwatch();
-        long batchSize = 0;
         try {
             List<Long> journalIds = listJournalIds(journalDirectory, null);
             // Should not use MathUtils.now(), which use System.nanoTime() and
@@ -767,16 +759,8 @@ class Journal extends BookieCriticalThread implements CheckpointSource {
                                 }
                             }
 
-                            ServerStatsProvider.getStatsLoggerInstance().getOpStatsLogger(
-                                    BookkeeperServerStatsLogger.BookkeeperServerOp.JOURNAL_FORCE_WRITE_BATCH_ENTRIES)
-                                    .registerSuccessfulEvent(toFlush.size());
-                            ServerStatsProvider.getStatsLoggerInstance().getOpStatsLogger(
-                                    BookkeeperServerStatsLogger.BookkeeperServerOp.JOURNAL_FORCE_WRITE_BATCH_BYTES)
-                                    .registerSuccessfulEvent(batchSize);
-
                             forceWriteRequests.put(new ForceWriteRequest(logFile, logId, lastFlushPosition, toFlush, (lastFlushPosition > maxJournalSize), false));
                             toFlush = new LinkedList<QueueEntry>();
-                            batchSize = 0L;
                             // check whether journal file is over file limit
                             if (bc.position() > maxJournalSize) {
                                 logFile = null;
@@ -795,7 +779,6 @@ class Journal extends BookieCriticalThread implements CheckpointSource {
                     continue;
                 }
 
-                batchSize += (4 + qe.entry.remaining());
                 lenBuff.clear();
                 lenBuff.putInt(qe.entry.remaining());
                 lenBuff.flip();
@@ -803,22 +786,13 @@ class Journal extends BookieCriticalThread implements CheckpointSource {
                 // we should be doing the following, but then we run out of
                 // direct byte buffers
                 // logFile.write(new ByteBuffer[] { lenBuff, qe.entry });
-                int flushes = 0;
-                flushes += bc.write(lenBuff);
-                flushes += bc.write(qe.entry);
-
-                ServerStatsProvider.getStatsLoggerInstance().getOpStatsLogger(
-                        BookkeeperServerStatsLogger.BookkeeperServerOp.JOURNAL_FLUSH_IN_MEM_ADD)
-                        .registerSuccessfulEvent(flushes);
-
-                ServerStatsProvider.getStatsLoggerInstance().getOpStatsLogger(
-                        BookkeeperServerStatsLogger.BookkeeperServerOp.JOURNAL_MEM_ADD_ENTRY)
-                        .registerSuccessfulEvent(MathUtils.elapsedMicroSec(qe.enqueueTime));
+                bc.write(lenBuff);
+                bc.write(qe.entry);
 
                 // NOTE: preAlloc depends on the fact that we don't change file size while this is
                 // called or useful parts of the file will be zeroed out - in other words
                 // it depends on single threaded flushes to the JournalChannel
-                logFile.preAllocIfNeeded(journalAllocationWatcher);
+                logFile.preAllocIfNeeded();
                 toFlush.add(qe);
                 qe = null;
             }
