@@ -29,12 +29,13 @@ import java.io.RandomAccessFile;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.ByteBuffer;
+import org.apache.bookkeeper.util.NativeIO;
+
+import static com.google.common.base.Charsets.UTF_8;
 
 import org.apache.bookkeeper.util.NativeIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import static com.google.common.base.Charsets.UTF_8;
 
 /**
  * Simple wrapper around FileChannel to add versioning
