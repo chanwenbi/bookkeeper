@@ -31,13 +31,13 @@ public interface RequestProcessor {
     public void close();
 
     /**
-     * Process request.
+     * Process request from given <i>channel</i>.
      *
      * @param request
      *          request to process
      * @param channel
      *          channel received the given request <i>r</i>
      */
-    public void processRequest(Request request, Channel channel);
+    public void processRequest(Object request, Channel channel);
 
 }

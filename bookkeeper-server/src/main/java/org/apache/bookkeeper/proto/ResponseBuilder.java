@@ -28,6 +28,32 @@ import org.jboss.netty.buffer.ChannelBuffers;
 import com.google.protobuf.ByteString;
 
 class ResponseBuilder {
+
+    private static int getPreV3ErrorCode(StatusCode code) {
+        switch (code) {
+        case EOK:
+            return BookieProtocol.EOK;
+        case ENOLEDGER:
+            return BookieProtocol.ENOLEDGER;
+        case ENOENTRY:
+            return BookieProtocol.ENOENTRY;
+        case EIO:
+            return BookieProtocol.EIO;
+        case EUA:
+            return BookieProtocol.EUA;
+        case EBADVERSION:
+            return BookieProtocol.EBADVERSION;
+        case EFENCED:
+            return BookieProtocol.EFENCED;
+        case EREADONLY:
+            return BookieProtocol.EREADONLY;
+        case EBADREQ:
+            return BookieProtocol.EBADREQ;
+        default:
+            return BookieProtocol.EBADREQ;
+        }
+    }
+
     private static BookieProtocol.Response buildErrorResponse(int errorCode, BookieProtocol.Request r) {
         if (r.getOpCode() == BookieProtocol.ADDENTRY) {
             return new BookieProtocol.AddResponse(r.getProtocolVersion(), errorCode,
@@ -64,8 +90,7 @@ class ResponseBuilder {
         if (r.getHeader().getVersion().equals(BookkeeperProtocol.ProtocolVersion.VERSION_THREE)) {
             return buildErrorResponseV3(errorCode, r);
         } else {
-            // TODO:
-            return null;
+            return buildErrorResponse(getPreV3ErrorCode(errorCode));
         }
     }
 
