@@ -525,7 +525,12 @@ public class TestBackwardCompat {
 
         // Check that current client can to write to old server
         LedgerCurrent lcur = LedgerCurrent.newLedger();
-        lcur.write100();
+        try {
+            lcur.write100();
+            fail("Shouldn't be able to write");
+        } catch (Exception e) {
+            // correct behaviour
+        }
         lcur.close();
 
         s410.stop();

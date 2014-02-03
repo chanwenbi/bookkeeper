@@ -93,22 +93,64 @@ public class BookieRequestProcessor implements RequestProcessor {
 
     @Override
     public void processRequest(Object msg, Channel c) {
-        BookieProtocol.Request r = (BookieProtocol.Request) msg;
-        // porcess packet
-        switch (r.getOpCode()) {
-        case BookieProtocol.ADDENTRY:
-            processAddRequest(r, c);
-            break;
-        case BookieProtocol.READENTRY:
-            processReadRequest(r, c);
-            break;
-        default:
-            LOG.error("Unknown op type {}, sending error", r.getOpCode());
-            c.write(ResponseBuilder.buildErrorResponse(BookieProtocol.EBADREQ, r));
-            if (statsEnabled) {
-                bkStats.getOpStats(BKStats.STATS_UNKNOWN).incrementFailedOps();
+        // If we can decode this packet as a Request protobuf packet, process
+        // it as a version 3 packet. Else, just use the old protocol.
+        if (msg instanceof BookkeeperProtocol.Request) {
+            BookkeeperProtocol.Request r = (BookkeeperProtocol.Request) msg;
+            BookkeeperProtocol.BKPacketHeader header = r.getHeader();
+            switch (header.getOperation()) {
+                case ADD_ENTRY:
+                    processAddRequestV3(r, c);
+                    break;
+                case READ_ENTRY:
+                    processReadRequestV3(r, c);
+                    break;
+                default:
+                    BookkeeperProtocol.Response.Builder response =
+                            BookkeeperProtocol.Response.newBuilder().setHeader(r.getHeader())
+                            .setStatus(BookkeeperProtocol.StatusCode.EBADREQ);
+                    c.write(response.build());
+                    if (statsEnabled) {
+                        bkStats.getOpStats(BKStats.STATS_UNKNOWN).incrementFailedOps();
+                    }
+                    break;
             }
-            break;
+        } else {
+            BookieProtocol.Request r = (BookieProtocol.Request) msg;
+            // porcess packet
+            switch (r.getOpCode()) {
+                case BookieProtocol.ADDENTRY:
+                    processAddRequest(r, c);
+                    break;
+                case BookieProtocol.READENTRY:
+                    processReadRequest(r, c);
+                    break;
+                default:
+                    LOG.error("Unknown op type {}, sending error", r.getOpCode());
+                    c.write(ResponseBuilder.buildErrorResponse(BookieProtocol.EBADREQ, r));
+                    if (statsEnabled) {
+                        bkStats.getOpStats(BKStats.STATS_UNKNOWN).incrementFailedOps();
+                    }
+                    break;
+            }
+        }
+    }
+
+    private void processAddRequestV3(final BookkeeperProtocol.Request r, final Channel c) {
+        WriteEntryProcessorV3 write = new WriteEntryProcessorV3(r, c, bookie);
+        if (null == writeThreadPool) {
+            write.run();
+        } else {
+            writeThreadPool.submit(write);
+        }
+    }
+
+    private void processReadRequestV3(final BookkeeperProtocol.Request r, final Channel c) {
+        ReadEntryProcessorV3 read = new ReadEntryProcessorV3(r, c, bookie);
+        if (null == readThreadPool) {
+            read.run();
+        } else {
+            readThreadPool.submit(read);
         }
     }
 

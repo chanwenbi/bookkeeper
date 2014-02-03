@@ -451,7 +451,7 @@ class IndexInMemPageMgr {
             if (null != lep) {
                 return lep;
             }
-            LOG.info("Could not grab a clean page for ledger {}, entry {}, force flushing dirty ledgers.",
+            LOG.debug("Could not grab a clean page for ledger {}, entry {}, force flushing dirty ledgers.",
                     ledger, entry);
             flushOneOrMoreLedgers(false);
         }
