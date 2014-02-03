@@ -21,9 +21,9 @@
 
 package org.apache.bookkeeper.client;
 
-import java.net.InetSocketAddress;
-import java.util.List;
 import java.util.Set;
+import java.util.List;
+
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -34,9 +34,9 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.bookkeeper.conf.ClientConfiguration;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.GenericCallback;
 import org.apache.bookkeeper.test.BookKeeperClusterTestCase;
+import org.apache.bookkeeper.conf.ClientConfiguration;
 
 @SuppressWarnings("deprecation")
 public class SlowBookieTest extends BookKeeperClusterTestCase {

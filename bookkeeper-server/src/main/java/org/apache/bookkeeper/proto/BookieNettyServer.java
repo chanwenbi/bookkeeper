@@ -66,8 +66,6 @@ class BookieNettyServer {
     Object suspensionLock = new Object();
     boolean suspended = false;
 
-    final InetSocketAddress bindAddress;
-
     BookieNettyServer(ServerConfiguration conf, RequestProcessor processor)
             throws IOException, KeeperException, InterruptedException, BookieException  {
         this.conf = conf;
