@@ -18,10 +18,10 @@
 package org.apache.bookkeeper.proto;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 
 import org.apache.bookkeeper.bookie.Bookie;
 import org.apache.bookkeeper.bookie.BookieException;
+import org.apache.bookkeeper.net.BookieSocketAddress;
 import org.apache.bookkeeper.proto.BookieProtocol.Request;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.WriteCallback;
 import org.apache.bookkeeper.util.MathUtils;
@@ -83,7 +83,7 @@ class WriteEntryProcessor extends PacketProcessorBase implements WriteCallback {
 
     @Override
     public void writeComplete(int rc, long ledgerId, long entryId,
-                              InetSocketAddress addr, Object ctx) {
+                              BookieSocketAddress addr, Object ctx) {
         channel.write(ResponseBuilder.buildAddResponse(request));
 
         // compute the latency

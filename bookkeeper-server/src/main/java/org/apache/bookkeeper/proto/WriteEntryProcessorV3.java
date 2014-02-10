@@ -1,11 +1,11 @@
 package org.apache.bookkeeper.proto;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 
 import org.apache.bookkeeper.bookie.Bookie;
 import org.apache.bookkeeper.bookie.BookieException;
+import org.apache.bookkeeper.net.BookieSocketAddress;
 import org.apache.bookkeeper.proto.BookkeeperProtocol.AddRequest;
 import org.apache.bookkeeper.proto.BookkeeperProtocol.AddResponse;
 import org.apache.bookkeeper.proto.BookkeeperProtocol.Request;
@@ -46,7 +46,7 @@ class WriteEntryProcessorV3 extends PacketProcessorBaseV3 implements Runnable {
         BookkeeperInternalCallbacks.WriteCallback wcb = new BookkeeperInternalCallbacks.WriteCallback() {
             @Override
             public void writeComplete(int rc, long ledgerId, long entryId,
-                                      InetSocketAddress addr, Object ctx) {
+                                      BookieSocketAddress addr, Object ctx) {
                 Channel conn = (Channel) ctx;
                 StatusCode status;
                 switch (rc) {
