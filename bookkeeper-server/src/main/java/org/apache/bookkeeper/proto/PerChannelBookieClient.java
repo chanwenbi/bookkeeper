@@ -18,7 +18,6 @@
 package org.apache.bookkeeper.proto;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.nio.channels.ClosedChannelException;
 import java.util.ArrayDeque;
 import java.util.Queue;
@@ -31,6 +30,7 @@ import com.google.protobuf.ByteString;
 import org.apache.bookkeeper.client.BKException;
 import org.apache.bookkeeper.client.BookKeeperClientStats;
 import org.apache.bookkeeper.conf.ClientConfiguration;
+import org.apache.bookkeeper.net.BookieSocketAddress;
 import org.apache.bookkeeper.proto.BookkeeperProtocol.AddRequest;
 import org.apache.bookkeeper.proto.BookkeeperProtocol.AddResponse;
 import org.apache.bookkeeper.proto.BookkeeperProtocol.BKPacketHeader;
@@ -86,7 +86,7 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
     public static final int MAX_FRAME_LENGTH = 2 * 1024 * 1024; // 2M
     public static final AtomicLong txnIdGenerator = new AtomicLong(0);
 
-    InetSocketAddress addr;
+    BookieSocketAddress addr;
     AtomicLong totalBytesOutstanding;
     ClientSocketChannelFactory channelFactory;
     OrderedSafeExecutor executor;
@@ -163,20 +163,20 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
     }
 
     public PerChannelBookieClient(OrderedSafeExecutor executor, ClientSocketChannelFactory channelFactory,
-                                  InetSocketAddress addr, AtomicLong totalBytesOutstanding,
+                                  BookieSocketAddress addr, AtomicLong totalBytesOutstanding,
                                   ScheduledExecutorService timeoutExecutor) {
         this(new ClientConfiguration(), executor, channelFactory, addr, totalBytesOutstanding, timeoutExecutor,
                 NullStatsLogger.INSTANCE);
     }
 
     public PerChannelBookieClient(OrderedSafeExecutor executor, ClientSocketChannelFactory channelFactory,
-                                  InetSocketAddress addr, AtomicLong totalBytesOutstanding) {
+                                  BookieSocketAddress addr, AtomicLong totalBytesOutstanding) {
         this(new ClientConfiguration(), executor, channelFactory, addr, totalBytesOutstanding, null,
                 NullStatsLogger.INSTANCE);
     }
 
     public PerChannelBookieClient(ClientConfiguration conf, OrderedSafeExecutor executor,
-                                  ClientSocketChannelFactory channelFactory, InetSocketAddress addr,
+                                  ClientSocketChannelFactory channelFactory, BookieSocketAddress addr,
                                   AtomicLong totalBytesOutstanding, ScheduledExecutorService timeoutExecutor,
                                   StatsLogger parentStatsLogger) {
         this.conf = conf;
@@ -187,7 +187,7 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
         this.state = ConnectionState.DISCONNECTED;
 
         StringBuilder nameBuilder = new StringBuilder();
-        nameBuilder.append(addr.getHostName().replace('.', '_').replace('-', '_'))
+        nameBuilder.append(addr.getHostname().replace('.', '_').replace('-', '_'))
             .append("_").append(addr.getPort());
 
         this.statsLogger = parentStatsLogger.scope(BookKeeperClientStats.CHANNEL_SCOPE)
@@ -216,7 +216,7 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
         bootstrap.setOption("tcpNoDelay", conf.getClientTcpNoDelay());
         bootstrap.setOption("keepAlive", true);
 
-        ChannelFuture future = bootstrap.connect(addr);
+        ChannelFuture future = bootstrap.connect(addr.getSocketAddress());
         future.addListener(new ChannelFutureListener() {
             @Override
             public void operationComplete(ChannelFuture future) throws Exception {
@@ -243,8 +243,9 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
                         closeChannel(future.getChannel());
                         return; // pendingOps should have been completed when other channel connected
                     } else {
-                        LOG.error("Could not connect to bookie: {}, current state {} : ",
-                                  new Object[] { future.getChannel(), state, future.getCause() });
+                        LOG.error("Could not connect to bookie: {}/{}, current state {} : ",
+                                  new Object[] { future.getChannel(), addr,
+                                                 state, future.getCause() });
                         rc = BKException.Code.BookieHandleNotAvailableException;
                         closeChannel(future.getChannel());
                         channel = null;
@@ -317,12 +318,19 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
      * {@link #connectIfNeededAndDoOp(GenericCallback)}
      *
      * @param ledgerId
+     *          Ledger Id
      * @param masterKey
+     *          Master Key
      * @param entryId
+     *          Entry Id
      * @param toSend
+     *          Buffer to send
      * @param cb
+     *          Write callback
      * @param ctx
+     *          Write callback context
      * @param options
+     *          Add options
      */
     void addEntry(final long ledgerId, byte[] masterKey, final long entryId, ChannelBuffer toSend, WriteCallback cb,
                   Object ctx, final int options) {
@@ -846,7 +854,7 @@ public class PerChannelBookieClient extends SimpleChannelHandler implements Chan
             final long requestTimeMillis = MathUtils.now();
             this.cb = null == addEntryOpLogger ? originalCallback : new WriteCallback() {
                 @Override
-                public void writeComplete(int rc, long ledgerId, long entryId, InetSocketAddress addr, Object ctx) {
+                public void writeComplete(int rc, long ledgerId, long entryId, BookieSocketAddress addr, Object ctx) {
                     long latencyMillis = MathUtils.now() - requestTimeMillis;
                     if (rc != BKException.Code.OK) {
                         addEntryOpLogger.registerFailedEvent(latencyMillis);

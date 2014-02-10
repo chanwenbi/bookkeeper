@@ -26,6 +26,7 @@ import java.util.concurrent.Executors;
 
 import org.apache.bookkeeper.bookie.Bookie;
 import org.apache.bookkeeper.conf.ServerConfiguration;
+import org.apache.bookkeeper.net.BookieSocketAddress;
 import org.apache.bookkeeper.processor.RequestProcessor;
 import org.jboss.netty.channel.Channel;
 import org.slf4j.Logger;
@@ -63,10 +64,10 @@ public class BookieRequestProcessor implements RequestProcessor {
         this.bookie = bookie;
         this.readThreadPool =
             createExecutor(this.serverCfg.getNumReadWorkerThreads(),
-                           "BookieWriteThread-" + serverCfg.getBookiePort() + "-%d");
+                           "BookieReadThread-" + serverCfg.getBookiePort() + "-%d");
         this.writeThreadPool =
             createExecutor(this.serverCfg.getNumAddWorkerThreads(),
-                           "BookieReadThread-" + serverCfg.getBookiePort() + "-%d");
+                           "BookieWriteThread-" + serverCfg.getBookiePort() + "-%d");
         this.statsEnabled = serverCfg.isStatisticsEnabled();
     }
 

@@ -56,6 +56,8 @@ Trunk (unreleased changes)
 
       BOOKKEEPER-719: Inconsistent synchronization of org.apache.bookkeeper.stats.CodahaleMetricsProvider.metrics (sijie via ivank)
 
+      BOOKKEEPER-644: Provide a bookie address wrapper (sijie via fpj)
+
       bookkeeper-server:
 
         BOOKKEEPER-567: ReadOnlyBookieTest hangs on shutdown (sijie via ivank)
@@ -152,6 +154,18 @@ Trunk (unreleased changes)
 
         BOOKKEEPER-703: Document all the settings added in BOOKKEEPER-656 (sijie)
 
+        BOOKKEEPER-727: Names of bookie write/read threads are backwards (ivank via fpj)
+
+        BOOKKEEPER-728: Bookkeeper#Builder is not public, so can't be used outside of client package (ivank via fpj)
+
+        BOOKKEEPER-729: Bookie shouldn't exit with 0, if exiting from deathwatcher and thread death was caused by OOM (ivank via fpj)
+
+        BOOKKEEPER-725: AutoRecoveryMain should exit with error code if deathwatcher finds dead thread (ivank via sijie)
+
+        BOOKKEEPER-726: PerChannelBookieClient should print address that it failed to connect to when it fails to correct (ivank via sijie)
+
+        BOOKKEEPER-724: Shade introduces RAT error (sijie via fpj)
+
       hedwig-server:
 
         BOOKKEEPER-601: readahead cache size isn't updated correctly (sijie via fpj)
@@ -225,6 +239,10 @@ Trunk (unreleased changes)
       BOOKKEEPER-701: Improve exception handling of Bookkeeper threads (rakesh via sijie)
 
       BOOKKEEPER-708: Shade protobuf library to avoid incompatible versions (rakesh, ivank via sijie)
+
+      BOOKKEEPER-732: Add env variable ENTRY_FORMATTER_CLASS to the bkenv.sh (rakesh via sijie)
+
+      BOOKKEEPER-731: Missing BOOKIE_PID_DIR and BOOKIE_STOP_TIMEOUT in env variables list (rakesh via sijie)
 
     NEW FEATURE:
 
