@@ -226,6 +226,7 @@
             <!-- exclude generated file //-->
             <exclude>**/DataFormats.java</exclude>
             <exclude>**/BookkeeperProtocol.java</exclude>
+            <exclude>dependency-reduced-pom.xml</exclude>
           </excludes>
         </configuration>
       </plugin>

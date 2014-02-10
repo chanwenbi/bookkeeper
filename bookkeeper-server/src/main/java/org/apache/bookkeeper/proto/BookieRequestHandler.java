@@ -20,8 +20,6 @@
  */
 package org.apache.bookkeeper.proto;
 
-import java.nio.channels.ClosedChannelException;
-
 import org.apache.bookkeeper.conf.ServerConfiguration;
 import org.apache.bookkeeper.processor.RequestProcessor;
 import org.apache.bookkeeper.proto.BookkeeperProtocol.Request;
@@ -34,6 +32,8 @@ import org.jboss.netty.channel.SimpleChannelHandler;
 import org.jboss.netty.channel.group.ChannelGroup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.nio.channels.ClosedChannelException;
 
 /**
  * Serverside handler for bookkeeper requests

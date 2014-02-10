@@ -22,7 +22,6 @@ package org.apache.bookkeeper.proto;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -34,6 +33,7 @@ import java.util.concurrent.TimeoutException;
 import org.apache.bookkeeper.bookie.Bookie;
 import org.apache.bookkeeper.bookie.BookieException;
 import org.apache.bookkeeper.conf.ServerConfiguration;
+import org.apache.bookkeeper.net.BookieSocketAddress;
 import org.apache.bookkeeper.processor.RequestProcessor;
 import org.apache.bookkeeper.proto.BookkeeperProtocol.AddRequest;
 import org.apache.bookkeeper.proto.BookkeeperProtocol.BKPacketHeader;
@@ -78,10 +78,10 @@ public class BookieRequestProcessor implements RequestProcessor, BookkeeperInter
         this.bookie = bookie;
         this.readThreadPool =
             createExecutor(this.serverCfg.getNumReadWorkerThreads(),
-                           "BookieWriteThread-" + serverCfg.getBookiePort() + "-%d");
+                           "BookieReadThread-" + serverCfg.getBookiePort() + "-%d");
         this.writeThreadPool =
             createExecutor(this.serverCfg.getNumAddWorkerThreads(),
-                           "BookieReadThread-" + serverCfg.getBookiePort() + "-%d");
+                           "BookieWriteThread-" + serverCfg.getBookiePort() + "-%d");
         this.statsEnabled = serverCfg.isStatisticsEnabled();
     }
 
@@ -215,7 +215,7 @@ public class BookieRequestProcessor implements RequestProcessor, BookkeeperInter
 
     @Override
     public void writeComplete(int rc, long ledgerId, long entryId,
-                    InetSocketAddress addr, Object ctx) {
+                              BookieSocketAddress addr, Object ctx) {
         assert (ctx instanceof AddCtx);
         AddCtx addctx = (AddCtx) ctx;
         addctx.c.write(ResponseBuilder.buildAddResponse(addctx.r));
