@@ -2353,6 +2353,10 @@ public class BookieShell implements Tool {
             System.out.println("MasterKey:      " + bytes2Hex(masterKey));
             System.out.println();
             return;
+        } else if (entryId == Bookie.METAENTRY_ID_FENCE_KEY) {
+            System.out.println("Type:           FENCE");
+            System.out.println();
+            return;
         }
         if (entryId == Bookie.METAENTRY_ID_FENCE_KEY) {
             System.out.println("Type:           META");
