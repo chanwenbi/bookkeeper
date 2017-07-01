@@ -100,6 +100,11 @@ class BookieNettyServer {
         this.requestProcessor = processor;
         this.authProviderFactory = AuthProviderFactoryFactory.newBookieAuthProviderFactory(conf);
 
+        // Validate that we allow ephemeral ports
+        if (0 == conf.getBookiePort() && !conf.getAllowEphemeralPorts()) {
+            throw new IOException("Invalid port specified, using ephemeral ports accidentally?");
+        }
+
         if (!conf.isDisableServerSocketBind()) {
             ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat("bookie-io-%s").build();
             final int numThreads = Runtime.getRuntime().availableProcessors() * 2;
@@ -136,7 +141,12 @@ class BookieNettyServer {
         } else {
             bindAddress = bookieAddress.getSocketAddress();
         }
-        listenOn(bindAddress, bookieAddress);
+        Channel bindChannel = listenOn(bindAddress, bookieAddress);
+        if (conf.getBookiePort() == 0
+            && null != bindChannel
+            && bindChannel.localAddress() instanceof InetSocketAddress) {
+            conf.setBookiePort(((InetSocketAddress) bindChannel.localAddress()).getPort());
+        }
     }
 
     boolean isRunning() {
@@ -174,7 +184,7 @@ class BookieNettyServer {
         }
     }
 
-    private void listenOn(InetSocketAddress address, BookieSocketAddress bookieAddress) throws InterruptedException {
+    private Channel listenOn(InetSocketAddress address, BookieSocketAddress bookieAddress) throws InterruptedException {
         if (!conf.isDisableServerSocketBind()) {
             ServerBootstrap bootstrap = new ServerBootstrap();
             bootstrap.childOption(ChannelOption.ALLOCATOR, new PooledByteBufAllocator(true));
@@ -218,7 +228,7 @@ class BookieNettyServer {
             });
 
             // Bind and start to accept incoming connections
-            bootstrap.bind(address.getAddress(), address.getPort()).sync();
+            return bootstrap.bind(address.getAddress(), address.getPort()).sync().channel();
         }
 
         if (conf.isEnableLocalTransport()) {
@@ -270,6 +280,7 @@ class BookieNettyServer {
             jvmBootstrap.bind(bookieAddress.getLocalAddress()).sync();
             LocalBookiesRegistry.registerLocalBookieAddress(bookieAddress);
         }
+        return null;
     }
 
     void start() {

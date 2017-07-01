@@ -118,6 +118,7 @@ public class Bookie extends BookieCriticalThread {
     final LedgerManager ledgerManager;
     final LedgerStorage ledgerStorage;
     final List<Journal> journals;
+    final FileLock lock;
 
     final HandleFactory handles;
 
@@ -603,6 +604,9 @@ public class Bookie extends BookieCriticalThread {
                     statsLogger.scope(LD_INDEX_SCOPE));
         }
 
+        // create the file lock to prevent two instances running at the same time.
+        this.lock = new FileLock(this.journalDirectories.get(0));
+
         // instantiate zookeeper client to initialize ledger manager
         this.zk = instantiateZookeeperClient(conf);
         checkEnvironment(this.zk);
@@ -759,6 +763,13 @@ public class Bookie extends BookieCriticalThread {
 
     @Override
     synchronized public void start() {
+        try {
+            this.lock.lock();
+        } catch (IOException ioe) {
+            LOG.error("Exception while locking bookie to start, shutting down", ioe);
+            shutdown(ExitCode.BOOKIE_EXCEPTION);
+            return;
+        }
         setDaemon(true);
         if (LOG.isDebugEnabled()) {
             LOG.debug("I'm starting a bookie with journal directories {}",
@@ -1251,6 +1262,8 @@ public class Bookie extends BookieCriticalThread {
             if (zk != null) {
                 zk.close();
             }
+            // release the lock here
+            this.lock.release();
         } catch (InterruptedException ie) {
             LOG.error("Interrupted during shutting down bookie : ", ie);
         } finally {

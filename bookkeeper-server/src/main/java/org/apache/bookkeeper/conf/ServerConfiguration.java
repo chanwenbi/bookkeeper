@@ -89,6 +89,7 @@ public class ServerConfiguration extends AbstractConfiguration {
     protected final static String ALLOW_STORAGE_EXPANSION = "allowStorageExpansion";
     // NIO Parameters
     protected final static String SERVER_TCP_NODELAY = "serverTcpNoDelay";
+    protected final static String ALLOW_EPHEMERAL_PORTS = "allowEphemeralPorts";
     protected final static String SERVER_SOCK_KEEPALIVE = "serverSockKeepalive";
     protected final static String SERVER_SOCK_LINGER = "serverTcpLinger";
 
@@ -1457,6 +1458,27 @@ public class ServerConfiguration extends AbstractConfiguration {
      */
     public int getDiskCheckInterval() {
         return getInt(DISK_CHECK_INTERVAL, 10 * 1000);
+    }
+    
+    /**
+     * Are we allowing Bookie to bind to ephemeral ports
+     *
+     * @return Ephemeral Ports setting
+     */
+    public boolean getAllowEphemeralPorts() {
+        return getBoolean(ALLOW_EPHEMERAL_PORTS, true);
+    }
+
+    /**
+     * Set ephemeral ports setting
+     *
+     * @param allowEphemeralPorts
+     *          Ephemeral Ports setting
+     * @return server configuration
+     */
+    public ServerConfiguration setAllowEphemeralPorts(boolean allowEphemeralPorts) {
+        setProperty(ALLOW_EPHEMERAL_PORTS, Boolean.toString(allowEphemeralPorts));
+        return this;
     }
 
     /**

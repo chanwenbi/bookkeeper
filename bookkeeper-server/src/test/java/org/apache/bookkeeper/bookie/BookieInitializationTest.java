@@ -28,6 +28,7 @@ import java.io.IOException;
 import java.net.BindException;
 import java.net.InetAddress;
 
+import java.nio.channels.OverlappingFileLockException;
 import org.apache.bookkeeper.bookie.LedgerDirsManager.NoWritableLedgerDirException;
 import org.apache.bookkeeper.client.BookKeeper;
 import org.apache.bookkeeper.client.BookKeeper.DigestType;
@@ -258,7 +259,7 @@ public class BookieInitializationTest extends BookKeeperClusterTestCase {
 
     /**
      * Verify duplicate bookie server startup. Should throw
-     * java.net.BindException if already BK server is running
+     * {@link OverlappingFileLockException} if already BK server is running
      */
     @Test(timeout = 20000)
     public void testDuplicateBookieServerStartup() throws Exception {
@@ -273,16 +274,52 @@ public class BookieInitializationTest extends BookKeeperClusterTestCase {
         bs1.start();
 
         // starting bk server with same conf
+        BookieServer bs2 = new BookieServer(conf);
         try {
-            BookieServer bs2 = new BookieServer(conf);
             bs2.start();
-            fail("Should throw BindException, as the bk server is already running!");
-        } catch (BindException e) {
+            fail("Should throw OverlappingFileLockException, as the bk server is already running!");
+        } catch (OverlappingFileLockException e) {
             // Ok
         } catch (IOException e) {
             Assert.assertTrue("BKServer allowed duplicate Startups!",
                     e.getMessage().contains("bind"));
+        } finally {
+            bs2.shutdown();
         }
+        bs1.shutdown();
+    }
+
+    /**
+     * Verify duplicate bookie server startup. Should throw
+     * {@link OverlappingFileLockException} if already BK server is running
+     */
+    @Test(timeout = 20000)
+    public void testDuplicateBookieServerStartupWithEphemeralPorts() throws Exception {
+        File tmpDir = createTempDir("bookie", "test");
+
+        ServerConfiguration conf = TestBKConfiguration.newServerConfiguration();
+        conf.setZkServers(null)
+            .setAllowEphemeralPorts(true)
+            .setBookiePort(0)
+            .setJournalDirName(tmpDir.getPath())
+            .setLedgerDirNames( new String[] { tmpDir.getPath() });
+        BookieServer bs1 = new BookieServer(conf);
+        bs1.start();
+
+        // starting bk server with same conf
+        BookieServer bs2 = new BookieServer(conf);
+        try {
+            bs2.start();
+            fail("Should throw OverlappingFileLockException, as the bk server is already running!");
+        } catch (OverlappingFileLockException e) {
+            // Ok
+        } catch (IOException e) {
+            Assert.assertTrue("BKServer allowed duplicate Startups!",
+                    e.getMessage().contains("bind"));
+        } finally {
+            bs2.shutdown();
+        }
+        bs1.shutdown();
     }
 
     /**
