@@ -26,10 +26,10 @@ groups:
     endpoint: autorecovery
   - name: Metric collection
     endpoint: metrics
-  - name: Geo-replication
-    endpoint: geo-replication
   - name: Customized placement policies
     endpoint: placement
+  - name: Geo-replication
+    endpoint: geo-replication
   - name: Performance tuning
     endpoint: perf
 - name: API
