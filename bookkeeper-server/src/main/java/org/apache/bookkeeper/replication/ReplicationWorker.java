@@ -190,7 +190,14 @@ public class ReplicationWorker implements Runnable {
 
     private void waitTillTargetBookieIsWritable() {
         LOG.info("Waiting for target bookie {} to be back in read/write mode", targetBookie);
-        while (workerRunning && admin.getReadOnlyBookies().contains(targetBookie)) {
+        while (workerRunning) {
+            try {
+                if (!admin.getReadOnlyBookies().contains(targetBookie)) {
+                    break;
+                }
+            } catch (BKException e) {
+                // encounter exception, let's wait for backoff time as well.
+            }
             isInReadOnlyMode = true;
             waitBackOffTime();
         }

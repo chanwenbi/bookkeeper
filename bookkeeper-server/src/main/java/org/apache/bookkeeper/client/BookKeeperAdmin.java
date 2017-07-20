@@ -23,6 +23,8 @@ package org.apache.bookkeeper.client;
 import static com.google.common.base.Charsets.UTF_8;
 import static com.google.common.base.Preconditions.checkArgument;
 
+import com.google.common.collect.Sets;
+import com.google.common.util.concurrent.AbstractFuture;
 import java.io.IOException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
@@ -36,14 +38,15 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Random;
 import java.util.Set;
+import java.util.SortedMap;
 import java.util.UUID;
 import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
-
-import org.apache.bookkeeper.bookie.Bookie;
 import org.apache.bookkeeper.client.AsyncCallback.OpenCallback;
 import org.apache.bookkeeper.client.AsyncCallback.RecoverCallback;
 import org.apache.bookkeeper.client.BookKeeper.SyncOpenCallback;
@@ -79,8 +82,6 @@ import org.apache.zookeeper.ZooKeeper;
 import org.apache.zookeeper.data.ACL;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.google.common.util.concurrent.AbstractFuture;
 
 /**
  * Admin client for BookKeeper clusters
@@ -221,6 +222,16 @@ public class BookKeeperAdmin implements AutoCloseable {
     public ZooKeeper getZooKeeper() {
         return zk;
     }
+    
+    /**
+     * Get all the bookies registered under cookies path.
+     *
+     * @return the registered bookie list.
+     */
+    public Collection<BookieSocketAddress> getRegisteredBookies()
+            throws BKException {
+        return bkc.bookieWatcher.getRegisteredBookies();
+    }
 
     /**
      * Get a list of the available bookies.
@@ -229,7 +240,7 @@ public class BookKeeperAdmin implements AutoCloseable {
      */
     public Collection<BookieSocketAddress> getAvailableBookies()
             throws BKException {
-        return bkc.bookieWatcher.getBookies();
+        return bkc.bookieWatcher.getAvailableBookies();
     }
 
     /**
@@ -237,32 +248,17 @@ public class BookKeeperAdmin implements AutoCloseable {
      *
      * @return a collection of bookie addresses
      */
-    public Collection<BookieSocketAddress> getReadOnlyBookies() {
+    public Collection<BookieSocketAddress> getReadOnlyBookies()
+            throws BKException {
         return bkc.bookieWatcher.getReadOnlyBookies();
     }
 
-    /**
-     * Notify when the available list of bookies changes.
-     * This is a one-shot notification. To receive subsequent notifications
-     * the listener must be registered again.
-     *
-     * @param listener the listener to notify
-     */
-    public void notifyBookiesChanged(final BookiesListener listener)
-            throws BKException {
-        bkc.bookieWatcher.notifyBookiesChanged(listener);
+    public void registerBookiesListener(BookiesListener listener) {
+        this.bkc.bookieWatcher.registerBookiesListener(listener);
     }
 
-    /**
-     * Notify when the available list of read only bookies changes.
-     * This is a one-shot notification. To receive subsequent notifications
-     * the listener must be registered again.
-     *
-     * @param listener the listener to notify
-     */
-    public void notifyReadOnlyBookiesChanged(final BookiesListener listener)
-            throws BKException {
-        bkc.bookieWatcher.notifyReadOnlyBookiesChanged(listener);
+    public void unregisterBookiesListener(BookiesListener listener) {
+        this.bkc.bookieWatcher.unregisterBookiesListener(listener);
     }
 
     /**
@@ -292,10 +288,17 @@ public class BookKeeperAdmin implements AutoCloseable {
      * @see BookKeeper#openLedger
      */
     public LedgerHandle openLedger(final long lId) throws InterruptedException,
+            BKException {    
+            return openLedger(lId, false);
+    }
+
+    public LedgerHandle openLedger(final long lId, final boolean forceRecovery) throws InterruptedException,
             BKException {
         CompletableFuture<LedgerHandle> counter = new CompletableFuture<>();
 
-        new LedgerOpenOp(bkc, lId, new SyncOpenCallback(), counter).initiate();
+        new LedgerOpenOp(bkc, lId, new SyncOpenCallback(), counter)
+            .forceRecovery(forceRecovery)
+            .initiate();
 
         return SynchCallbackUtils.waitForResult(counter);
     }
@@ -463,6 +466,69 @@ public class BookKeeperAdmin implements AutoCloseable {
             value = false;
             rc = BKException.Code.OK;
         }
+    }
+    
+    public SortedMap<Long, LedgerMetadata> getLedgersContainBookies(Set<BookieSocketAddress> bookies)
+            throws InterruptedException, BKException {
+        final SyncObject sync = new SyncObject();
+        final AtomicReference<SortedMap<Long, LedgerMetadata>> resultHolder =
+                new AtomicReference<SortedMap<Long, LedgerMetadata>>(null);
+        asyncGetLedgersContainBookies(bookies, new GenericCallback<SortedMap<Long, LedgerMetadata>>() {
+            @Override
+            public void operationComplete(int rc, SortedMap<Long, LedgerMetadata> result) {
+                LOG.info("GetLedgersContainBookies completed with rc : {}", rc);
+                synchronized (sync) {
+                    sync.rc = rc;
+                    sync.value = true;
+                    resultHolder.set(result);
+                    sync.notify();
+                }
+            }
+        });
+        synchronized (sync) {
+            while (sync.value == false) {
+                sync.wait();
+            }
+        }
+        if (sync.rc != BKException.Code.OK) {
+            throw BKException.create(sync.rc);
+        }
+        return resultHolder.get();
+    }
+
+    public void asyncGetLedgersContainBookies(final Set<BookieSocketAddress> bookies,
+                                              final GenericCallback<SortedMap<Long, LedgerMetadata>> callback) {
+        final SortedMap<Long, LedgerMetadata> ledgers = new ConcurrentSkipListMap<Long, LedgerMetadata>();
+        bkc.getLedgerManager().asyncProcessLedgers(new Processor<Long>() {
+            @Override
+            public void process(final Long lid, final AsyncCallback.VoidCallback cb) {
+                bkc.getLedgerManager().readLedgerMetadata(lid, new GenericCallback<LedgerMetadata>() {
+                    @Override
+                    public void operationComplete(int rc, LedgerMetadata metadata) {
+                        if (BKException.Code.NoSuchLedgerExistsException == rc) {
+                            // the ledger was deleted during this iteration.
+                            cb.processResult(BKException.Code.OK, null, null);
+                            return;
+                        } else if (BKException.Code.OK != rc) {
+                            cb.processResult(rc, null, null);
+                            return;
+                        }
+                        Set<BookieSocketAddress> bookiesInLedger = metadata.getBookiesInThisLedger();
+                        Sets.SetView<BookieSocketAddress> intersection =
+                                Sets.intersection(bookiesInLedger, bookies);
+                        if (!intersection.isEmpty()) {
+                            ledgers.put(lid, metadata);
+                        }
+                        cb.processResult(BKException.Code.OK, null, null);
+                    }
+                });
+            }
+        }, new AsyncCallback.VoidCallback() {
+            @Override
+            public void processResult(int rc, String path, Object ctx) {
+                callback.operationComplete(rc, ledgers);
+            }
+        }, null, BKException.Code.OK, BKException.Code.MetaStoreException);
     }
 
     /**

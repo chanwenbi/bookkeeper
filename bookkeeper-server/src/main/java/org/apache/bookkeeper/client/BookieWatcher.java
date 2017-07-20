@@ -25,6 +25,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
@@ -42,7 +43,6 @@ import org.apache.zookeeper.KeeperException.Code;
 import org.apache.zookeeper.KeeperException.NodeExistsException;
 import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.Watcher;
-import org.apache.zookeeper.Watcher.Event.EventType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,22 +74,25 @@ class BookieWatcher implements Watcher, ChildrenCallback {
     final BookKeeper bk;
     final ScheduledExecutorService scheduler;
     final EnsemblePlacementPolicy placementPolicy;
+    final CopyOnWriteArraySet<BookiesListener> listeners =
+            new CopyOnWriteArraySet<BookiesListener>();
 
     // Bookies that will not be preferred to be chosen in a new ensemble
     final Cache<BookieSocketAddress, Boolean> quarantinedBookies;
 
-    SafeRunnable reReadTask = new SafeRunnable() {
+    private final SafeRunnable reReadTask = new SafeRunnable() {
         @Override
         public void safeRun() {
             readBookies();
         }
     };
-    private ReadOnlyBookieWatcher readOnlyBookieWatcher;
+    private final ReadOnlyBookieWatcher readOnlyBookieWatcher;
 
-    public BookieWatcher(ClientConfiguration conf,
-                         ScheduledExecutorService scheduler,
-                         EnsemblePlacementPolicy placementPolicy,
-                         BookKeeper bk) throws KeeperException, InterruptedException  {
+    BookieWatcher(ClientConfiguration conf,
+                  ScheduledExecutorService scheduler,
+                  EnsemblePlacementPolicy placementPolicy,
+                  BookKeeper bk)
+            throws KeeperException, InterruptedException  {
         this.bk = bk;
         // ZK bookie registration path
         this.bookieRegistrationPath = conf.getZkAvailableBookiesPath();
@@ -107,33 +110,48 @@ class BookieWatcher implements Watcher, ChildrenCallback {
 
                 }).build();
     }
+    
+    void registerBookiesListener(final BookiesListener listener) {
+        listeners.add(listener);
+        readOnlyBookieWatcher.registerBookiesListener(listener);
+    }
 
-    void notifyBookiesChanged(final BookiesListener listener) throws BKException {
+    void unregisterBookiesListener(final BookiesListener listener) {
+        listeners.remove(listener);
+        readOnlyBookieWatcher.unregisterBookiesListener(listener);
+    }
+
+    /**
+     * Get all the bookies registered under cookies path.
+     *
+     * @return the registered bookie list.
+     */
+    Collection<BookieSocketAddress> getRegisteredBookies() throws BKException {
+        String cookiePath = bk.getConf().getZkLedgersRootPath() + "/"
+            + BookKeeperConstants.COOKIE_NODE;
         try {
-            bk.getZkHandle().getChildren(this.bookieRegistrationPath,
-                    new Watcher() {
-                        public void process(WatchedEvent event) {
-                            // listen children changed event from ZooKeeper
-                            if (event.getType() == EventType.NodeChildrenChanged) {
-                                listener.availableBookiesChanged();
-                            }
-                        }
-                    });
+            List<String> children = bk.getZkHandle().getChildren(cookiePath, false);
+            List<BookieSocketAddress> bookies = new ArrayList<BookieSocketAddress>(children.size());
+            for (String child : children) {
+                try {
+                    bookies.add(new BookieSocketAddress(child));
+                } catch (IOException ioe) {
+                    logger.error("Error parsing bookie address {} : ", child, ioe);
+                    throw new BKException.ZKException();
+                }
+            }
+            return bookies;
         } catch (KeeperException ke) {
-            logger.error("Error registering watcher with zookeeper", ke);
+            logger.error("Failed to get registered bookie list : ", ke);
             throw new BKException.ZKException();
         } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
-            logger.error("Interrupted registering watcher with zookeeper", ie);
+            logger.error("Interrupted reading registered bookie list", ie);
             throw new BKException.BKInterruptedException();
         }
     }
 
-    void notifyReadOnlyBookiesChanged(final BookiesListener listener) throws BKException {
-        readOnlyBookieWatcher.notifyBookiesChanged(listener);
-    }
-
-    public Collection<BookieSocketAddress> getBookies() throws BKException {
+    Collection<BookieSocketAddress> getAvailableBookies() throws BKException {
         try {
             List<String> children = bk.getZkHandle().getChildren(this.bookieRegistrationPath, false);
             children.remove(BookKeeperConstants.READONLY);
@@ -148,15 +166,26 @@ class BookieWatcher implements Watcher, ChildrenCallback {
         }
     }
 
-    Collection<BookieSocketAddress> getReadOnlyBookies() {
+    Collection<BookieSocketAddress> getReadOnlyBookies() throws BKException {
+        try {
+            readOnlyBookieWatcher.readROBookiesBlocking();
+        } catch (KeeperException ke) {
+            logger.error("Encountered zookeeper exception on getting readonly bookie list : code = {}, message = {}",
+                ke.code(), ke.getMessage());
+            throw new BKException.ZKException();
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            logger.error("Interrupted reading bookie list : ", ie);
+            throw new BKException.BKInterruptedException();
+        }
         return new HashSet<BookieSocketAddress>(readOnlyBookieWatcher.getReadOnlyBookies());
     }
 
-    public void readBookies() {
+    private void readBookies() {
         readBookies(this);
     }
 
-    public void readBookies(ChildrenCallback callback) {
+    private void readBookies(ChildrenCallback callback) {
         bk.getZkHandle().getChildren(this.bookieRegistrationPath, this, callback, null);
     }
 
@@ -169,12 +198,17 @@ class BookieWatcher implements Watcher, ChildrenCallback {
     public void processResult(int rc, String path, Object ctx, List<String> children) {
 
         if (rc != KeeperException.Code.OK.intValue()) {
-            //logger.error("Error while reading bookies", KeeperException.create(Code.get(rc), path));
+            if (bk.closed) {
+                return;
+            }
             // try the read after a second again
             try {
                 scheduler.schedule(reReadTask, ZK_CONNECT_BACKOFF_SEC, TimeUnit.SECONDS);
             } catch (RejectedExecutionException ree) {
-                logger.warn("Failed to schedule reading bookies task : ", ree);
+                if (!bk.closed) {
+                    logger.warn("Failed to schedule reading bookies task (it might be because bookkeeper" +
+                            " client is closing): ", ree);
+                }
             }
             return;
         }
@@ -195,6 +229,9 @@ class BookieWatcher implements Watcher, ChildrenCallback {
                     // start collecting bookieInfo for the newly joined bookies, if any
                     bk.bookieInfoReader.availableBookiesChanged(newBookieAddrs);
                 }
+            }
+            for (BookiesListener listener : listeners) {
+                listener.availableBookiesChanged(newBookieAddrs);
             }
         }));
 
@@ -241,6 +278,7 @@ class BookieWatcher implements Watcher, ChildrenCallback {
 
         final LinkedBlockingQueue<Integer> queue = new LinkedBlockingQueue<Integer>();
         readBookies(new ChildrenCallback() {
+            @Override
             public void processResult(int rc, String path, Object ctx, List<String> children) {
                 bk.mainWorkerPool.submitOrdered(path, safeRun(() -> {
                     BookieWatcher.this.processResult(rc, path, ctx, children);
@@ -331,8 +369,11 @@ class BookieWatcher implements Watcher, ChildrenCallback {
 
         private final static Logger LOG = LoggerFactory.getLogger(ReadOnlyBookieWatcher.class);
         private volatile HashSet<BookieSocketAddress> readOnlyBookies = new HashSet<BookieSocketAddress>();
-        private BookKeeper bk;
-        private String readOnlyBookieRegPath;
+        private final BookKeeper bk;
+        private final String readOnlyBookieRegPath;
+
+        final CopyOnWriteArraySet<BookiesListener> listeners =
+                new CopyOnWriteArraySet<BookiesListener>();
 
         public ReadOnlyBookieWatcher(ClientConfiguration conf, BookKeeper bk) throws KeeperException,
                 InterruptedException {
@@ -350,6 +391,14 @@ class BookieWatcher implements Watcher, ChildrenCallback {
             }
         }
 
+        void registerBookiesListener(final BookiesListener listener) {
+            listeners.add(listener);
+        }
+
+        void unregisterBookiesListener(final BookiesListener listener) {
+            listeners.remove(listener);
+        }
+
         @Override
         public void process(WatchedEvent event) {
             readROBookies();
@@ -361,6 +410,7 @@ class BookieWatcher implements Watcher, ChildrenCallback {
 
             final LinkedBlockingQueue<Integer> queue = new LinkedBlockingQueue<Integer>();
             readROBookies(new ChildrenCallback() {
+                @Override
                 public void processResult(int rc, String path, Object ctx, List<String> children) {
                     try {
                         ReadOnlyBookieWatcher.this.processResult(rc, path, ctx, children);
@@ -375,30 +425,6 @@ class BookieWatcher implements Watcher, ChildrenCallback {
 
             if (rc != KeeperException.Code.OK.intValue()) {
                 throw KeeperException.create(Code.get(rc));
-            }
-        }
-
-        void notifyBookiesChanged(final BookiesListener listener) throws BKException {
-            try {
-                List<String> children = bk.getZkHandle().getChildren(this.readOnlyBookieRegPath, new Watcher() {
-                    public void process(WatchedEvent event) {
-                        // listen children changed event from ZooKeeper
-                        if (event.getType() == EventType.NodeChildrenChanged) {
-                            listener.availableBookiesChanged();
-                        }
-                    }
-                });
-
-                // Update the list of read-only bookies
-                HashSet<BookieSocketAddress> newReadOnlyBookies = convertToBookieAddresses(children);
-                readOnlyBookies = newReadOnlyBookies;
-            } catch (KeeperException ke) {
-                logger.error("Error registering watcher with zookeeper", ke);
-                throw new BKException.ZKException();
-            } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
-                logger.error("Interrupted registering watcher with zookeeper", ie);
-                throw new BKException.BKInterruptedException();
             }
         }
 
@@ -420,6 +446,10 @@ class BookieWatcher implements Watcher, ChildrenCallback {
 
             HashSet<BookieSocketAddress> newReadOnlyBookies = convertToBookieAddresses(children);
             readOnlyBookies = newReadOnlyBookies;
+
+            for (BookiesListener listener : listeners) {
+                listener.readOnlyBookiesChanged(newReadOnlyBookies);
+            }
         }
 
         // returns the readonly bookies

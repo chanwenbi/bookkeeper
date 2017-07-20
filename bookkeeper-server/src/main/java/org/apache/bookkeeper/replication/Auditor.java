@@ -377,7 +377,7 @@ public class Auditor implements BookiesListener {
                 LOG.info("Periodic checking disabled");
             }
             try {
-                notifyBookieChanges();
+                admin.registerBookiesListener(this);
                 knownBookies = getAvailableBookies();
             } catch (BKException bke) {
                 LOG.error("Couldn't get bookie list, exiting", bke);
@@ -437,11 +437,6 @@ public class Auditor implements BookiesListener {
             availableBookies.add(addr.toString());
         }
         return availableBookies;
-    }
-
-    private void notifyBookieChanges() throws BKException {
-        admin.notifyBookiesChanged(this);
-        admin.notifyReadOnlyBookiesChanged(this);
     }
 
     /**
@@ -705,13 +700,12 @@ public class Auditor implements BookiesListener {
     }
 
     @Override
-    public void availableBookiesChanged() {
-        // since a watch is triggered, we need to watch again on the bookies
-        try {
-            notifyBookieChanges();
-        } catch (BKException bke) {
-            LOG.error("Exception while registering for a bookie change notification", bke);
-        }
+    public void availableBookiesChanged(Set<BookieSocketAddress> bookies) {
+        submitAuditTask();
+    }
+
+    @Override
+    public void readOnlyBookiesChanged(Set<BookieSocketAddress> bookies) {
         submitAuditTask();
     }
 
@@ -727,6 +721,7 @@ public class Auditor implements BookiesListener {
                 LOG.warn("Executor not shutting down, interrupting");
                 executor.shutdownNow();
             }
+            admin.unregisterBookiesListener(this);
             admin.close();
             bkc.close();
         } catch (InterruptedException ie) {

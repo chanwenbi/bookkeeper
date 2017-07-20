@@ -139,12 +139,12 @@ public class BookieInfoReader {
         if (newBookiesList == null) {
             try {
                 if (this.bookies == null) {
-                    joinedBookies = this.bookies = bk.bookieWatcher.getBookies();
+                    joinedBookies = this.bookies = bk.bookieWatcher.getAvailableBookies();
                 } else if (refreshBookieList.get()) {
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("Refreshing bookie list");
                     }
-                    newBookiesList = bk.bookieWatcher.getBookies();
+                    newBookiesList = bk.bookieWatcher.getAvailableBookies();
                     refreshBookieList.set(false);
                 } else {
                     // the bookie list is already up to date, just retrieve their info
@@ -241,7 +241,7 @@ public class BookieInfoReader {
                          BookkeeperProtocol.GetBookieInfoRequest.Flags.FREE_DISK_SPACE_VALUE;
 
         Collection<BookieSocketAddress> bookies;
-        bookies = bk.bookieWatcher.getBookies();
+        bookies = bk.bookieWatcher.getAvailableBookies();
         bookies.addAll(bk.bookieWatcher.getReadOnlyBookies());
 
         totalSent.set(bookies.size());

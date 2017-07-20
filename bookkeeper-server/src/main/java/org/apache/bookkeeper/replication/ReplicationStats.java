@@ -24,9 +24,12 @@ public interface ReplicationStats {
 
     public final static String REPLICATION_SCOPE = "replication";
 
+    // auditor stats
     public final static String AUDITOR_SCOPE = "auditor";
     public final static String ELECTION_ATTEMPTS = "election_attempts";
+    public final static String AUDITOR_STATUS = "auditor_status";
     public final static String NUM_UNDER_REPLICATED_LEDGERS = "NUM_UNDER_REPLICATED_LEDGERS";
+    public final static String PUBLISHED_UNDERREPLICATED_LEDGERS = "PUBLISHED_UNDERREPLICATED_LEDGERS";
     public final static String URL_PUBLISH_TIME_FOR_LOST_BOOKIE = "URL_PUBLISH_TIME_FOR_LOST_BOOKIE";
     public final static String BOOKIE_TO_LEDGERS_MAP_CREATION_TIME = "BOOKIE_TO_LEDGERS_MAP_CREATION_TIME";
     public final static String CHECK_ALL_LEDGERS_TIME = "CHECK_ALL_LEDGERS_TIME";
@@ -35,7 +38,18 @@ public interface ReplicationStats {
     public final static String NUM_LEDGERS_CHECKED = "NUM_LEDGERS_CHECKED";
     public final static String NUM_BOOKIE_AUDITS_DELAYED = "NUM_BOOKIE_AUDITS_DELAYED";
     public final static String NUM_DELAYED_BOOKIE_AUDITS_DELAYES_CANCELLED = "NUM_DELAYED_BOOKIE_AUDITS_CANCELLED";
+    
+    // cluster manager
+    public final static String CLUSTER_SCOPE = "cluster";
+    public final static String FAILED_BOOKIES = "failed_bookies";
+    public final static String REGISTERED_BOOKIES = "registered_bookies";
+    public final static String AVAILABLE_BOOKIES = "available_bookies";
+    public final static String READ_ONLY_BOOKIES = "readonly_bookies";
+    public final static String STALE_BOOKIES = "stale_bookies";
+    public final static String ACTIVE_BOOKIES = "active_bookies";
+    public final static String LOST_BOOKIES = "lost_bookies";
 
+    // replication worker stats
     public final static String REPLICATION_WORKER_SCOPE = "replication_worker";
     public final static String REREPLICATE_OP = "rereplicate";
     public final static String NUM_FULL_OR_PARTIAL_LEDGERS_REPLICATED = "NUM_FULL_OR_PARTIAL_LEDGERS_REPLICATED";

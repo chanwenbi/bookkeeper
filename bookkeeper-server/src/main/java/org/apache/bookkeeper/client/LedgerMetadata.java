@@ -17,9 +17,12 @@
  */
 package org.apache.bookkeeper.client;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.TextFormat;
 
+import java.util.HashSet;
+import java.util.Set;
 import org.apache.bookkeeper.net.BookieSocketAddress;
 import org.apache.bookkeeper.proto.DataFormats.LedgerMetadataFormat;
 import org.apache.bookkeeper.versioning.Version;
@@ -224,7 +227,7 @@ public class LedgerMetadata {
         return state == LedgerMetadataFormat.State.IN_RECOVERY;
     }
 
-    LedgerMetadataFormat.State getState() {
+    public LedgerMetadataFormat.State getState() {
         return state;
     }
 
@@ -241,6 +244,7 @@ public class LedgerMetadata {
         state = LedgerMetadataFormat.State.CLOSED;
     }
 
+    @VisibleForTesting
     public void addEnsemble(long startEntryId, ArrayList<BookieSocketAddress> ensemble) {
         assert ensembles.isEmpty() || startEntryId >= ensembles.lastKey();
 
@@ -630,4 +634,11 @@ public class LedgerMetadata {
         }
     }
 
+    Set<BookieSocketAddress> getBookiesInThisLedger() {
+        Set<BookieSocketAddress> bookies = new HashSet<BookieSocketAddress>();
+        for (ArrayList<BookieSocketAddress> ensemble : ensembles.values()) {
+            bookies.addAll(ensemble);
+        }
+        return bookies;
+    }
 }
