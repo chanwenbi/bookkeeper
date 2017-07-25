@@ -39,7 +39,7 @@ import org.apache.bookkeeper.client.AsyncCallback.AddCallback;
 import org.apache.bookkeeper.client.BookKeeper.DigestType;
 import org.apache.bookkeeper.meta.LongHierarchicalLedgerManagerFactory;
 import org.apache.bookkeeper.net.BookieSocketAddress;
-import org.apache.bookkeeper.test.MultiLedgerManagerMultiDigestTestCase;
+import org.apache.bookkeeper.test.BookKeeperClusterTestCase;
 import org.junit.Before;
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -48,8 +48,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Testing ledger write entry cases
  */
-public class BookieWriteLedgerTest extends
-        MultiLedgerManagerMultiDigestTestCase implements AddCallback {
+public class BookieWriteLedgerTest extends BookKeeperClusterTestCase implements AddCallback {
 
     private final static Logger LOG = LoggerFactory
             .getLogger(BookieWriteLedgerTest.class);
@@ -86,11 +85,11 @@ public class BookieWriteLedgerTest extends
         entries2 = new ArrayList<byte[]>(); // initialize the entries list
     }
 
-    public BookieWriteLedgerTest(String ledgerManagerFactory,
-            DigestType digestType) {
+    public BookieWriteLedgerTest() {
         super(5);
-        this.digestType = digestType;
+        this.digestType = DigestType.CRC32;
         // set ledger manager
+        String ledgerManagerFactory = "org.apache.bookkeeper.meta.HierarchicalLedgerManagerFactory";
         baseConf.setLedgerManagerFactoryClassName(ledgerManagerFactory);
         baseClientConf.setLedgerManagerFactoryClassName(ledgerManagerFactory);
     }
