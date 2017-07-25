@@ -240,7 +240,12 @@ public class BookKeeperAdmin implements AutoCloseable {
      */
     public Collection<BookieSocketAddress> getAvailableBookies()
             throws BKException {
-        return bkc.bookieWatcher.getAvailableBookies();
+        return getAvailableBookies(false);
+    }
+
+    public Collection<BookieSocketAddress> getAvailableBookies(boolean watch)
+            throws BKException {
+        return bkc.bookieWatcher.getAvailableBookies(watch);
     }
 
     /**
@@ -250,7 +255,12 @@ public class BookKeeperAdmin implements AutoCloseable {
      */
     public Collection<BookieSocketAddress> getReadOnlyBookies()
             throws BKException {
-        return bkc.bookieWatcher.getReadOnlyBookies();
+        return getReadOnlyBookies(false);
+    }
+
+    public Collection<BookieSocketAddress> getReadOnlyBookies(boolean watch)
+            throws BKException {
+        return bkc.bookieWatcher.getReadOnlyBookies(watch);
     }
 
     public void registerBookiesListener(BookiesListener listener) {

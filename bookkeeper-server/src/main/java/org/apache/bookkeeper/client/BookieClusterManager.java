@@ -52,7 +52,6 @@ public class BookieClusterManager implements BookiesListener {
 
     static final Logger logger = LoggerFactory.getLogger(BookieClusterManager.class);
 
-
     static class UpdateStatus {
 
         long lastUpdatedTimestamp;
@@ -76,13 +75,13 @@ public class BookieClusterManager implements BookiesListener {
     protected final long staleBookieIntervalInMs;
     protected final Map<BookieSocketAddress, UpdateStatus> bookieStatuses =
             new HashMap<BookieSocketAddress, UpdateStatus>();
-    protected AtomicBoolean isStarted = new AtomicBoolean();
-    protected  Set<BookieSocketAddress> registeredBookies = new HashSet<BookieSocketAddress>();
-    protected  Set<BookieSocketAddress> availableBookies = new HashSet<BookieSocketAddress>();
-    protected  Set<BookieSocketAddress> readOnlyBookies = new HashSet<BookieSocketAddress>();
-    protected  Set<BookieSocketAddress> staleBookies = new HashSet<BookieSocketAddress>();
-    protected  Set<BookieSocketAddress> activeBookies = new HashSet<BookieSocketAddress>();
-    protected  Set<BookieSocketAddress> lostBookies = new HashSet<BookieSocketAddress>();
+    protected final AtomicBoolean isStarted = new AtomicBoolean();
+    protected final Set<BookieSocketAddress> registeredBookies = new HashSet<BookieSocketAddress>();
+    protected final Set<BookieSocketAddress> availableBookies = new HashSet<BookieSocketAddress>();
+    protected final Set<BookieSocketAddress> readOnlyBookies = new HashSet<BookieSocketAddress>();
+    protected final Set<BookieSocketAddress> staleBookies = new HashSet<BookieSocketAddress>();
+    protected final Set<BookieSocketAddress> activeBookies = new HashSet<BookieSocketAddress>();
+    protected final Set<BookieSocketAddress> lostBookies = new HashSet<BookieSocketAddress>();
 
     // stats for bookie cluster
     private StatsLogger statsLogger;

@@ -187,7 +187,7 @@ public class Auditor implements BookiesListener {
     }
 
     @VisibleForTesting
-    synchronized Future<?> submitAuditTask() {
+    Future<?> submitAuditTask() {
         if (executor.isShutdown()) {
             SettableFuture<Void> f = SettableFuture.<Void>create();
             f.setException(new BKAuditException("Auditor shutting down"));
@@ -200,7 +200,7 @@ public class Auditor implements BookiesListener {
                         waitIfLedgerReplicationDisabled();
                         int lostBookieRecoveryDelay = Auditor.this.ledgerUnderreplicationManager
                                 .getLostBookieRecoveryDelay();
-                        List<String> availableBookies = getAvailableBookies();
+                        List<String> availableBookies = getAvailableBookies(false);
 
                         // casting to String, as knownBookies and availableBookies
                         // contains only String values
@@ -378,7 +378,7 @@ public class Auditor implements BookiesListener {
             }
             try {
                 admin.registerBookiesListener(this);
-                knownBookies = getAvailableBookies();
+                knownBookies = getAvailableBookies(true);
             } catch (BKException bke) {
                 LOG.error("Couldn't get bookie list, exiting", bke);
                 submitShutdownTask();
@@ -426,9 +426,9 @@ public class Auditor implements BookiesListener {
         }
     }
 
-    private List<String> getAvailableBookies() throws BKException {
+    private List<String> getAvailableBookies(boolean watch) throws BKException {
         // Get the available bookies
-        Collection<BookieSocketAddress> availableBkAddresses = admin.getAvailableBookies();
+        Collection<BookieSocketAddress> availableBkAddresses = admin.getAvailableBookies(watch);
         Collection<BookieSocketAddress> readOnlyBkAddresses = admin.getReadOnlyBookies();
         availableBkAddresses.addAll(readOnlyBkAddresses);
 
@@ -492,7 +492,7 @@ public class Auditor implements BookiesListener {
             return;
         }
 
-        List<String> availableBookies = getAvailableBookies();
+        List<String> availableBookies = getAvailableBookies(false);
         // find lost bookies
         Set<String> knownBookies = ledgerDetails.keySet();
         Collection<String> lostBookies = CollectionUtils.subtract(knownBookies,
