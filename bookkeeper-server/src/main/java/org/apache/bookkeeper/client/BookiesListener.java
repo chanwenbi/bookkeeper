@@ -1,5 +1,3 @@
-package org.apache.bookkeeper.client;
-
 /**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -17,7 +15,10 @@ package org.apache.bookkeeper.client;
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.bookkeeper.client;
 
+import org.apache.bookkeeper.common.annotation.InterfaceAudience;
+import org.apache.bookkeeper.common.annotation.InterfaceStability;
 
 import org.apache.bookkeeper.net.BookieSocketAddress;
 
@@ -26,6 +27,9 @@ import java.util.Set;
 /**
  * Listener for the the available bookies changes.
  */
+
+@InterfaceAudience.Private
+@InterfaceStability.Evolving
 public interface BookiesListener {
     /**
      * Available bookies changed

@@ -26,11 +26,11 @@ import org.apache.bookkeeper.client.BKException;
 import org.apache.bookkeeper.conf.ClientConfiguration;
 import org.apache.bookkeeper.conf.ServerConfiguration;
 import org.apache.bookkeeper.util.ReflectionUtils;
-import org.apache.bookkeeper.client.ClientConnectionPeer;
-import org.apache.bookkeeper.bookie.BookieConnectionPeer;
+import org.apache.bookkeeper.proto.ClientConnectionPeer;
+import org.apache.bookkeeper.proto.BookieConnectionPeer;
 
 /**
- * @TODO: Write JavaDoc comment {@link https://github.com/apache/bookkepeer/issues/247}
+ * A factory to manage the authentication provider factories.
  */
 public class AuthProviderFactoryFactory {
 
