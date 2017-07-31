@@ -33,7 +33,8 @@ echo "ORIGIN_REPO: $ORIGIN_REPO"
   git reset origin/asf-site
 
   touch .
-  cp -r $APACHE_GENERATED_DIR/content content
+  rm -r content
+  mv $APACHE_GENERATED_DIR/content content
   git add -A content
 
   git commit -m "Updated site at revision $REVISION"
