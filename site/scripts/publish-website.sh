@@ -29,12 +29,18 @@ echo "ORIGIN_REPO: $ORIGIN_REPO"
 (
   cd $ROOT_DIR
 
+  CONTENTDIR=/tmp/bookkeeper-site
+  rm -rf $CONTENTDIR
+  mkdir $CONTENTDIR
+  mv $APACHE_GENERATED_DIR/content $CONTENTDIR/content
+
   git checkout asf-site
+  git clean -fdx
   git reset origin/asf-site
 
   touch .
   rm -r content
-  mv $APACHE_GENERATED_DIR/content content
+  mv $CONTENTDIR/content content
   git add -A content
 
   git commit -m "Updated site at revision $REVISION"
