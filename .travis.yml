@@ -35,8 +35,7 @@ before_install:
 
 script:
   - travis_retry mvn --batch-mode clean apache-rat:check compile findbugs:check
-# Disabled the tests here. Since tests are running much slower on Travis than on Jenkins
-#  - ./dev/ticktoc.sh "mvn --batch-mode clean package"
+  - ./dev/ticktoc.sh "mvn --batch-mode clean package"
 
 cache:
   directories:
