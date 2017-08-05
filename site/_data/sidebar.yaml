@@ -20,6 +20,8 @@ groups:
 - name: Administration
   dir: admin
   docs:
+  - name: Production Deployment
+    endpoint: production
   - name: BookKeeper administration
     endpoint: bookies
   - name: AutoRecovery

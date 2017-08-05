@@ -212,7 +212,7 @@ groups:
     default: 'true'
   - param: journalMaxGroupWaitMSec
     description: Maximum latency to impose on a journal write to achieve grouping.
-    default: 200
+    default: 2
   - param: journalBufferedWritesThreshold
     description: Maximum writes to buffer to achieve grouping.
     default: 524288
