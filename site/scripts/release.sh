@@ -34,25 +34,25 @@ RELEASE_VERSION=`echo $LATEST_VERSION | sed 's/^\(.*\)-SNAPSHOT/\1/'`
 
 echo "Releasing version $RELEASE_VERSION ..."
 
-## create a release directory
-#
-#if [[ -d ${DOC_HOME}/docs/${RELEASE_VERSION} ]]; then
-#  echo "Release $RELEASE_VERSION docs dir '${DOC_HOME}/docs/${RELEASE_VERSION}' already exists."
-#  exit 1
-#fi
-#
-#cp -r ${DOC_HOME}/docs/latest ${DOC_HOME}/docs/${RELEASE_VERSION}
-#
-## add the release to git repo
-#git add ${DOC_HOME}/docs/${RELEASE_VERSION}
-#
-#cd ${DOC_HOME}/docs/${RELEASE_VERSION}
-#
-#find . -name "*.md" | xargs sed -i'.bak' "s/{{ site\.latest_version }}/${RELEASE_VERSION}/"
-#find . -name "*.md.bak" | xargs rm
-#find . -name "*.md" | xargs sed -i'.bak' "s/${LATEST_VERSION}/${RELEASE_VERSION}/"
-#find . -name "*.md.bak" | xargs rm
-#cp releaseNotesTemplate.md releaseNotes.md
+# create a release directory
+
+if [[ -d ${DOC_HOME}/docs/${RELEASE_VERSION} ]]; then
+  echo "Release $RELEASE_VERSION docs dir '${DOC_HOME}/docs/${RELEASE_VERSION}' already exists."
+  exit 1
+fi
+
+cp -r ${DOC_HOME}/docs/latest ${DOC_HOME}/docs/${RELEASE_VERSION}
+
+# add the release to git repo
+git add ${DOC_HOME}/docs/${RELEASE_VERSION}
+
+cd ${DOC_HOME}/docs/${RELEASE_VERSION}
+
+find . -name "*.md" | xargs sed -i'.bak' "s/{{ site\.latest_version }}/${RELEASE_VERSION}/"
+find . -name "*.md.bak" | xargs rm
+find . -name "*.md" | xargs sed -i'.bak' "s/${LATEST_VERSION}/${RELEASE_VERSION}/"
+find . -name "*.md.bak" | xargs rm
+cp releaseNotesTemplate.md releaseNotes.md
 
 # go to doc home
 
@@ -76,3 +76,5 @@ NEXT_VERSION="${major_version}.${next_minor_version}.0-SNAPSHOT"
 find _config.yml | xargs sed -i'.bak' "s/latest_version: \"${LATEST_VERSION}\"/latest_version: \"${NEXT_VERSION}\"/"
 
 rm _config.yml.bak
+
+echo "Released version $RELEASE_VERSION."
