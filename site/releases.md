@@ -31,6 +31,10 @@ Client Guide | API docs
 
 [INSERT SUMMARY]
 
+### [date] Release 4.5.0 available
+
+[INSERT SUMMARY]
+
 ### 16 May, 2016: release 4.4.0 available
 
 This is the fourth release of BookKeeper as an Apache Top Level Project!
