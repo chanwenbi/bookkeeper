@@ -75,7 +75,7 @@ public class TestLongZkLedgerIdGenerator extends TestCase {
         super.tearDown();
     }
 
-    @Test(timeout=60000)
+    @Test
     public void testGenerateLedgerId() throws Exception {
         // Create *nThread* threads each generate *nLedgers* ledger id,
         // and then check there is no identical ledger id.

@@ -73,7 +73,7 @@ public class TestDiskChecker {
     /**
      * Check the disk full
      */
-    @Test(expected = DiskOutOfSpaceException.class)
+    @Test
     public void testCheckDiskFull() throws IOException {
         File file = createTempDir("DiskCheck", "test");
         long usableSpace = file.getUsableSpace();
@@ -84,7 +84,7 @@ public class TestDiskChecker {
         diskChecker.checkDiskFull(file);
     }
 
-    @Test(expected = DiskWarnThresholdException.class)
+    @Test
     public void testDiskWarnThresholdException() throws IOException {
         File file = createTempDir("DiskCheck", "test");
         long usableSpace = file.getUsableSpace();
@@ -100,7 +100,7 @@ public class TestDiskChecker {
      * Check disk full on non exist file. in this case it should check for
      * parent file
      */
-    @Test(timeout = 30000, expected = DiskOutOfSpaceException.class)
+    @Test
     public void testCheckDiskFullOnNonExistFile() throws IOException {
         File file = createTempDir("DiskCheck", "test");
         long usableSpace = file.getUsableSpace();
@@ -114,7 +114,7 @@ public class TestDiskChecker {
     /**
      * Check disk error for file
      */
-    @Test(timeout = 30000, expected = DiskErrorException.class)
+    @Test
     public void testCheckDiskErrorForFile() throws Exception {
         File parent = createTempDir("DiskCheck", "test");
         File child = File.createTempFile("DiskCheck", "test", parent);
@@ -124,7 +124,7 @@ public class TestDiskChecker {
     /**
      * Check disk error for valid dir.
      */
-    @Test(timeout=60000)
+    @Test
     public void testCheckDiskErrorForDir() throws Exception {
         File parent = createTempDir("DiskCheck", "test");
         File child = File.createTempFile("DiskCheck", "test", parent);

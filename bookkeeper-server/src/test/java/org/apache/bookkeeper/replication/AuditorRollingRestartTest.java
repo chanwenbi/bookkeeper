@@ -48,7 +48,7 @@ public class AuditorRollingRestartTest extends BookKeeperClusterTestCase {
     /**
      * Test no auditing during restart if disabled
      */
-    @Test(timeout=600000) // 10 minutes
+    @Test
     public void testAuditingDuringRollingRestart() throws Exception {
         LedgerManagerFactory mFactory = LedgerManagerFactory.newLedgerManagerFactory(bsConfs.get(0), zkc);
         final LedgerUnderreplicationManager underReplicationManager = mFactory.newLedgerUnderreplicationManager();

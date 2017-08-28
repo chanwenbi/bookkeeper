@@ -168,7 +168,7 @@ public abstract class CompactionTest extends BookKeeperClusterTestCase {
         }
     }
 
-    @Test(timeout=60000)
+    @Test
     public void testDisableCompaction() throws Exception {
         // prepare data
         LedgerHandle[] lhs = prepareData(3, false);
@@ -195,7 +195,7 @@ public abstract class CompactionTest extends BookKeeperClusterTestCase {
         }
     }
 
-    @Test(timeout=60000)
+    @Test
     public void testForceGarbageCollection() throws Exception {
         ServerConfiguration conf = newServerConfiguration();
         conf.setGcWaitTime(60000);
@@ -240,7 +240,7 @@ public abstract class CompactionTest extends BookKeeperClusterTestCase {
         storage.shutdown();
     }
 
-    @Test(timeout=60000)
+    @Test
     public void testMinorCompaction() throws Exception {
         // prepare data
         LedgerHandle[] lhs = prepareData(3, false);
@@ -274,7 +274,7 @@ public abstract class CompactionTest extends BookKeeperClusterTestCase {
         verifyLedger(lhs[0].getId(), 0, lhs[0].getLastAddConfirmed());
     }
 
-    @Test(timeout = 60000)
+    @Test
     public void testMinorCompactionWithNoWritableLedgerDirs() throws Exception {
         // prepare data
         LedgerHandle[] lhs = prepareData(3, false);
@@ -315,7 +315,7 @@ public abstract class CompactionTest extends BookKeeperClusterTestCase {
         }
     }
 
-    @Test(timeout = 60000)
+    @Test
     public void testMinorCompactionWithNoWritableLedgerDirsButIsForceGCAllowWhenNoSpaceIsSet() throws Exception {
         // prepare data
         LedgerHandle[] lhs = prepareData(3, false);
@@ -379,7 +379,7 @@ public abstract class CompactionTest extends BookKeeperClusterTestCase {
         }
     }
     
-    @Test(timeout=60000)
+    @Test
     public void testMajorCompaction() throws Exception {
 
         // prepare data
@@ -414,7 +414,7 @@ public abstract class CompactionTest extends BookKeeperClusterTestCase {
         verifyLedger(lhs[1].getId(), 0, lhs[1].getLastAddConfirmed());
     }
 
-    @Test(timeout=60000)
+    @Test
     public void testMajorCompactionAboveThreshold() throws Exception {
         // prepare data
         LedgerHandle[] lhs = prepareData(3, false);
@@ -437,7 +437,7 @@ public abstract class CompactionTest extends BookKeeperClusterTestCase {
         }
     }
 
-    @Test(timeout=60000)
+    @Test
     public void testCompactionSmallEntryLogs() throws Exception {
 
         // create a ledger to write a few entries
@@ -486,7 +486,7 @@ public abstract class CompactionTest extends BookKeeperClusterTestCase {
      * {@see https://issues.apache.org/jira/browse/BOOKKEEPER-530}
      * {@see https://issues.apache.org/jira/browse/BOOKKEEPER-664}
      */
-    @Test(timeout=60000)
+    @Test
     public void testCompactionSafety() throws Exception {
         tearDown(); // I dont want the test infrastructure
         ServerConfiguration conf = TestBKConfiguration.newServerConfiguration();
@@ -641,7 +641,7 @@ public abstract class CompactionTest extends BookKeeperClusterTestCase {
      * Test that compaction should execute silently when there is no entry logs
      * to compact. {@see https://issues.apache.org/jira/browse/BOOKKEEPER-700}
      */
-    @Test(timeout = 60000)
+    @Test
     public void testWhenNoLogsToCompact() throws Exception {
         tearDown(); // I dont want the test infrastructure
         ServerConfiguration conf = TestBKConfiguration.newServerConfiguration();
@@ -688,7 +688,7 @@ public abstract class CompactionTest extends BookKeeperClusterTestCase {
     /**
      * Suspend garbage collection when suspendMajor/suspendMinor is set.
      */
-    @Test(timeout=60000)
+    @Test
     public void testSuspendGarbageCollection() throws Exception {
         ServerConfiguration conf = newServerConfiguration();
         conf.setGcWaitTime(500);
@@ -744,7 +744,7 @@ public abstract class CompactionTest extends BookKeeperClusterTestCase {
         storage.gcThread.resumeMajorGC();
     }
 
-    @Test(timeout = 60000)
+    @Test
     public void testCompactionWithEntryLogRollover() throws Exception {
         // Disable bookie gc during this test
         baseConf.setGcWaitTime(60000);

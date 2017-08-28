@@ -48,12 +48,12 @@ public class LedgerMetadataCreationTest extends LedgerManagerTestCase {
         baseConf.setGcWaitTime(100000);
     }
 
-    @Test(timeout = 60000)
+    @Test
     public void testLedgerCreationAndDeletionWithRandomLedgerIds() throws Exception {
         testExecution(true);
     }
 
-    @Test(timeout = 60000)
+    @Test
     public void testLedgerCreationAndDeletion() throws Exception{
         testExecution(false);
     }
@@ -129,7 +129,7 @@ public class LedgerMetadataCreationTest extends LedgerManagerTestCase {
         bookKeeper.close();
     }
     
-    @Test(timeout = 60000)
+    @Test
     public void testParentNodeDeletion() throws Exception {
         /*
          * run this testcase only for HierarchicalLedgerManager and

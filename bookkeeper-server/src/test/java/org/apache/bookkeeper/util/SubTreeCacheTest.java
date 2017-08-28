@@ -207,14 +207,14 @@ public class SubTreeCacheTest {
         }
     }
 
-    @Test(timeout=5000)
+    @Test
     public void testNoUpdate() throws Exception {
         TestWatch watch = setWatch();
         readAssertChildren("/a/a", new String[]{"a", "b"});
         assertNotFired(watch);
     }
 
-    @Test(timeout=5000)
+    @Test
     public void testSingleCreate() throws Exception {
         TestWatch watch = setWatch();
         readAssertChildren("/a/a", new String[]{"a", "b"});
@@ -222,7 +222,7 @@ public class SubTreeCacheTest {
         assertFired(watch);
     }
 
-    @Test(timeout=5000)
+    @Test
     public void testSingleRemoval() throws Exception {
         TestWatch watch = setWatch();
         readAssertChildren("/a/a", new String[]{"a", "b"});
@@ -230,7 +230,7 @@ public class SubTreeCacheTest {
         assertFired(watch);
     }
 
-    @Test(timeout=5000)
+    @Test
     public void testCancelation() throws Exception {
         TestWatch watch = setWatch();
         readAssertChildren("/a/a", new String[]{"a", "b"});
@@ -239,7 +239,7 @@ public class SubTreeCacheTest {
         assertNotFired(watch);
     }
 
-    @Test(timeout=5000)
+    @Test
     public void testGuardCancelation() throws Exception {
         TestWatch watch;
         try (TestWatchGuard guard = setWatchWithGuard()) {
@@ -250,7 +250,7 @@ public class SubTreeCacheTest {
         assertNotFired(watch);
     }
 
-    @Test(timeout=5000)
+    @Test
     public void testGuardCancelationExceptional() throws Exception {
         TestWatch watch = null;
         try (TestWatchGuard guard = setWatchWithGuard()) {
@@ -262,7 +262,7 @@ public class SubTreeCacheTest {
         assertNotFired(watch);
     }
 
-    @Test(timeout=5000)
+    @Test
     public void testDuplicateWatch() throws Exception {
         try (TestWatchGuard watch = setWatchWithGuard()) {
             readAssertChildren("/a/a", new String[]{"a", "b"});
@@ -275,14 +275,14 @@ public class SubTreeCacheTest {
         }
     }
 
-    @Test(timeout=5000, expected = KeeperException.class)
+    @Test
     public void testNoNode() throws Exception {
         try (TestWatchGuard watch = setWatchWithGuard()) {
             readAssertChildren("/z/a", new String[]{});
         }
     }
 
-    @Test(timeout=5000)
+    @Test
     public void testRemoveEmptyNode() throws Exception {
         try (TestWatchGuard watch = setWatchWithGuard()) {
             readAssertChildren("/a/a/a", new String[]{});
@@ -291,7 +291,7 @@ public class SubTreeCacheTest {
         }
     }
 
-    @Test(timeout=5000)
+    @Test
     public void doubleWatch() throws Exception {
         try (TestWatchGuard watch1 = setWatchWithGuard()) {
             readAssertChildren("/a/a", new String[]{"a", "b"});
@@ -305,7 +305,7 @@ public class SubTreeCacheTest {
         }
     }
 
-    @Test(timeout=5000)
+    @Test
     public void sequentialWatch() throws Exception {
         try (TestWatchGuard watch = setWatchWithGuard()) {
             readAssertChildren("/a/a", new String[]{"a", "b"});
