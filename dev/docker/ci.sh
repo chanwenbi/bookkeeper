@@ -46,7 +46,7 @@ RUN groupadd --non-unique -g ${GROUP_ID} ${USER_NAME} && \
 ENV  HOME /home/${USER_NAME}
 UserSpecificDocker
 
-BOOKKEEPER_ROOT=${SCRIPT_DIR}/..
+BOOKKEEPER_ROOT=${SCRIPT_DIR}/../..
 
 pushd ${BOOKKEEPER_ROOT}
 
