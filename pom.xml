@@ -178,7 +178,6 @@
           <argLine>-Xmx2G -Djava.net.preferIPv4Stack=true</argLine>
           <redirectTestOutputToFile>true</redirectTestOutputToFile>
           <reuseForks>false</reuseForks>
-          <forkCount>2C</forkCount>
           <forkedProcessTimeoutInSeconds>1800</forkedProcessTimeoutInSeconds>
         </configuration>
       </plugin>
