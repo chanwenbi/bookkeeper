@@ -34,8 +34,7 @@ before_install:
   - if [ "$TRAVIS_OS_NAME" == "linux" ]; then jdk_switcher use "$CUSTOM_JDK"; fi
 
 script:
-  - travis_retry mvn --batch-mode clean apache-rat:check compile findbugs:check
-  - ./dev/ticktoc.sh "mvn --batch-mode clean package"
+  - ./dev/docker/ci.sh
 
 cache:
   directories:
