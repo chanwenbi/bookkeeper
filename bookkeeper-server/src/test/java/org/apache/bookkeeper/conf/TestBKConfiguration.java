@@ -28,7 +28,6 @@ public class TestBKConfiguration {
         confReturn.setJournalFlushWhenQueueEmpty(true);
         // enable journal format version
         confReturn.setJournalFormatVersionToWrite(5);
-        confReturn.setAdvertisedAddress("127.0.0.1");
         confReturn.setAllowLoopback(true);
         confReturn.setAllowEphemeralPorts(true);
         confReturn.setBookiePort(0);
