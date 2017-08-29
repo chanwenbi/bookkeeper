@@ -71,7 +71,7 @@ public abstract class BookKeeperClusterTestCase {
     public final TestName runtime = new TestName();
 
     @Rule
-    public Timeout globalTimeout = Timeout.seconds(120); // 2 minutes max per method tested
+    public final Timeout globalTimeout;
 
     // ZooKeeper related variables
     protected final ZooKeeperUtil zkUtil = new ZooKeeperUtil();
@@ -92,7 +92,12 @@ public abstract class BookKeeperClusterTestCase {
     private boolean isAutoRecoveryEnabled;
 
     public BookKeeperClusterTestCase(int numBookies) {
+        this(numBookies, 120);
+    }
+
+    public BookKeeperClusterTestCase(int numBookies, int testTimeoutSecs) {
         this.numBookies = numBookies;
+        this.globalTimeout = Timeout.seconds(testTimeoutSecs);
         baseConf.setAllowLoopback(true);
     }
 

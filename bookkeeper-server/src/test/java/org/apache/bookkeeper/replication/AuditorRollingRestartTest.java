@@ -40,7 +40,7 @@ import static org.junit.Assert.*;
 public class AuditorRollingRestartTest extends BookKeeperClusterTestCase {
 
     public AuditorRollingRestartTest() {
-        super(3);
+        super(3, 600);
         // run the daemon within the bookie
         baseConf.setAutoRecoveryDaemonEnabled(true);
     }

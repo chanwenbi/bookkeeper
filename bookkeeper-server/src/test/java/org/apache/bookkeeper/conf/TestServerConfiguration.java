@@ -41,7 +41,7 @@ public class TestServerConfiguration {
         assertTrue(true);
     }
 
-    @Test
+    @Test(expected = ConfigurationException.class)
     public void testEphemeralPortsDisallowed() throws ConfigurationException {
         ServerConfiguration conf = new ServerConfiguration();
         conf.setAllowEphemeralPorts(false);
