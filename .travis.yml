@@ -17,9 +17,11 @@ language: java
 
 # blacklist
 branches:
-  except:
-    - asf-site
-    - gh-pages
+  only:
+    - master
+    - branch-4.6
+    - branch-4.5
+    - multiple_branches_ci
 
 matrix:
   include:
@@ -35,8 +37,7 @@ before_install:
 
 script:
   - travis_retry mvn --batch-mode clean apache-rat:check compile findbugs:check
-# Disabled the tests here. Since tests are running much slower on Travis than on Jenkins
-#  - ./dev/ticktoc.sh "mvn --batch-mode clean package"
+  - 'if [ "$TRAVIS_PULL_REQUEST" = "false" ]; then ./dev/ticktoc.sh "mvn --batch-mode clean package"; fi'
 
 cache:
   directories:
