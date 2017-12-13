@@ -34,7 +34,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.apache.bookkeeper.bookie.GarbageCollector.GarbageCleaner;
 import org.apache.bookkeeper.client.BKException;
 import org.apache.bookkeeper.client.BookKeeper.DigestType;
 import org.apache.bookkeeper.client.LedgerHandle;
@@ -106,20 +105,14 @@ public class TestGcOverreplicatedLedger extends LedgerManagerTestCase {
 
         lh.close();
 
-        final CompactableLedgerStorage mockLedgerStorage = new MockLedgerStorage();
+        final CompactableLedgerStorage mockLedgerStorage = newMockLedgerStorage();
         final GarbageCollector garbageCollector = new ScanAndCompareGarbageCollector(ledgerManager, mockLedgerStorage,
                 bkConf);
         Thread.sleep(bkConf.getGcOverreplicatedLedgerWaitTimeMillis() + 1);
-        garbageCollector.gc(new GarbageCleaner() {
-
-            @Override
-            public void clean(long ledgerId) {
-                try {
-                    mockLedgerStorage.deleteLedger(ledgerId);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                    return;
-                }
+        garbageCollector.gc(ledgerId -> {
+            try {
+                mockLedgerStorage.deleteLedger(ledgerId);
+            } catch (IOException e) {
             }
         });
 
@@ -157,20 +150,14 @@ public class TestGcOverreplicatedLedger extends LedgerManagerTestCase {
 
         lh.close();
 
-        final CompactableLedgerStorage mockLedgerStorage = new MockLedgerStorage();
+        final CompactableLedgerStorage mockLedgerStorage = newMockLedgerStorage();
         final GarbageCollector garbageCollector = new ScanAndCompareGarbageCollector(ledgerManager, mockLedgerStorage,
                 bkConf);
         Thread.sleep(bkConf.getGcOverreplicatedLedgerWaitTimeMillis() + 1);
-        garbageCollector.gc(new GarbageCleaner() {
-
-            @Override
-            public void clean(long ledgerId) {
-                try {
-                    mockLedgerStorage.deleteLedger(ledgerId);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                    return;
-                }
+        garbageCollector.gc(ledgerId -> {
+            try {
+                mockLedgerStorage.deleteLedger(ledgerId);
+            } catch (IOException e) {
             }
         });
 
@@ -207,20 +194,14 @@ public class TestGcOverreplicatedLedger extends LedgerManagerTestCase {
         ZkLedgerUnderreplicationManager.acquireUnderreplicatedLedgerLock(zkc, baseConf.getZkLedgersRootPath(),
                 lh.getId(), ZooDefs.Ids.OPEN_ACL_UNSAFE);
 
-        final CompactableLedgerStorage mockLedgerStorage = new MockLedgerStorage();
+        final CompactableLedgerStorage mockLedgerStorage = newMockLedgerStorage();
         final GarbageCollector garbageCollector = new ScanAndCompareGarbageCollector(ledgerManager, mockLedgerStorage,
                 bkConf);
         Thread.sleep(bkConf.getGcOverreplicatedLedgerWaitTimeMillis() + 1);
-        garbageCollector.gc(new GarbageCleaner() {
-
-            @Override
-            public void clean(long ledgerId) {
-                try {
-                    mockLedgerStorage.deleteLedger(ledgerId);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                    return;
-                }
+        garbageCollector.gc(ledgerId -> {
+            try {
+                mockLedgerStorage.deleteLedger(ledgerId);
+            } catch (IOException e) {
             }
         });
 

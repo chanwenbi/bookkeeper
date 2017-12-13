@@ -21,24 +21,16 @@
 
 package org.apache.bookkeeper.meta;
 
-import io.netty.buffer.ByteBuf;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Map;
 import java.util.NavigableMap;
-import java.util.Observable;
-import java.util.Observer;
-import org.apache.bookkeeper.bookie.BookieException;
-import org.apache.bookkeeper.bookie.CheckpointSource;
-import org.apache.bookkeeper.bookie.CheckpointSource.Checkpoint;
-import org.apache.bookkeeper.bookie.Checkpointer;
 import org.apache.bookkeeper.bookie.CompactableLedgerStorage;
-import org.apache.bookkeeper.bookie.EntryLocation;
-import org.apache.bookkeeper.bookie.EntryLogger;
-import org.apache.bookkeeper.bookie.LedgerDirsManager;
-import org.apache.bookkeeper.conf.ServerConfiguration;
-import org.apache.bookkeeper.stats.StatsLogger;
 import org.apache.bookkeeper.test.BookKeeperClusterTestCase;
 import org.apache.bookkeeper.util.SnapshotMap;
 import org.junit.After;
@@ -110,121 +102,34 @@ public abstract class LedgerManagerTestCase extends BookKeeperClusterTestCase {
         super.tearDown();
     }
 
-    /**
-     * Mocked ledger storage.
-     */
-    public class MockLedgerStorage implements CompactableLedgerStorage {
+    //
+    // Mocked Ledger Storage
+    //
 
-        @Override
-        public void initialize(
-            ServerConfiguration conf,
-            LedgerManager ledgerManager,
-            LedgerDirsManager ledgerDirsManager,
-            LedgerDirsManager indexDirsManager,
-            CheckpointSource checkpointSource,
-            Checkpointer checkpointer,
-            StatsLogger statsLogger) throws IOException {
-        }
+    private Iterable<Long> getActiveLedgersInRange(long firstLedgerId, long lastLedgerId) {
+        NavigableMap<Long, Boolean> bkActiveLedgersSnapshot = activeLedgers.snapshot();
+        Map<Long, Boolean> subBkActiveLedgers = bkActiveLedgersSnapshot
+                .subMap(firstLedgerId, true, lastLedgerId, false);
 
-        @Override
-        public void start() {
-        }
-
-        @Override
-        public void shutdown() throws InterruptedException {
-        }
-
-        @Override
-        public boolean ledgerExists(long ledgerId) throws IOException {
-            return false;
-        }
-
-        @Override
-        public boolean setFenced(long ledgerId) throws IOException {
-            return false;
-        }
-
-        @Override
-        public boolean isFenced(long ledgerId) throws IOException {
-            return false;
-        }
-
-        @Override
-        public void setMasterKey(long ledgerId, byte[] masterKey) throws IOException {
-        }
-
-        @Override
-        public byte[] readMasterKey(long ledgerId) throws IOException, BookieException {
-            return null;
-        }
-
-        @Override
-        public long addEntry(ByteBuf entry) throws IOException {
-            return 0;
-        }
-
-        @Override
-        public ByteBuf getEntry(long ledgerId, long entryId) throws IOException {
-            return null;
-        }
-
-        @Override
-        public long getLastAddConfirmed(long ledgerId) throws IOException {
-            return 0;
-        }
-
-        @Override
-        public void flush() throws IOException {
-        }
-
-        @Override
-        public void checkpoint(Checkpoint checkpoint) throws IOException {
-        }
-
-        @Override
-        public void registerLedgerDeletionListener(LedgerDeletionListener listener) {
-        }
-
-        @Override
-        public void deleteLedger(long ledgerId) throws IOException {
-            activeLedgers.remove(ledgerId);
-        }
-
-        @Override
-        public Iterable<Long> getActiveLedgersInRange(long firstLedgerId, long lastLedgerId) {
-            NavigableMap<Long, Boolean> bkActiveLedgersSnapshot = activeLedgers.snapshot();
-            Map<Long, Boolean> subBkActiveLedgers = bkActiveLedgersSnapshot
-                    .subMap(firstLedgerId, true, lastLedgerId, false);
-
-            return subBkActiveLedgers.keySet();
-        }
-
-        @Override
-        public EntryLogger getEntryLogger() {
-            return null;
-        }
-
-        @Override
-        public void updateEntriesLocations(Iterable<EntryLocation> locations) throws IOException {
-        }
-
-        @Override
-        public void flushEntriesLocationsIndex() throws IOException {
-        }
-
-        @Override
-        public Observable waitForLastAddConfirmedUpdate(long ledgerId, long previoisLAC, Observer observer)
-                throws IOException {
-            return null;
-        }
-
-        @Override
-        public void setExplicitlac(long ledgerId, ByteBuf lac) throws IOException {
-        }
-
-        @Override
-        public ByteBuf getExplicitLac(long ledgerId) {
-            return null;
-        }
+        return subBkActiveLedgers.keySet();
     }
+
+    protected CompactableLedgerStorage newMockLedgerStorage() throws Exception {
+        CompactableLedgerStorage storage = mock(CompactableLedgerStorage.class);
+        // mock deleteLedger
+        doAnswer(invocationOnMock -> {
+            long ledgerId = invocationOnMock.getArgument(0);
+            activeLedgers.remove(ledgerId);
+            return null;
+        }).when(storage).deleteLedger(anyLong());
+        // mock getActiveLedgersInRange
+        doAnswer(invocationOnMock -> {
+            long firstLedgerId = invocationOnMock.getArgument(0);
+            long lastLedgerId = invocationOnMock.getArgument(1);
+
+            return getActiveLedgersInRange(firstLedgerId, lastLedgerId);
+        }).when(storage).getActiveLedgersInRange(anyLong(), anyLong());
+        return storage;
+    }
+
 }

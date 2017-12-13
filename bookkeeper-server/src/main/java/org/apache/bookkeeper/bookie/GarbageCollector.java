@@ -25,6 +25,7 @@ package org.apache.bookkeeper.bookie;
  * This is the garbage collector interface, garbage collector implementers
  * need to extends this class to remove the deleted ledgers.
  */
+@FunctionalInterface
 public interface GarbageCollector {
     /**
      * Do the garbage collector work.
@@ -36,6 +37,7 @@ public interface GarbageCollector {
     /**
      * A interface used to define customised garbage cleaner.
      */
+    @FunctionalInterface
     interface GarbageCleaner {
 
         /**
