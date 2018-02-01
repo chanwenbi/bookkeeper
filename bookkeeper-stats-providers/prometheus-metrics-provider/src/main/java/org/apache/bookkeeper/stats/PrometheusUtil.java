@@ -39,7 +39,7 @@ public class PrometheusUtil {
             collectorsMapField = CollectorRegistry.class.getDeclaredField("namesToCollectors");
             collectorsMapField.setAccessible(true);
 
-            collectorsNamesMethod = CollectorRegistry.class.getDeclaredMethod("collectorNames", String.class);
+            collectorsNamesMethod = CollectorRegistry.class.getDeclaredMethod("collectorNames", Collector.class);
             collectorsNamesMethod.setAccessible(true);
 
         } catch (NoSuchFieldException | SecurityException | NoSuchMethodException e) {
