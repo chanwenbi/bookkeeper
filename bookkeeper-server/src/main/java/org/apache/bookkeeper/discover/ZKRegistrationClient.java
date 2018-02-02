@@ -23,6 +23,7 @@ import static org.apache.bookkeeper.util.BookKeeperConstants.READONLY;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Sets;
 import java.io.IOException;
+import java.net.URI;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -35,6 +36,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.bookkeeper.client.BKException;
+import org.apache.bookkeeper.client.BKException.BKIncorrectParameterException;
 import org.apache.bookkeeper.client.BKException.BKInterruptedException;
 import org.apache.bookkeeper.client.BKException.Code;
 import org.apache.bookkeeper.client.BKException.ZKException;
@@ -52,6 +54,8 @@ import org.apache.bookkeeper.versioning.Version.Occurred;
 import org.apache.bookkeeper.versioning.Versioned;
 import org.apache.bookkeeper.zookeeper.BoundExponentialBackoffRetryPolicy;
 import org.apache.bookkeeper.zookeeper.ZooKeeperClient;
+import org.apache.commons.configuration.ConfigurationException;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.WatchedEvent;
@@ -202,7 +206,21 @@ public class ZKRegistrationClient implements RegistrationClient {
         this.conf = conf;
         this.scheduler = scheduler;
 
-        this.bookieRegistrationPath = conf.getZkAvailableBookiesPath();
+        URI metadataServiceUri;
+        try {
+            metadataServiceUri = URI.create(conf.getMetadataServiceUri());
+            String scheme = metadataServiceUri.getScheme();
+            String[] schemeParts = StringUtils.split(scheme, '+');
+            if (!schemeParts[0].toLowerCase().equals("zk")) {
+                log.error("Expected a zookeeper service uri, but '{}' is found", metadataServiceUri);
+                throw new BKIncorrectParameterException();
+            }
+        } catch (ConfigurationException e) {
+            log.error("Invalid metadata service uri", e);
+            throw new BKIncorrectParameterException();
+        }
+
+        this.bookieRegistrationPath = metadataServiceUri.getPath();
         this.bookieReadonlyRegistrationPath = this.bookieRegistrationPath + "/" + READONLY;
 
         this.acls = ZkUtils.getACLs(conf);
@@ -216,7 +234,7 @@ public class ZKRegistrationClient implements RegistrationClient {
         } else {
             try {
                 this.zk = ZooKeeperClient.newBuilder()
-                    .connectString(conf.getZkServers())
+                    .connectString(metadataServiceUri.getHost())
                     .sessionTimeoutMs(conf.getZkTimeout())
                     .operationRetryPolicy(new BoundExponentialBackoffRetryPolicy(conf.getZkTimeout(),
                         conf.getZkTimeout(), 0))
