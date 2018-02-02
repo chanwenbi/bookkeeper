@@ -150,7 +150,7 @@ public class ZkLedgerUnderreplicationManager implements LedgerUnderreplicationMa
             // if we cant get the address, ignore. it's optional
             // in the data structure in any case
         }
-        return TextFormat.printToString(lockDataBuilder.build()).getBytes(UTF_8);
+        return TextFormat.printToString(lockDataBuilder.build()).getBytes(Charsets.UTF_8);
     }
 
     private void checkLayout()
@@ -168,7 +168,7 @@ public class ZkLedgerUnderreplicationManager implements LedgerUnderreplicationMa
                 LedgerRereplicationLayoutFormat.Builder builder = LedgerRereplicationLayoutFormat.newBuilder();
                 builder.setType(LAYOUT).setVersion(LAYOUT_VERSION);
                 try {
-                    zkc.create(layoutZNode, TextFormat.printToString(builder.build()).getBytes(UTF_8),
+                    zkc.create(layoutZNode, TextFormat.printToString(builder.build()).getBytes(Charsets.UTF_8),
                                zkAcls, CreateMode.PERSISTENT);
                 } catch (KeeperException.NodeExistsException nne) {
                     // someone else managed to create it
@@ -180,7 +180,7 @@ public class ZkLedgerUnderreplicationManager implements LedgerUnderreplicationMa
                 LedgerRereplicationLayoutFormat.Builder builder = LedgerRereplicationLayoutFormat.newBuilder();
 
                 try {
-                    TextFormat.merge(new String(layoutData, UTF_8), builder);
+                    TextFormat.merge(new String(layoutData, Charsets.UTF_8), builder);
                     LedgerRereplicationLayoutFormat layout = builder.build();
                     if (!layout.getType().equals(LAYOUT)
                             || layout.getVersion() != LAYOUT_VERSION) {
@@ -247,7 +247,7 @@ public class ZkLedgerUnderreplicationManager implements LedgerUnderreplicationMa
         String znode = getUrLedgerZnode(ledgerId);
         UnderreplicatedLedgerFormat.Builder builder = UnderreplicatedLedgerFormat.newBuilder();
         byte[] data = zkc.getData(znode, false, null);
-        TextFormat.merge(new String(data, UTF_8), builder);
+        TextFormat.merge(new String(data, Charsets.UTF_8), builder);
         return builder.build();
     }
 
@@ -265,7 +265,7 @@ public class ZkLedgerUnderreplicationManager implements LedgerUnderreplicationMa
                 try {
                     builder.addReplica(missingReplica);
                     ZkUtils.createFullPathOptimistic(zkc, znode, TextFormat
-                            .printToString(builder.build()).getBytes(UTF_8),
+                            .printToString(builder.build()).getBytes(Charsets.UTF_8),
                             zkAcls, CreateMode.PERSISTENT);
                 } catch (KeeperException.NodeExistsException nee) {
                     Stat s = zkc.exists(znode, false);
@@ -275,14 +275,14 @@ public class ZkLedgerUnderreplicationManager implements LedgerUnderreplicationMa
                     try {
                         byte[] bytes = zkc.getData(znode, false, s);
                         builder.clear();
-                        TextFormat.merge(new String(bytes, UTF_8), builder);
+                        TextFormat.merge(new String(bytes, Charsets.UTF_8), builder);
                         UnderreplicatedLedgerFormat data = builder.build();
                         if (data.getReplicaList().contains(missingReplica)) {
                             return; // nothing to add
                         }
                         builder.addReplica(missingReplica);
                         zkc.setData(znode,
-                                    TextFormat.printToString(builder.build()).getBytes(UTF_8),
+                                    TextFormat.printToString(builder.build()).getBytes(Charsets.UTF_8),
                                     s.getVersion());
                     } catch (KeeperException.NoNodeException nne) {
                         continue;
@@ -598,7 +598,7 @@ public class ZkLedgerUnderreplicationManager implements LedgerUnderreplicationMa
         }
         try {
             String znode = basePath + '/' + BookKeeperConstants.DISABLE_NODE;
-            zkc.create(znode, "".getBytes(UTF_8), zkAcls, CreateMode.PERSISTENT);
+            zkc.create(znode, "".getBytes(Charsets.UTF_8), zkAcls, CreateMode.PERSISTENT);
             LOG.info("Auto ledger re-replication is disabled!");
         } catch (KeeperException.NodeExistsException ke) {
             LOG.warn("AutoRecovery is already disabled!", ke);
@@ -731,7 +731,7 @@ public class ZkLedgerUnderreplicationManager implements LedgerUnderreplicationMa
     public boolean initializeLostBookieRecoveryDelay(int lostBookieRecoveryDelay) throws UnavailableException {
         LOG.debug("initializeLostBookieRecoveryDelay()");
         try {
-            zkc.create(lostBookieRecoveryDelayZnode, Integer.toString(lostBookieRecoveryDelay).getBytes(UTF_8),
+            zkc.create(lostBookieRecoveryDelayZnode, Integer.toString(lostBookieRecoveryDelay).getBytes(Charsets.UTF_8),
                     Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
         } catch (KeeperException.NodeExistsException ke) {
             LOG.info("lostBookieRecoveryDelay Znode is already present, so using "
@@ -752,10 +752,10 @@ public class ZkLedgerUnderreplicationManager implements LedgerUnderreplicationMa
         LOG.debug("setLostBookieRecoveryDelay()");
         try {
             if (zkc.exists(lostBookieRecoveryDelayZnode, false) != null) {
-                zkc.setData(lostBookieRecoveryDelayZnode, Integer.toString(lostBookieRecoveryDelay).getBytes(UTF_8),
+                zkc.setData(lostBookieRecoveryDelayZnode, Integer.toString(lostBookieRecoveryDelay).getBytes(Charsets.UTF_8),
                         -1);
             } else {
-                zkc.create(lostBookieRecoveryDelayZnode, Integer.toString(lostBookieRecoveryDelay).getBytes(UTF_8),
+                zkc.create(lostBookieRecoveryDelayZnode, Integer.toString(lostBookieRecoveryDelay).getBytes(Charsets.UTF_8),
                         Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
             }
         } catch (KeeperException ke) {
@@ -772,7 +772,7 @@ public class ZkLedgerUnderreplicationManager implements LedgerUnderreplicationMa
         LOG.debug("getLostBookieRecoveryDelay()");
         try {
             byte[] data = zkc.getData(lostBookieRecoveryDelayZnode, false, null);
-            return Integer.parseInt(new String(data, UTF_8));
+            return Integer.parseInt(new String(data, Charsets.UTF_8));
         } catch (KeeperException ke) {
             LOG.error("Error while getting LostBookieRecoveryDelay ", ke);
             throw new ReplicationException.UnavailableException("Error contacting zookeeper", ke);

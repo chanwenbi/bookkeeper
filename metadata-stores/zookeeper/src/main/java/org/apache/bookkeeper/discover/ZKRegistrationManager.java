@@ -125,9 +125,9 @@ public class ZKRegistrationManager implements RegistrationManager {
         this.zkAcls = ZkUtils.getACLs(conf);
         this.statsLogger = statsLogger;
 
-        this.cookiePath = conf.getZkLedgersRootPath() + "/" + COOKIE_NODE;
+        this.cookiePath = conf.getZkLedgersRootPath() + "/" + BookKeeperConstants.COOKIE_NODE;
         this.bookieRegistrationPath = conf.getZkAvailableBookiesPath();
-        this.bookieReadonlyRegistrationPath = this.bookieRegistrationPath + "/" + READONLY;
+        this.bookieReadonlyRegistrationPath = this.bookieRegistrationPath + "/" + BookKeeperConstants.READONLY;
 
         try {
             this.zk = newZookeeper(conf, listener);
@@ -192,7 +192,7 @@ public class ZKRegistrationManager implements RegistrationManager {
                 .operationRetryPolicy(new BoundExponentialBackoffRetryPolicy(conf.getZkRetryBackoffStartMs(),
                         conf.getZkRetryBackoffMaxMs(), Integer.MAX_VALUE))
                 .requestRateLimit(conf.getZkRequestRateLimit())
-                .statsLogger(this.statsLogger.scope(BOOKIE_SCOPE))
+                .statsLogger(this.statsLogger.scope(BookKeeperServerStats.BOOKIE_SCOPE))
                 .build();
     }
 
@@ -426,7 +426,7 @@ public class ZKRegistrationManager implements RegistrationManager {
             }
             try {
                 byte[] data = zk.getData(conf.getZkLedgersRootPath() + "/"
-                    + INSTANCEID, false, null);
+                    + BookKeeperConstants.INSTANCEID, false, null);
                 instanceId = new String(data, UTF_8);
             } catch (KeeperException.NoNodeException e) {
                 log.info("INSTANCEID not exists in zookeeper. Not considering it for data verification");
@@ -462,8 +462,8 @@ public class ZKRegistrationManager implements RegistrationManager {
         }
 
         // create readonly bookies node if not exists
-        if (null == zk.exists(conf.getZkAvailableBookiesPath() + "/" + READONLY, false)) {
-            zk.create(conf.getZkAvailableBookiesPath() + "/" + READONLY, new byte[0], zkAcls, CreateMode.PERSISTENT);
+        if (null == zk.exists(conf.getZkAvailableBookiesPath() + "/" + BookKeeperConstants.READONLY, false)) {
+            zk.create(conf.getZkAvailableBookiesPath() + "/" + BookKeeperConstants.READONLY, new byte[0], zkAcls, CreateMode.PERSISTENT);
         }
 
         return ledgerRootExists;

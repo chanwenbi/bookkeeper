@@ -43,7 +43,7 @@ public class ZkLayoutManager implements LayoutManager {
                            String ledgersRoot,
                            List<ACL> acls) {
         this.zk = zk;
-        this.ledgersLayout = ledgersRoot + "/" + LAYOUT_ZNODE;
+        this.ledgersLayout = ledgersRoot + "/" + BookKeeperConstants.LAYOUT_ZNODE;
         this.acls = acls;
     }
 

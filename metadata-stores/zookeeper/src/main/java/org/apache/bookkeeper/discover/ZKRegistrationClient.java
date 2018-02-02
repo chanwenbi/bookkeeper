@@ -221,7 +221,7 @@ public class ZKRegistrationClient implements RegistrationClient {
         }
 
         this.bookieRegistrationPath = metadataServiceUri.getPath();
-        this.bookieReadonlyRegistrationPath = this.bookieRegistrationPath + "/" + READONLY;
+        this.bookieReadonlyRegistrationPath = this.bookieRegistrationPath + "/" + BookKeeperConstants.READONLY;
 
         this.acls = ZkUtils.getACLs(conf);
 
@@ -372,7 +372,7 @@ public class ZKRegistrationClient implements RegistrationClient {
         // Read the bookie addresses into a set for efficient lookup
         HashSet<BookieSocketAddress> newBookieAddrs = Sets.newHashSet();
         for (String bookieAddrString : children) {
-            if (READONLY.equals(bookieAddrString)) {
+            if (BookKeeperConstants.READONLY.equals(bookieAddrString)) {
                 continue;
             }
 
