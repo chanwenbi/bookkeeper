@@ -206,6 +206,26 @@ public class ByteBufListTest {
         assertEquals(b2.refCnt(), 0);
     }
 
+    @Test
+    public void testSideCar() throws Exception {
+        ByteBuf b1 = PooledByteBufAllocator.DEFAULT.heapBuffer(128, 128);
+        b1.writerIndex(b1.capacity());
+        ByteBuf b2 = PooledByteBufAllocator.DEFAULT.heapBuffer(128, 128);
+        b2.writerIndex(b2.capacity());
+
+        ByteBufList list1 = ByteBufList.get(b1);
+        ByteBufList list2 = ByteBufList.get(b2);
+
+        // make `list2` as a sidecar of list1
+        list1.setSidecarList(list2);
+        list1.release();
+
+        assertEquals(0, list1.refCnt());
+        assertEquals(0, list2.refCnt());
+        assertEquals(0, b1.refCnt());
+        assertEquals(0, b2.refCnt());
+    }
+
     class MockChannelHandlerContext implements ChannelHandlerContext {
         @Override
         public ChannelFuture bind(SocketAddress localAddress) {

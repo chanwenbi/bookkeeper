@@ -65,6 +65,9 @@ import java.util.ArrayList;
 public class ByteBufList extends AbstractReferenceCounted {
     private final ArrayList<ByteBuf> buffers;
     private final Handle<ByteBufList> recyclerHandle;
+    // the existence of a sider list to allow bookkeeping the actual data buffers and release them when they
+    // are not going to be used anymore.
+    private ByteBufList sidecarList;
 
     private static final int INITIAL_LIST_SIZE = 4;
 
@@ -127,7 +130,7 @@ public class ByteBufList extends AbstractReferenceCounted {
         return buf;
     }
 
-    private static ByteBufList get() {
+    public static ByteBufList get() {
         ByteBufList buf = RECYCLER.get();
         buf.setRefCnt(1);
         return buf;
@@ -156,6 +159,21 @@ public class ByteBufList extends AbstractReferenceCounted {
             readableBytes += buffers.get(i).readableBytes();
         }
         return readableBytes;
+    }
+
+    /**
+     * Set a sidecar list to allow it being released after this instance is not used anymore.
+     *
+     * @param sidecarList sidecar list
+     * @return itself
+     */
+    public ByteBufList setSidecarList(ByteBufList sidecarList) {
+        if (null != this.sidecarList) {
+            this.sidecarList.release();
+            this.sidecarList = null;
+        }
+        this.sidecarList = sidecarList;
+        return this;
     }
 
     /**
@@ -232,6 +250,10 @@ public class ByteBufList extends AbstractReferenceCounted {
         for (int i = 0; i < buffers.size(); i++) {
             buffers.get(i).release();
         }
+        if (null != sidecarList) {
+            sidecarList.release();
+            sidecarList = null;
+        }
 
         buffers.clear();
         recyclerHandle.recycle(this);
@@ -241,6 +263,9 @@ public class ByteBufList extends AbstractReferenceCounted {
     public ReferenceCounted touch(Object hint) {
         for (int i = 0; i < buffers.size(); i++) {
             buffers.get(i).touch(hint);
+        }
+        if (null != sidecarList) {
+            sidecarList.touch(hint);
         }
         return this;
     }
