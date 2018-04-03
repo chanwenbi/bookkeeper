@@ -24,6 +24,7 @@ import com.google.protobuf.CodedStreamUtil;
 import com.google.protobuf.ExtensionRegistry;
 import com.google.protobuf.GeneratedMessageV3;
 import com.google.protobuf.MessageLite;
+import com.google.protobuf.Parser;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.ByteBufInputStream;
@@ -34,8 +35,6 @@ import io.netty.util.Recycler.Handle;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.ReferenceCounted;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.bookkeeper.proto.BookieProtoEncoding.EnDecoder;
 import org.apache.bookkeeper.proto.BookkeeperProtocol.AddRequest;
@@ -128,25 +127,20 @@ public final class BookieProtocolV3 {
      * @throws IOException
      */
     public static RequestV3 parseRequest(ByteBuf packet, ExtensionRegistry registry) throws IOException {
+        return parseRequest(packet, registry, true);
+    }
+
+    static RequestV3 parseRequest(ByteBuf packet, ExtensionRegistry registry, boolean enableAliasing)
+            throws IOException {
         RequestV3 request = RequestV3.get();
 
-        CodedInputStream cis;
-        if (packet.hasArray()) {
-            cis = CodedStreamUtil.fromImmutableArray(
-                packet.array(),
-                packet.arrayOffset() + packet.readerIndex(),
-                packet.readableBytes());
-        } else if (packet.isDirect()) {
-            cis = CodedStreamUtil.fromNioBuffer(packet.nioBuffer());
-        } else {
-            ByteBufInputStream is = new ByteBufInputStream(packet);
-            cis = CodedInputStream.newInstance(is);
-        }
-        // enable aliasing - so ByteString will not copy data from `packet`.
-        cis.enableAliasing(true);
         try {
             request.packet = packet;
-            request.underlyingRequest = Request.parseFrom(cis, registry);
+            request.underlyingRequest = parseMessage(
+                Request.parser(),
+                packet,
+                registry,
+                enableAliasing);
             return request;
         } catch (IOException ioe) {
             ReferenceCountUtil.safeRelease(request);
@@ -163,8 +157,32 @@ public final class BookieProtocolV3 {
      * @throws IOException
      */
     public static ResponseV3 parseResponse(ByteBuf packet, ExtensionRegistry registry) throws IOException {
-        ResponseV3 request = ResponseV3.get();
+        return parseResponse(packet, registry, true);
+    }
 
+    static ResponseV3 parseResponse(ByteBuf packet, ExtensionRegistry registry, boolean enableAliasing)
+            throws IOException {
+        ResponseV3 response = ResponseV3.get();
+
+        try {
+            response.packet = packet;
+            response.underlyingResponse = parseMessage(
+                Response.parser(),
+                packet,
+                registry,
+                enableAliasing);
+            return response;
+        } catch (IOException ioe) {
+            ReferenceCountUtil.safeRelease(response);
+            throw ioe;
+        }
+    }
+
+    static <T> T parseMessage(Parser<T> parser,
+                              ByteBuf packet,
+                              ExtensionRegistry registry,
+                              boolean enableAliasing)
+            throws IOException {
         CodedInputStream cis;
         if (packet.hasArray()) {
             cis = CodedStreamUtil.fromImmutableArray(
@@ -178,15 +196,8 @@ public final class BookieProtocolV3 {
             cis = CodedInputStream.newInstance(is);
         }
         // enable aliasing - so ByteString will not copy data from `packet`.
-        cis.enableAliasing(true);
-        try {
-            request.packet = packet;
-            request.underlyingResponse = Response.parseFrom(cis, registry);
-            return request;
-        } catch (IOException ioe) {
-            ReferenceCountUtil.safeRelease(request);
-            throw ioe;
-        }
+        cis.enableAliasing(enableAliasing);
+        return parser.parseFrom(cis, registry);
     }
 
     /**
@@ -424,64 +435,6 @@ public final class BookieProtocolV3 {
 
     }
 
-    private static final List<Recycler<RequestV3Builder>> REQ_BUILDERS =
-        new ArrayList<>(OperationType.values().length);
-
-    static {
-        OperationType[] types = OperationType.values();
-        for (int i = 0; i < types.length; i++) {
-            final OperationType type = types[i];
-            Recycler<RequestV3Builder> recycler = new Recycler<RequestV3Builder>() {
-                @Override
-                protected RequestV3Builder newObject(Handle<RequestV3Builder> handle) {
-                    return new RequestV3Builder(handle, type);
-                }
-            };
-
-            if (i < REQ_BUILDERS.size()) {
-                Recycler<RequestV3Builder> oldRecycler = REQ_BUILDERS.get(i);
-                if (null == oldRecycler) {
-                    REQ_BUILDERS.set(i, recycler);
-                }
-            } else {
-                REQ_BUILDERS.add(recycler);
-            }
-        }
-    }
-
-    private static final List<Recycler<ResponseV3Builder>> RESP_BUILDERS =
-        new ArrayList<>(OperationType.values().length);
-
-    static {
-        OperationType[] types = OperationType.values();
-        for (int i = 0; i < types.length; i++) {
-            final OperationType type = types[i];
-            Recycler<ResponseV3Builder> recycler = new Recycler<ResponseV3Builder>() {
-                @Override
-                protected ResponseV3Builder newObject(Handle<ResponseV3Builder> handle) {
-                    return new ResponseV3Builder(handle, type);
-                }
-            };
-
-            if (i < RESP_BUILDERS.size()) {
-                Recycler<ResponseV3Builder> oldRecycler = RESP_BUILDERS.get(i);
-                if (null == oldRecycler) {
-                    RESP_BUILDERS.set(i, recycler);
-                }
-            } else {
-                RESP_BUILDERS.add(recycler);
-            }
-        }
-    }
-
-    public static RequestV3Builder newRequestBuilder(OperationType type) {
-        return REQ_BUILDERS.get(type.getNumber() - 1).get();
-    }
-
-    public static ResponseV3Builder newResponseBuilder(OperationType type) {
-        return RESP_BUILDERS.get(type.getNumber() - 1).get();
-    }
-
     /**
      * Builder provides recyclable protobuf message builders.
      */
@@ -491,18 +444,20 @@ public final class BookieProtocolV3 {
     // CHECKSTYLE.ON: LineLength
 
         private final Handle<BuilderT> handle;
-        private final MsgBuilderT msgBuilder;
+        private MsgBuilderT msgBuilder;
         private ByteBufList retainedBufList;
 
-        protected PBMessageBuilder(Handle<BuilderT> handle, OperationType opType) {
+        protected PBMessageBuilder(Handle<BuilderT> handle) {
             this.handle = handle;
-            this.msgBuilder = createMessageBuilder(opType);
         }
-
-        abstract MsgBuilderT createMessageBuilder(OperationType opType);
 
         public MsgBuilderT getMsgBuilder() {
             return msgBuilder;
+        }
+
+        public BuilderT setMsgBuilder(MsgBuilderT builder) {
+            this.msgBuilder = builder;
+            return self();
         }
 
         public void retainBuf(ByteBuf buf) {
@@ -525,7 +480,9 @@ public final class BookieProtocolV3 {
 
         @Override
         protected void deallocate() {
-            this.msgBuilder.clear();
+            if (null != msgBuilder) {
+                this.msgBuilder.clear();
+            }
 
             if (null != retainedBufList) {
                 ReferenceCountUtil.safeRelease(retainedBufList);
@@ -541,6 +498,48 @@ public final class BookieProtocolV3 {
         }
 
         public ByteBufList serialize(ByteBufAllocator allocator) {
+            return serializeLazy(allocator);
+        }
+
+        ByteBufList serializeHeap(ByteBufAllocator allocator) {
+            MessageLite msg = msgBuilder.build();
+
+            int len = msg.getSerializedSize();
+
+            ByteBuf buf = allocator.heapBuffer(len, len);
+            buf.writerIndex(buf.readerIndex() + len);
+
+            byte[] array = buf.array();
+            int offset = buf.arrayOffset() + buf.readerIndex();
+
+            CodedOutputStream os = CodedOutputStream.newInstance(array, offset, len);
+            try {
+                msg.writeTo(os);
+                os.flush();
+            } catch (IOException ioe) {
+                throw new RuntimeException(ioe);
+            }
+            return ByteBufList.get(buf);
+        }
+
+        ByteBufList serializeDirect(ByteBufAllocator allocator) {
+            MessageLite msg = msgBuilder.build();
+
+            int len = msg.getSerializedSize();
+
+            ByteBuf buf = allocator.directBuffer(len, len);
+            buf.writerIndex(msg.getSerializedSize());
+            CodedOutputStream os = CodedOutputStream.newInstance(buf.nioBuffer());
+            try {
+                msg.writeTo(os);
+                os.flush();
+            } catch (IOException ioe) {
+                throw new RuntimeException(ioe);
+            }
+            return ByteBufList.get(buf);
+        }
+
+        ByteBufList serializeLazy(ByteBufAllocator allocator) {
             MessageLite msg = msgBuilder.build();
 
             // estimate the buffer
@@ -578,39 +577,21 @@ public final class BookieProtocolV3 {
      */
     public static class RequestV3Builder extends PBMessageBuilder<Request.Builder, RequestV3Builder> {
 
-        RequestV3Builder(Handle<RequestV3Builder> handle, OperationType opType) {
-            super(handle, opType);
+        private static final Recycler<RequestV3Builder> RECYCLER = new Recycler<RequestV3Builder>() {
+            @Override
+            protected RequestV3Builder newObject(Handle<RequestV3Builder> handle) {
+                return new RequestV3Builder(handle);
+            }
+        };
+
+        public static RequestV3Builder get() {
+            RequestV3Builder builder = RECYCLER.get();
+            builder.setRefCnt(1);
+            return builder;
         }
 
-        Request.Builder createMessageBuilder(OperationType opType) {
-            Request.Builder reqBuilder = Request.newBuilder();
-            // force create the response builder, so we can reuse the builder after `deallocate`
-            switch (opType) {
-                case ADD_ENTRY:
-                    reqBuilder.getAddRequestBuilder();
-                    break;
-                case READ_ENTRY:
-                    reqBuilder.getReadRequestBuilder();
-                    break;
-                case AUTH:
-                    reqBuilder.getAuthRequestBuilder();
-                    break;
-                case START_TLS:
-                    reqBuilder.getStartTLSRequestBuilder();
-                    break;
-                case GET_BOOKIE_INFO:
-                    reqBuilder.getGetBookieInfoRequestBuilder();
-                    break;
-                case READ_LAC:
-                    reqBuilder.getReadLacRequestBuilder();
-                    break;
-                case WRITE_LAC:
-                    reqBuilder.getWriteLacRequestBuilder();
-                    break;
-                default:
-                    break;
-            }
-            return reqBuilder;
+        RequestV3Builder(Handle<RequestV3Builder> handle) {
+            super(handle);
         }
 
         @Override
@@ -625,39 +606,21 @@ public final class BookieProtocolV3 {
      */
     public static class ResponseV3Builder extends PBMessageBuilder<Response.Builder, ResponseV3Builder> {
 
-        ResponseV3Builder(Handle<ResponseV3Builder> handle, OperationType opType) {
-            super(handle, opType);
+        private static final Recycler<ResponseV3Builder> RECYCLER = new Recycler<ResponseV3Builder>() {
+            @Override
+            protected ResponseV3Builder newObject(Handle<ResponseV3Builder> handle) {
+                return new ResponseV3Builder(handle);
+            }
+        };
+
+        public static ResponseV3Builder get() {
+            ResponseV3Builder builder = RECYCLER.get();
+            builder.setRefCnt(1);
+            return builder;
         }
 
-        Response.Builder createMessageBuilder(OperationType opType) {
-            Response.Builder respBuilder = Response.newBuilder();
-            // force create the response builder, so we can reuse the builder after `deallocate`
-            switch (opType) {
-                case ADD_ENTRY:
-                    respBuilder.getAddResponseBuilder();
-                    break;
-                case READ_ENTRY:
-                    respBuilder.getReadResponseBuilder();
-                    break;
-                case AUTH:
-                    respBuilder.getAuthResponseBuilder();
-                    break;
-                case START_TLS:
-                    respBuilder.getStartTLSResponse();
-                    break;
-                case GET_BOOKIE_INFO:
-                    respBuilder.getGetBookieInfoResponse();
-                    break;
-                case READ_LAC:
-                    respBuilder.getReadLacResponse();
-                    break;
-                case WRITE_LAC:
-                    respBuilder.getWriteLacResponse();
-                    break;
-                default:
-                    break;
-            }
-            return respBuilder;
+        ResponseV3Builder(Handle<ResponseV3Builder> handle) {
+            super(handle);
         }
 
         @Override

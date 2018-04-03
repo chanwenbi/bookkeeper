@@ -74,7 +74,9 @@ public class RecycableByteOutput extends ByteOutput {
     @Override
     public void write(byte[] value, int offset, int length) throws IOException {
         buf = null;
-        bufList.add(Unpooled.copiedBuffer(value, offset, length));
+        ByteBuf buffer = allocator.directBuffer(length, length);
+        buffer.writeBytes(value, offset, length);
+        bufList.add(buffer);
     }
 
     @Override
@@ -86,7 +88,10 @@ public class RecycableByteOutput extends ByteOutput {
     @Override
     public void write(ByteBuffer value) throws IOException {
         buf = null;
-        bufList.add(Unpooled.copiedBuffer(value));
+        int size = value.remaining();
+        ByteBuf buffer = allocator.directBuffer(size, size);
+        buffer.writeBytes(value);
+        bufList.add(buffer);
     }
 
     @Override

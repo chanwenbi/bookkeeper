@@ -24,6 +24,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import com.google.protobuf.ByteString;
+import com.google.protobuf.CodedStreamUtil;
 import com.google.protobuf.UnsafeByteOperations;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.PooledByteBufAllocator;
@@ -44,6 +45,7 @@ import org.apache.bookkeeper.proto.v3.BookieProtocolV3.RequestV3;
 import org.apache.bookkeeper.proto.v3.BookieProtocolV3.RequestV3Builder;
 import org.apache.bookkeeper.util.ByteBufList;
 import org.apache.commons.codec.binary.Hex;
+import org.junit.Before;
 import org.junit.Test;
 
 /**
@@ -51,6 +53,11 @@ import org.junit.Test;
  */
 @Slf4j
 public class RequestEnDecoderV3Test {
+
+    @Before
+    public void setup() {
+        log.info("Has unsafe byte buffer operations {}", CodedStreamUtil.hasUnsafeByteBufferOperations());
+    }
 
     @Test
     public void testAddEntry() throws Exception {
@@ -71,12 +78,12 @@ public class RequestEnDecoderV3Test {
             .setAddRequest(addRequest)
             .build();
 
-        RequestV3Builder v3Builder = BookieProtocolV3.newRequestBuilder(OperationType.ADD_ENTRY);
-        v3Builder.getMsgBuilder()
+        RequestV3Builder v3Builder = RequestV3Builder.get();
+        v3Builder.setMsgBuilder(Request.newBuilder()
             .setHeader(request.getHeader())
             .setAddRequest(AddRequest.newBuilder(addRequest)
                 .clearBody()
-                .setBody(UnsafeByteOperations.unsafeWrap(entry.nioBuffer())));
+                .setBody(UnsafeByteOperations.unsafeWrap(entry.nioBuffer()))));
         v3Builder.retainBuf(entry);
 
         testEncodeDecodeRequest(v3Builder, entry, request);
@@ -99,10 +106,10 @@ public class RequestEnDecoderV3Test {
             .setReadRequest(readRequest)
             .build();
 
-        RequestV3Builder v3Builder = BookieProtocolV3.newRequestBuilder(OperationType.READ_ENTRY);
-        v3Builder.getMsgBuilder()
+        RequestV3Builder v3Builder = RequestV3Builder.get();
+        v3Builder.setMsgBuilder(Request.newBuilder()
             .setHeader(request.getHeader())
-            .setReadRequest(ReadRequest.newBuilder(readRequest));
+            .setReadRequest(ReadRequest.newBuilder(readRequest)));
 
         testEncodeDecodeRequest(v3Builder, null, request);
     }
@@ -121,10 +128,10 @@ public class RequestEnDecoderV3Test {
             .setGetBookieInfoRequest(getRequest)
             .build();
 
-        RequestV3Builder v3Builder = BookieProtocolV3.newRequestBuilder(OperationType.GET_BOOKIE_INFO);
-        v3Builder.getMsgBuilder()
+        RequestV3Builder v3Builder = RequestV3Builder.get();
+        v3Builder.setMsgBuilder(Request.newBuilder()
             .setHeader(request.getHeader())
-            .setGetBookieInfoRequest(GetBookieInfoRequest.newBuilder(getRequest));
+            .setGetBookieInfoRequest(GetBookieInfoRequest.newBuilder(getRequest)));
 
         testEncodeDecodeRequest(v3Builder, null, request);
     }
@@ -149,12 +156,12 @@ public class RequestEnDecoderV3Test {
             .setWriteLacRequest(writeLacRequest)
             .build();
 
-        RequestV3Builder v3Builder = BookieProtocolV3.newRequestBuilder(OperationType.WRITE_LAC);
-        v3Builder.getMsgBuilder()
+        RequestV3Builder v3Builder = RequestV3Builder.get();
+        v3Builder.setMsgBuilder(Request.newBuilder()
             .setHeader(request.getHeader())
             .setWriteLacRequest(WriteLacRequest.newBuilder(writeLacRequest)
                 .clearBody()
-                .setBody(UnsafeByteOperations.unsafeWrap(entry.nioBuffer())));
+                .setBody(UnsafeByteOperations.unsafeWrap(entry.nioBuffer()))));
         v3Builder.retainBuf(entry);
 
         testEncodeDecodeRequest(v3Builder, entry, request);
@@ -175,10 +182,10 @@ public class RequestEnDecoderV3Test {
             .setReadLacRequest(readRequest)
             .build();
 
-        RequestV3Builder v3Builder = BookieProtocolV3.newRequestBuilder(OperationType.READ_LAC);
-        v3Builder.getMsgBuilder()
+        RequestV3Builder v3Builder = RequestV3Builder.get();
+        v3Builder.setMsgBuilder(Request.newBuilder()
             .setHeader(request.getHeader())
-            .setReadLacRequest(ReadLacRequest.newBuilder(readRequest));
+            .setReadLacRequest(ReadLacRequest.newBuilder(readRequest)));
 
         testEncodeDecodeRequest(v3Builder, null, request);
     }

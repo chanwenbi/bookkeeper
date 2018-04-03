@@ -71,11 +71,11 @@ public class ResponseEnDecoderV3Test {
             .setAddResponse(addResponse)
             .build();
 
-        ResponseV3Builder v3Builder = BookieProtocolV3.newResponseBuilder(OperationType.ADD_ENTRY);
-        v3Builder.getMsgBuilder()
+        ResponseV3Builder v3Builder = ResponseV3Builder.get();
+        v3Builder.setMsgBuilder(Response.newBuilder()
             .setStatus(StatusCode.EOK)
             .setHeader(response.getHeader())
-            .setAddResponse(AddResponse.newBuilder(addResponse));
+            .setAddResponse(AddResponse.newBuilder(addResponse)));
 
         testEncodeDecodeResponse(v3Builder, null, null, response);
     }
@@ -100,14 +100,13 @@ public class ResponseEnDecoderV3Test {
             .setReadResponse(readResponse)
             .build();
 
-        ResponseV3Builder v3Builder = BookieProtocolV3.newResponseBuilder(OperationType.READ_ENTRY);
-        v3Builder.getMsgBuilder()
+        ResponseV3Builder v3Builder = ResponseV3Builder.get();
+        v3Builder.setMsgBuilder(Response.newBuilder()
             .setStatus(StatusCode.EOK)
             .setHeader(response.getHeader())
             .setReadResponse(ReadResponse.newBuilder(readResponse)
                 .clearBody()
-                .setBody(UnsafeByteOperations.unsafeWrap(entry.nioBuffer()))
-            );
+                .setBody(UnsafeByteOperations.unsafeWrap(entry.nioBuffer()))));
         v3Builder.retainBuf(entry);
 
         testEncodeDecodeResponse(v3Builder, entry, null, response);
@@ -131,11 +130,11 @@ public class ResponseEnDecoderV3Test {
             .setGetBookieInfoResponse(getResponse)
             .build();
 
-        ResponseV3Builder v3Builder = BookieProtocolV3.newResponseBuilder(OperationType.GET_BOOKIE_INFO);
-        v3Builder.getMsgBuilder()
+        ResponseV3Builder v3Builder = ResponseV3Builder.get();
+        v3Builder.setMsgBuilder(Response.newBuilder()
             .setStatus(StatusCode.EOK)
             .setHeader(response.getHeader())
-            .setGetBookieInfoResponse(GetBookieInfoResponse.newBuilder(getResponse));
+            .setGetBookieInfoResponse(GetBookieInfoResponse.newBuilder(getResponse)));
 
         testEncodeDecodeResponse(v3Builder, null, null, response);
     }
@@ -158,11 +157,11 @@ public class ResponseEnDecoderV3Test {
             .setWriteLacResponse(writeLacResponse)
             .build();
 
-        ResponseV3Builder v3Builder = BookieProtocolV3.newResponseBuilder(OperationType.WRITE_LAC);
-        v3Builder.getMsgBuilder()
+        ResponseV3Builder v3Builder = ResponseV3Builder.get();
+        v3Builder.setMsgBuilder(Response.newBuilder()
             .setStatus(StatusCode.EOK)
             .setHeader(response.getHeader())
-            .setWriteLacResponse(WriteLacResponse.newBuilder(writeLacResponse));
+            .setWriteLacResponse(WriteLacResponse.newBuilder(writeLacResponse)));
 
         testEncodeDecodeResponse(v3Builder, null, null, response);
     }
@@ -188,15 +187,15 @@ public class ResponseEnDecoderV3Test {
             .setReadLacResponse(readResponse)
             .build();
 
-        ResponseV3Builder v3Builder = BookieProtocolV3.newResponseBuilder(OperationType.READ_LAC);
-        v3Builder.getMsgBuilder()
+        ResponseV3Builder v3Builder = ResponseV3Builder.get();
+        v3Builder.setMsgBuilder(Response.newBuilder()
             .setStatus(StatusCode.EOK)
             .setHeader(response.getHeader())
             .setReadLacResponse(ReadLacResponse.newBuilder(readResponse)
                 .clearLacBody()
                 .clearLastEntryBody()
                 .setLacBody(UnsafeByteOperations.unsafeWrap(lacBody.nioBuffer()))
-                .setLastEntryBody(UnsafeByteOperations.unsafeWrap(entry.nioBuffer())));
+                .setLastEntryBody(UnsafeByteOperations.unsafeWrap(entry.nioBuffer()))));
         v3Builder.retainBuf(entry);
         v3Builder.retainBuf(lacBody);
 

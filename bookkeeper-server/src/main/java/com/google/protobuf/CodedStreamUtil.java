@@ -60,4 +60,8 @@ public final class CodedStreamUtil {
         return CodedOutputStream.newInstance(output, bufferSize);
     }
 
+    public static boolean hasUnsafeByteBufferOperations() {
+        return UnsafeUtil.hasUnsafeByteBufferOperations();
+    }
+
 }
