@@ -25,6 +25,7 @@ import java.util.Set;
 
 import org.apache.bookkeeper.net.BookieSocketAddress;
 import org.apache.bookkeeper.net.DNSToSwitchMapping;
+import org.apache.bookkeeper.net.NetworkTopology;
 import org.apache.bookkeeper.net.Node;
 import org.apache.bookkeeper.stats.StatsLogger;
 
@@ -163,18 +164,22 @@ public class RackawareEnsemblePlacementPolicy extends RackawareEnsemblePlacement
 
     @Override
     public BookieNode selectFromNetworkLocation(
+            NetworkTopology networkTopology,
+            Map<BookieSocketAddress, BookieNode> topologyMap,
             String networkLoc,
             Set<Node> excludeBookies,
             Predicate<BookieNode> predicate,
             Ensemble<BookieNode> ensemble)
             throws BKException.BKNotEnoughBookiesException {
         try {
-            return super.selectFromNetworkLocation(networkLoc, excludeBookies, predicate, ensemble);
+            return super.selectFromNetworkLocation(
+                networkTopology, topologyMap, networkLoc, excludeBookies, predicate, ensemble);
         } catch (BKException.BKNotEnoughBookiesException bnebe) {
             if (slave == null) {
                 throw bnebe;
             } else {
-                return slave.selectFromNetworkLocation(networkLoc, excludeBookies, predicate, ensemble);
+                return slave.selectFromNetworkLocation(
+                    networkTopology, topologyMap, networkLoc, excludeBookies, predicate, ensemble);
             }
         }
     }

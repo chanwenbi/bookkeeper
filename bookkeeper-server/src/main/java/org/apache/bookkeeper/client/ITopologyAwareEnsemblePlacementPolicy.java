@@ -18,11 +18,14 @@
 package org.apache.bookkeeper.client;
 
 import java.util.ArrayList;
+import java.util.Map;
 import java.util.Set;
 
+import org.apache.bookkeeper.client.TopologyAwareEnsemblePlacementPolicy.BookieNode;
 import org.apache.bookkeeper.common.annotation.InterfaceAudience;
 import org.apache.bookkeeper.common.annotation.InterfaceStability;
 import org.apache.bookkeeper.net.BookieSocketAddress;
+import org.apache.bookkeeper.net.NetworkTopology;
 import org.apache.bookkeeper.net.Node;
 
 /**
@@ -98,9 +101,19 @@ public interface ITopologyAwareEnsemblePlacementPolicy<T extends Node> extends E
             Predicate<T> parentPredicate)
             throws BKException.BKNotEnoughBookiesException;
 
+    T selectFromNetworkLocation(String networkLoc,
+                                Set<Node> excludeBookies,
+                                Predicate<T> predicate,
+                                Ensemble<T> ensemble)
+            throws BKException.BKNotEnoughBookiesException;
+
     /**
      * Select a node from a given network location.
      *
+     * @param networkTopology
+     *          network topology
+     * @param topologyMap
+     *          a topology map of bookie address to its network location
      * @param networkLoc
      *          network location
      * @param excludeBookies
@@ -112,7 +125,9 @@ public interface ITopologyAwareEnsemblePlacementPolicy<T extends Node> extends E
      * @return the selected bookie.
      * @throws BKException.BKNotEnoughBookiesException
      */
-    T selectFromNetworkLocation(String networkLoc,
+    T selectFromNetworkLocation(NetworkTopology networkTopology,
+                                Map<BookieSocketAddress, BookieNode> topologyMap,
+                                String networkLoc,
                                 Set<Node> excludeBookies,
                                 Predicate<T> predicate,
                                 Ensemble<T> ensemble)
