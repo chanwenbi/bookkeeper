@@ -180,18 +180,34 @@ public class RackawareEnsemblePlacementPolicy extends RackawareEnsemblePlacement
     }
 
     @Override
-    public void handleBookiesThatLeft(Set<BookieSocketAddress> leftBookies) {
-        super.handleBookiesThatLeft(leftBookies);
+    public void handleWritableBookiesThatLeft(Set<BookieSocketAddress> leftBookies) {
+        super.handleWritableBookiesThatLeft(leftBookies);
         if (null != slave) {
-            slave.handleBookiesThatLeft(leftBookies);
+            slave.handleWritableBookiesThatLeft(leftBookies);
         }
     }
 
     @Override
-    public void handleBookiesThatJoined(Set<BookieSocketAddress> joinedBookies) {
-        super.handleBookiesThatJoined(joinedBookies);
+    public void handleWritableBookiesThatJoined(Set<BookieSocketAddress> joinedBookies) {
+        super.handleWritableBookiesThatJoined(joinedBookies);
         if (null != slave) {
-            slave.handleBookiesThatJoined(joinedBookies);
+            slave.handleWritableBookiesThatJoined(joinedBookies);
+        }
+    }
+
+    @Override
+    public void handleAllBookiesThatLeft(Set<BookieSocketAddress> leftBookies) {
+        super.handleAllBookiesThatLeft(leftBookies);
+        if (null != slave) {
+            slave.handleAllBookiesThatLeft(leftBookies);
+        }
+    }
+
+    @Override
+    public void handleAllBookiesThatJoined(Set<BookieSocketAddress> joinedBookies) {
+        super.handleAllBookiesThatJoined(joinedBookies);
+        if (null != slave) {
+            slave.handleAllBookiesThatJoined(joinedBookies);
         }
     }
 }

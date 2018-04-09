@@ -109,23 +109,23 @@ public class RegionAwareEnsemblePlacementPolicy extends RackawareEnsemblePlaceme
     }
 
     @Override
-    public void handleBookiesThatLeft(Set<BookieSocketAddress> leftBookies) {
-        super.handleBookiesThatLeft(leftBookies);
+    public void handleWritableBookiesThatLeft(Set<BookieSocketAddress> leftBookies) {
+        super.handleWritableBookiesThatLeft(leftBookies);
 
         for (TopologyAwareEnsemblePlacementPolicy policy: perRegionPlacement.values()) {
-            policy.handleBookiesThatLeft(leftBookies);
+            policy.handleWritableBookiesThatLeft(leftBookies);
         }
     }
 
     @Override
-    public void handleBookiesThatJoined(Set<BookieSocketAddress> joinedBookies) {
+    public void handleWritableBookiesThatJoined(Set<BookieSocketAddress> joinedBookies) {
         Map<String, Set<BookieSocketAddress>> perRegionClusterChange = new HashMap<String, Set<BookieSocketAddress>>();
 
         // node joined
         for (BookieSocketAddress addr : joinedBookies) {
             BookieNode node = createBookieNode(addr);
-            topology.add(node);
-            knownBookies.put(addr, node);
+            writableTopology.add(node);
+            writableBookies.put(addr, node);
             String region = getLocalRegion(node);
             if (null == perRegionPlacement.get(region)) {
                 perRegionPlacement.put(region, new RackawareEnsemblePlacementPolicy()
@@ -153,7 +153,56 @@ public class RegionAwareEnsemblePlacementPolicy extends RackawareEnsemblePlaceme
             if (null == regionSet) {
                 regionSet = new HashSet<BookieSocketAddress>();
             }
-            regionEntry.getValue().handleBookiesThatJoined(regionSet);
+            regionEntry.getValue().handleWritableBookiesThatJoined(regionSet);
+        }
+    }
+
+    @Override
+    public void handleAllBookiesThatLeft(Set<BookieSocketAddress> leftBookies) {
+        this.handleAllBookiesThatLeft(leftBookies);
+
+        for (TopologyAwareEnsemblePlacementPolicy policy: perRegionPlacement.values()) {
+            policy.handleAllBookiesThatLeft(leftBookies);
+        }
+    }
+
+    @Override
+    public void handleAllBookiesThatJoined(Set<BookieSocketAddress> joinedBookies) {
+        Map<String, Set<BookieSocketAddress>> perRegionClusterChange = new HashMap<>();
+
+        // node joined
+        for (BookieSocketAddress addr : joinedBookies) {
+            BookieNode node = createBookieNode(addr);
+            allTopology.add(node);
+            allBookies.put(addr, node);
+            String region = getLocalRegion(node);
+            if (null == perRegionPlacement.get(region)) {
+                perRegionPlacement.put(region, new RackawareEnsemblePlacementPolicy()
+                        .initialize(dnsResolver, timer, this.reorderReadsRandom, this.stabilizePeriodSeconds,
+                                this.isWeighted, this.maxWeightMultiple, statsLogger)
+                        .withDefaultRack(NetworkTopology.DEFAULT_REGION_AND_RACK));
+            }
+
+            Set<BookieSocketAddress> regionSet = perRegionClusterChange.get(region);
+            if (null == regionSet) {
+                regionSet = new HashSet<BookieSocketAddress>();
+                regionSet.add(addr);
+                perRegionClusterChange.put(region, regionSet);
+            } else {
+                regionSet.add(addr);
+            }
+
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Cluster changed : bookie {} joined the cluster.", addr);
+            }
+        }
+
+        for (Map.Entry<String, TopologyAwareEnsemblePlacementPolicy> regionEntry : perRegionPlacement.entrySet()) {
+            Set<BookieSocketAddress> regionSet = perRegionClusterChange.get(regionEntry.getKey());
+            if (null == regionSet) {
+                regionSet = new HashSet<BookieSocketAddress>();
+            }
+            regionEntry.getValue().handleWritableBookiesThatJoined(regionSet);
         }
     }
 
@@ -212,7 +261,7 @@ public class RegionAwareEnsemblePlacementPolicy extends RackawareEnsemblePlaceme
                                             Ensemble<BookieNode> ensemble)
         throws BKException.BKNotEnoughBookiesException {
         List<BookieNode> availableBookies = new ArrayList<BookieNode>();
-        for (BookieNode bookieNode: knownBookies.values()) {
+        for (BookieNode bookieNode: writableBookies.values()) {
             if (availableRegions.contains(getLocalRegion(bookieNode))) {
                 availableBookies.add(bookieNode);
             }
@@ -428,7 +477,7 @@ public class RegionAwareEnsemblePlacementPolicy extends RackawareEnsemblePlaceme
                 effectiveMinRegionsForDurability > 0 ? new HashSet<String>(perRegionPlacement.keySet()) : null,
                 effectiveMinRegionsForDurability);
 
-            BookieNode bookieNodeToReplace = knownBookies.get(bookieToReplace);
+            BookieNode bookieNodeToReplace = writableBookies.get(bookieToReplace);
             if (null == bookieNodeToReplace) {
                 bookieNodeToReplace = createBookieNode(bookieToReplace);
             }
@@ -439,7 +488,7 @@ public class RegionAwareEnsemblePlacementPolicy extends RackawareEnsemblePlaceme
                     continue;
                 }
 
-                BookieNode bn = knownBookies.get(bookieAddress);
+                BookieNode bn = writableBookies.get(bookieAddress);
                 if (null == bn) {
                     bn = createBookieNode(bookieAddress);
                 }

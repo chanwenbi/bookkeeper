@@ -201,7 +201,7 @@ public class Auditor {
                                 .getLostBookieRecoveryDelay();
                         List<String> availableBookies = getAvailableBookies();
 
-                        // casting to String, as knownBookies and availableBookies
+                        // casting to String, as writableBookies and availableBookies
                         // contains only String values
                         // find new bookies(if any) and update the known bookie list
                         Collection<String> newBookies = CollectionUtils.subtract(

@@ -119,12 +119,28 @@ public interface ITopologyAwareEnsemblePlacementPolicy<T extends Node> extends E
             throws BKException.BKNotEnoughBookiesException;
 
     /**
+     * Handle writable bookies that left.
+     *
+     * @param leftBookies
+     *          bookies that left
+     */
+    void handleWritableBookiesThatLeft(Set<BookieSocketAddress> leftBookies);
+
+    /**
+     * Handle writable bookies that joined.
+     *
+     * @param joinedBookies
+     *          bookies that joined.
+     */
+    void handleWritableBookiesThatJoined(Set<BookieSocketAddress> joinedBookies);
+
+    /**
      * Handle bookies that left.
      *
      * @param leftBookies
      *          bookies that left
      */
-    void handleBookiesThatLeft(Set<BookieSocketAddress> leftBookies);
+    void handleAllBookiesThatLeft(Set<BookieSocketAddress> leftBookies);
 
     /**
      * Handle bookies that joined.
@@ -132,5 +148,5 @@ public interface ITopologyAwareEnsemblePlacementPolicy<T extends Node> extends E
      * @param joinedBookies
      *          bookies that joined.
      */
-    void handleBookiesThatJoined(Set<BookieSocketAddress> joinedBookies);
+    void handleAllBookiesThatJoined(Set<BookieSocketAddress> joinedBookies);
 }

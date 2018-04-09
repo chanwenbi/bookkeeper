@@ -183,11 +183,14 @@ public class RackawareEnsemblePlacementPolicyImpl extends TopologyAwareEnsembleP
         }
     }
 
-    // for now, we just maintain the writable bookies' topology
-    protected NetworkTopology topology;
+    protected NetworkTopology writableTopology;
+    // maintain a topology including readonly bookies.
+    // this allows us using network topology on choosing bookies to read
+    protected NetworkTopology allTopology;
     protected DNSToSwitchMapping dnsResolver;
     protected HashedWheelTimer timer;
-    protected final Map<BookieSocketAddress, BookieNode> knownBookies;
+    protected final Map<BookieSocketAddress, BookieNode> writableBookies;
+    protected final Map<BookieSocketAddress, BookieNode> allBookies;
     // Use a loading cache so slow bookies are expired. Use entryId as values.
     protected Cache<BookieSocketAddress, Long> slowBookies;
     protected BookieNode localNode;
@@ -211,8 +214,10 @@ public class RackawareEnsemblePlacementPolicyImpl extends TopologyAwareEnsembleP
 
     RackawareEnsemblePlacementPolicyImpl(boolean enforceDurability) {
         this.enforceDurability = enforceDurability;
-        topology = new NetworkTopologyImpl();
-        knownBookies = new HashMap<BookieSocketAddress, BookieNode>();
+        writableTopology = new NetworkTopologyImpl();
+        writableBookies = new HashMap<>();
+        allTopology = new NetworkTopologyImpl();
+        allBookies = new HashMap<>();
 
         rwLock = new ReentrantReadWriteLock();
     }
@@ -245,9 +250,9 @@ public class RackawareEnsemblePlacementPolicyImpl extends TopologyAwareEnsembleP
 
         // create the network topology
         if (stabilizePeriodSeconds > 0) {
-            this.topology = new StabilizeNetworkTopology(timer, stabilizePeriodSeconds);
+            this.writableTopology = new StabilizeNetworkTopology(timer, stabilizePeriodSeconds);
         } else {
-            this.topology = new NetworkTopologyImpl();
+            this.writableTopology = new NetworkTopologyImpl();
         }
 
         BookieNode bn;
@@ -345,11 +350,11 @@ public class RackawareEnsemblePlacementPolicyImpl extends TopologyAwareEnsembleP
         rwLock.writeLock().lock();
         try {
             for (BookieSocketAddress bookieAddress : bookieAddressList) {
-                BookieNode node = knownBookies.get(bookieAddress);
+                BookieNode node = writableBookies.get(bookieAddress);
                 if (node != null) {
                     // refresh the rack info if its a known bookie
-                    topology.remove(node);
-                    topology.add(createBookieNode(bookieAddress));
+                    writableTopology.remove(node);
+                    writableTopology.add(createBookieNode(bookieAddress));
                 }
             }
         } finally {
@@ -362,25 +367,44 @@ public class RackawareEnsemblePlacementPolicyImpl extends TopologyAwareEnsembleP
             Set<BookieSocketAddress> readOnlyBookies) {
         rwLock.writeLock().lock();
         try {
-            ImmutableSet<BookieSocketAddress> joinedBookies, leftBookies, deadBookies;
-            Set<BookieSocketAddress> oldBookieSet = knownBookies.keySet();
-            // left bookies : bookies in known bookies, but not in new writable bookie cluster.
-            leftBookies = Sets.difference(oldBookieSet, writableBookies).immutableCopy();
-            // joined bookies : bookies in new writable bookie cluster, but not in known bookies
-            joinedBookies = Sets.difference(writableBookies, oldBookieSet).immutableCopy();
-            // dead bookies.
-            deadBookies = Sets.difference(leftBookies, readOnlyBookies).immutableCopy();
-            LOG.debug("Cluster changed : left bookies are {}, joined bookies are {}, while dead bookies are {}.",
+            ImmutableSet<BookieSocketAddress> deadBookies;
+            {
+                ImmutableSet<BookieSocketAddress> joinedBookies, leftBookies;
+                Set<BookieSocketAddress> oldBookieSet = this.writableBookies.keySet();
+                // left bookies : bookies in `writableBookies`, but not in new writable bookie cluster.
+                leftBookies = Sets.difference(oldBookieSet, writableBookies).immutableCopy();
+                // joined bookies : bookies in new writable bookie cluster, but not in `writableBookies`
+                joinedBookies = Sets.difference(writableBookies, oldBookieSet).immutableCopy();
+                // dead bookies.
+                deadBookies = Sets.difference(leftBookies, readOnlyBookies).immutableCopy();
+                LOG.debug("Cluster changed : left bookies are {}, joined bookies are {}, while dead bookies are {}.",
                     leftBookies, joinedBookies, deadBookies);
-            handleBookiesThatLeft(leftBookies);
-            handleBookiesThatJoined(joinedBookies);
-            if (this.isWeighted && (leftBookies.size() > 0 || joinedBookies.size() > 0)) {
-                this.weightedSelection.updateMap(this.bookieInfoMap);
+                handleWritableBookiesThatLeft(leftBookies);
+                handleWritableBookiesThatJoined(joinedBookies);
+                if (this.isWeighted && (leftBookies.size() > 0 || joinedBookies.size() > 0)) {
+                    this.weightedSelection.updateMap(this.bookieInfoMap);
+                }
             }
             if (!readOnlyBookies.isEmpty()) {
                 this.readOnlyBookies = ImmutableSet.copyOf(readOnlyBookies);
             }
+            // process allTopology changes
+            {
+                ImmutableSet<BookieSocketAddress> joinedBookies, leftBookies;
 
+                Set<BookieSocketAddress> oldBookieSet = this.allBookies.keySet();
+                Set<BookieSocketAddress> newBookieSet = Sets.newHashSet();
+                newBookieSet.addAll(writableBookies);
+                newBookieSet.addAll(readOnlyBookies);
+
+                // left bookies : bookies in `oldBookieSet` but not in `newBookieSet`
+                leftBookies = Sets.difference(oldBookieSet, newBookieSet).immutableCopy();
+                // joined bookies : bookies in `newBookieSet` but not in `oldBookieSet`
+                joinedBookies = Sets.difference(newBookieSet, oldBookieSet).immutableCopy();
+
+                handleAllBookiesThatLeft(leftBookies);
+                handleAllBookiesThatJoined(joinedBookies);
+            }
             return deadBookies;
         } finally {
             rwLock.writeLock().unlock();
@@ -388,12 +412,12 @@ public class RackawareEnsemblePlacementPolicyImpl extends TopologyAwareEnsembleP
     }
 
     @Override
-    public void handleBookiesThatLeft(Set<BookieSocketAddress> leftBookies) {
+    public void handleWritableBookiesThatLeft(Set<BookieSocketAddress> leftBookies) {
         for (BookieSocketAddress addr : leftBookies) {
             try {
-                BookieNode node = knownBookies.remove(addr);
+                BookieNode node = writableBookies.remove(addr);
                 if (null != node) {
-                    topology.remove(node);
+                    writableTopology.remove(node);
                     if (this.isWeighted) {
                         this.bookieInfoMap.remove(node);
                     }
@@ -401,11 +425,11 @@ public class RackawareEnsemblePlacementPolicyImpl extends TopologyAwareEnsembleP
                     bookiesLeftCounter.registerSuccessfulValue(1L);
 
                     if (LOG.isDebugEnabled()) {
-                        LOG.debug("Cluster changed : bookie {} left from cluster.", addr);
+                        LOG.debug("Cluster changed : writable bookie {} left from cluster.", addr);
                     }
                 }
             } catch (Throwable t) {
-                LOG.error("Unexpected exception while handling leaving bookie {}", addr, t);
+                LOG.error("Unexpected exception while handling writable bookie {} leaving", addr, t);
                 if (bookiesLeftCounter != null) {
                     bookiesLeftCounter.registerFailedValue(1L);
                 }
@@ -416,13 +440,13 @@ public class RackawareEnsemblePlacementPolicyImpl extends TopologyAwareEnsembleP
     }
 
     @Override
-    public void handleBookiesThatJoined(Set<BookieSocketAddress> joinedBookies) {
+    public void handleWritableBookiesThatJoined(Set<BookieSocketAddress> joinedBookies) {
         // node joined
         for (BookieSocketAddress addr : joinedBookies) {
             try {
                 BookieNode node = createBookieNode(addr);
-                topology.add(node);
-                knownBookies.put(addr, node);
+                writableTopology.add(node);
+                writableBookies.put(addr, node);
                 if (this.isWeighted) {
                     this.bookieInfoMap.putIfAbsent(node, new BookieInfo());
                 }
@@ -430,13 +454,46 @@ public class RackawareEnsemblePlacementPolicyImpl extends TopologyAwareEnsembleP
                 bookiesJoinedCounter.registerSuccessfulValue(1L);
 
                 if (LOG.isDebugEnabled()) {
-                    LOG.debug("Cluster changed : bookie {} joined the cluster.", addr);
+                    LOG.debug("Cluster changed : writable bookie {} joined the cluster.", addr);
                 }
             } catch (Throwable t) {
                 // topology.add() throws unchecked exception
-                LOG.error("Unexpected exception while handling joining bookie {}", addr, t);
+                LOG.error("Unexpected exception while handling writable bookie {} joining", addr, t);
 
                 bookiesJoinedCounter.registerFailedValue(1L);
+                // no need to re-throw; we want to process the rest of the bookies
+                // exception anyways will be caught/logged/suppressed in the ZK's event handler
+            }
+        }
+    }
+
+    @Override
+    public void handleAllBookiesThatLeft(Set<BookieSocketAddress> leftBookies) {
+        for (BookieSocketAddress addr : leftBookies) {
+            try {
+                BookieNode node = allBookies.remove(addr);
+                if (null != node) {
+                    allTopology.remove(node);
+                }
+            } catch (Throwable t) {
+                LOG.warn("Unexpected exception while handling bookie {} leaving", addr, t);
+                // no need to re-throw; we want to process the rest of the bookies
+                // exception anyways will be caught/logged/suppressed in the ZK's event handler
+            }
+        }
+    }
+
+    @Override
+    public void handleAllBookiesThatJoined(Set<BookieSocketAddress> joinedBookies) {
+        // node joined
+        for (BookieSocketAddress addr : joinedBookies) {
+            try {
+                BookieNode node = createBookieNode(addr);
+                allTopology.add(node);
+                allBookies.put(addr, node);
+            } catch (Throwable t) {
+                // topology.add() throws unchecked exception
+                LOG.warn("Unexpected exception while handling bookie {} joining", addr, t);
                 // no need to re-throw; we want to process the rest of the bookies
                 // exception anyways will be caught/logged/suppressed in the ZK's event handler
             }
@@ -446,7 +503,7 @@ public class RackawareEnsemblePlacementPolicyImpl extends TopologyAwareEnsembleP
     protected Set<Node> convertBookiesToNodes(Set<BookieSocketAddress> excludeBookies) {
         Set<Node> nodes = new HashSet<Node>();
         for (BookieSocketAddress addr : excludeBookies) {
-            BookieNode bn = knownBookies.get(addr);
+            BookieNode bn = writableBookies.get(addr);
             if (null == bn) {
                 bn = createBookieNode(addr);
             }
@@ -521,7 +578,7 @@ public class RackawareEnsemblePlacementPolicyImpl extends TopologyAwareEnsembleP
                             parentEnsemble,
                             parentPredicate);
             BookieNode prevNode = null;
-            int numRacks = topology.getNumOfRacks();
+            int numRacks = writableTopology.getNumOfRacks();
             // only one rack, use the random algorithm.
             if (numRacks < 2) {
                 List<BookieNode> bns = selectRandom(ensembleSize, excludeNodes, TruePredicate.INSTANCE,
@@ -566,7 +623,7 @@ public class RackawareEnsemblePlacementPolicyImpl extends TopologyAwareEnsembleP
         rwLock.readLock().lock();
         try {
             excludeBookies.addAll(currentEnsemble);
-            BookieNode bn = knownBookies.get(bookieToReplace);
+            BookieNode bn = writableBookies.get(bookieToReplace);
             if (null == bn) {
                 bn = createBookieNode(bookieToReplace);
             }
@@ -606,7 +663,7 @@ public class RackawareEnsemblePlacementPolicyImpl extends TopologyAwareEnsembleP
             LOG.info("bookieFreeDiskInfo callback called even without weighted placement policy being used.");
             return;
         }
-         List<BookieNode> allBookies = new ArrayList<BookieNode>(knownBookies.values());
+         List<BookieNode> allBookies = new ArrayList<BookieNode>(writableBookies.values());
 
          // create a new map to reflect the new mapping
         Map<BookieNode, WeightedObject> map = new HashMap<BookieNode, WeightedObject>();
@@ -680,7 +737,7 @@ public class RackawareEnsemblePlacementPolicyImpl extends TopologyAwareEnsembleP
                                                    Predicate<BookieNode> predicate,
                                                    Ensemble<BookieNode> ensemble)
             throws BKNotEnoughBookiesException {
-        List<BookieNode> knownNodes = new ArrayList<>(knownBookies.values());
+        List<BookieNode> knownNodes = new ArrayList<>(writableBookies.values());
         Collections.shuffle(knownNodes);
 
         for (BookieNode knownNode : knownNodes) {
@@ -739,7 +796,7 @@ public class RackawareEnsemblePlacementPolicyImpl extends TopologyAwareEnsembleP
     protected BookieNode selectRandomFromRack(String netPath, Set<Node> excludeBookies, Predicate<BookieNode> predicate,
             Ensemble<BookieNode> ensemble) throws BKNotEnoughBookiesException {
         WeightedRandomSelection<BookieNode> wRSelection = null;
-        List<Node> leaves = new ArrayList<Node>(topology.getLeaves(netPath));
+        List<Node> leaves = new ArrayList<Node>(writableTopology.getLeaves(netPath));
         if (!this.isWeighted) {
             Collections.shuffle(leaves);
         } else {
@@ -815,9 +872,9 @@ public class RackawareEnsemblePlacementPolicyImpl extends TopologyAwareEnsembleP
         throws BKNotEnoughBookiesException {
         WeightedRandomSelection<BookieNode> wRSelection = null;
         if (bookiesToSelectFrom == null) {
-            // If the list is null, we need to select from the entire knownBookies set
+            // If the list is null, we need to select from the entire writableBookies set
             wRSelection = this.weightedSelection;
-            bookiesToSelectFrom = new ArrayList<BookieNode>(knownBookies.values());
+            bookiesToSelectFrom = new ArrayList<BookieNode>(writableBookies.values());
         }
         if (isWeighted) {
             if (CollectionUtils.subtract(bookiesToSelectFrom, excludeBookies).size() < numBookies) {
@@ -956,7 +1013,7 @@ public class RackawareEnsemblePlacementPolicyImpl extends TopologyAwareEnsembleP
         } else {
             for (int i = 0; i < ensemble.size(); i++) {
                 BookieSocketAddress bookieAddr = ensemble.get(i);
-                if ((!knownBookies.containsKey(bookieAddr) && !readOnlyBookies.contains(bookieAddr))
+                if ((!writableBookies.containsKey(bookieAddr) && !readOnlyBookies.contains(bookieAddr))
                     || slowBookies.getIfPresent(bookieAddr) != null) {
                     // Found at least one bookie not available in the ensemble, or in slowBookies
                     isAnyBookieUnavailable = true;
@@ -974,7 +1031,7 @@ public class RackawareEnsemblePlacementPolicyImpl extends TopologyAwareEnsembleP
             BookieSocketAddress address = ensemble.get(idx);
             String region = writeSetWithRegion.get(idx);
             Long lastFailedEntryOnBookie = bookiesHealthInfo.getBookieFailureHistory(address);
-            if (null == knownBookies.get(address)) {
+            if (null == writableBookies.get(address)) {
                 // there isn't too much differences between readonly bookies
                 // from unavailable bookies. since there
                 // is no write requests to them, so we shouldn't try reading

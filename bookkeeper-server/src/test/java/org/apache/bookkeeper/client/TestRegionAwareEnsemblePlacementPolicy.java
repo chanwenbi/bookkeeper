@@ -1340,7 +1340,7 @@ public class TestRegionAwareEnsemblePlacementPolicy extends TestCase {
 
         repp.onClusterChanged(writeBookies, readOnlyBookies);
 
-        LOG.info("Writable Bookies {}, ReadOnly Bookies {}.", repp.knownBookies.keySet(), repp.readOnlyBookies);
+        LOG.info("Writable Bookies {}, ReadOnly Bookies {}.", repp.writableBookies.keySet(), repp.readOnlyBookies);
 
         int ensembleSize = ensemble.size();
         for (int i = 0; i < ensembleSize; i++) {
