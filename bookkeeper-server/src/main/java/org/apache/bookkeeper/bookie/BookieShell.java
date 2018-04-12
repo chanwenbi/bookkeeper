@@ -76,7 +76,6 @@ import org.apache.bookkeeper.bookie.CheckpointSource.Checkpoint;
 import org.apache.bookkeeper.bookie.EntryLogger.EntryLogScanner;
 import org.apache.bookkeeper.bookie.Journal.JournalScanner;
 import org.apache.bookkeeper.bookie.storage.ldb.DbLedgerStorage;
-import org.apache.bookkeeper.bookie.storage.ldb.EntryLocationIndex;
 import org.apache.bookkeeper.bookie.storage.ldb.LocationsIndexRebuildOp;
 import org.apache.bookkeeper.client.BKException;
 import org.apache.bookkeeper.client.BKException.MetaStoreException;
@@ -88,6 +87,7 @@ import org.apache.bookkeeper.client.LedgerEntry;
 import org.apache.bookkeeper.client.LedgerHandle;
 import org.apache.bookkeeper.client.LedgerMetadata;
 import org.apache.bookkeeper.client.UpdateLedgerOp;
+import org.apache.bookkeeper.common.util.OrderedExecutor;
 import org.apache.bookkeeper.conf.ClientConfiguration;
 import org.apache.bookkeeper.conf.ServerConfiguration;
 import org.apache.bookkeeper.discover.RegistrationManager;
@@ -112,7 +112,6 @@ import org.apache.bookkeeper.util.EntryFormatter;
 import org.apache.bookkeeper.util.IOUtils;
 import org.apache.bookkeeper.util.LedgerIdFormatter;
 import org.apache.bookkeeper.util.MathUtils;
-import org.apache.bookkeeper.util.OrderedSafeExecutor;
 import org.apache.bookkeeper.util.Tool;
 import org.apache.bookkeeper.versioning.Version;
 import org.apache.bookkeeper.versioning.Versioned;
@@ -814,7 +813,7 @@ public class BookieShell implements Tool {
                 } else {
                     // Use BookieClient to target a specific bookie
                     EventLoopGroup eventLoopGroup = new NioEventLoopGroup();
-                    OrderedSafeExecutor executor = OrderedSafeExecutor.newBuilder()
+                    OrderedExecutor executor = OrderedExecutor.newBuilder()
                         .numThreads(1)
                         .name("BookieClientScheduler")
                         .build();
@@ -874,6 +873,7 @@ public class BookieShell implements Tool {
             super(CMD_LISTUNDERREPLICATED);
             opts.addOption("missingreplica", true, "Bookie Id of missing replica");
             opts.addOption("excludingmissingreplica", true, "Bookie Id of missing replica to ignore");
+            opts.addOption("printmissingreplica", false, "Whether to print missingreplicas list?");
         }
 
         @Override
@@ -890,7 +890,7 @@ public class BookieShell implements Tool {
         @Override
         String getUsage() {
             return "listunderreplicated [[-missingreplica <bookieaddress>]"
-                    + " [-excludingmissingreplica <bookieaddress>]]";
+                    + " [-excludingmissingreplica <bookieaddress>]] [-printmissingreplica]";
         }
 
         @Override
@@ -898,6 +898,7 @@ public class BookieShell implements Tool {
 
             final String includingBookieId = cmdLine.getOptionValue("missingreplica");
             final String excludingBookieId = cmdLine.getOptionValue("excludingmissingreplica");
+            final boolean printMissingReplica = cmdLine.hasOption("printmissingreplica");
 
             final Predicate<List<String>> predicate;
             if (!StringUtils.isBlank(includingBookieId) && !StringUtils.isBlank(excludingBookieId)) {
@@ -921,9 +922,15 @@ public class BookieShell implements Tool {
                     Thread.currentThread().interrupt();
                     throw new UncheckedExecutionException("Interrupted on newing ledger underreplicated manager", e);
                 }
-                Iterator<Long> iter = underreplicationManager.listLedgersToRereplicate(predicate);
+                Iterator<Map.Entry<Long, List<String>>> iter = underreplicationManager
+                        .listLedgersToRereplicate(predicate, printMissingReplica);
                 while (iter.hasNext()) {
-                    System.out.println(ledgerIdFormatter.formatLedgerId(iter.next()));
+                    System.out.println(ledgerIdFormatter.formatLedgerId(iter.next().getKey()));
+                    if (printMissingReplica) {
+                        iter.next().getValue().forEach((missingReplica) -> {
+                            System.out.println("\t" + missingReplica);
+                        });
+                    }
                 }
                 return null;
             });
@@ -1022,6 +1029,7 @@ public class BookieShell implements Tool {
             return ledgerId;
         }
 
+        @Override
         public void operationComplete(int rc, LedgerMetadata result) {
             if (rc != 0) {
                 setException(BKException.create(rc));
@@ -2489,6 +2497,7 @@ public class BookieShell implements Tool {
             return "Convert bookie indexes from InterleavedStorage to DbLedgerStorage format";
         }
 
+        @Override
         String getUsage() {
             return CMD_CONVERT_TO_DB_STORAGE;
         }
@@ -2584,6 +2593,7 @@ public class BookieShell implements Tool {
             return "Convert bookie indexes from DbLedgerStorage to InterleavedStorage format";
         }
 
+        @Override
         String getUsage() {
             return CMD_CONVERT_TO_INTERLEAVED_STORAGE;
         }
@@ -2629,8 +2639,6 @@ public class BookieShell implements Tool {
                     null, checkpointSource, checkpointer, NullStatsLogger.INSTANCE);
             LedgerCache interleavedLedgerCache = interleavedStorage.ledgerCache;
 
-            EntryLocationIndex dbEntryLocationIndex = dbStorage.getEntryLocationIndex();
-
             int convertedLedgers = 0;
             for (long ledgerId : dbStorage.getActiveLedgersInRange(0, Long.MAX_VALUE)) {
                 if (LOG.isDebugEnabled()) {
@@ -2642,10 +2650,10 @@ public class BookieShell implements Tool {
                     interleavedStorage.setFenced(ledgerId);
                 }
 
-                long lastEntryInLedger = dbEntryLocationIndex.getLastEntryInLedger(ledgerId);
+                long lastEntryInLedger = dbStorage.getLastEntryInLedger(ledgerId);
                 for (long entryId = 0; entryId <= lastEntryInLedger; entryId++) {
                     try {
-                        long location = dbEntryLocationIndex.getLocation(ledgerId, entryId);
+                        long location = dbStorage.getLocation(ledgerId, entryId);
                         if (location != 0L) {
                             interleavedLedgerCache.putEntryOffset(ledgerId, entryId, location);
                         }
@@ -2699,6 +2707,7 @@ public class BookieShell implements Tool {
             return "Rebuild DbLedgerStorage locations index by scanning the entry logs";
         }
 
+        @Override
         String getUsage() {
             return CMD_REBUILD_DB_LEDGER_LOCATIONS_INDEX;
         }
@@ -3116,6 +3125,7 @@ public class BookieShell implements Tool {
         };
 
         return new Iterable<SortedMap<Long, Long>>() {
+            @Override
             public Iterator<SortedMap<Long, Long>> iterator() {
                 return iterator;
             }

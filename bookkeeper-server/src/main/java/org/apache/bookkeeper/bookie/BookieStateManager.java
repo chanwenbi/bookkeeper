@@ -31,6 +31,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.bookkeeper.conf.ServerConfiguration;
 import org.apache.bookkeeper.meta.MetadataBookieDriver;
 import org.apache.bookkeeper.stats.Gauge;
@@ -43,6 +44,7 @@ import org.slf4j.LoggerFactory;
 /**
  * An implementation of StateManager.
  */
+@Slf4j
 public class BookieStateManager implements StateManager {
     private static final Logger LOG = LoggerFactory.getLogger(BookieStateManager.class);
     private final ServerConfiguration conf;
@@ -61,13 +63,13 @@ public class BookieStateManager implements StateManager {
     private final BookieStatus bookieStatus = new BookieStatus();
     private final AtomicBoolean rmRegistered = new AtomicBoolean(false);
     private final AtomicBoolean forceReadOnly = new AtomicBoolean(false);
+    private volatile boolean availableForHighPriorityWrites = true;
 
     private final String bookieId;
     private ShutdownHandler shutdownHandler;
     private final MetadataBookieDriver metadataDriver;
     // Expose Stats
     private final StatsLogger statsLogger;
-
 
     public BookieStateManager(ServerConfiguration conf, StatsLogger statsLogger,
            MetadataBookieDriver metadataDriver, LedgerDirsManager ledgerDirsManager) throws IOException {
@@ -133,6 +135,21 @@ public class BookieStateManager implements StateManager {
     @Override
     public boolean isReadOnly(){
         return forceReadOnly.get() || bookieStatus.isInReadOnlyMode();
+    }
+
+    @Override
+    public boolean isAvailableForHighPriorityWrites() {
+        return availableForHighPriorityWrites;
+    }
+
+    @Override
+    public void setHighPriorityWritesAvailability(boolean available) {
+        if (this.availableForHighPriorityWrites && !available) {
+            log.info("Disable high priority writes on readonly bookie.");
+        } else if (!this.availableForHighPriorityWrites && available) {
+            log.info("Enable high priority writes on readonly bookie.");
+        }
+        this.availableForHighPriorityWrites = available;
     }
 
     @Override
