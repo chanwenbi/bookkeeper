@@ -1,0 +1,21 @@
+# variables used by local machine that runs playbook
+deployment_dir: "{{ playbook_dir }}/deployment"
+conf_dir:       "{{ playbook_dir }}/deployment/conf"
+downloads_dir:  "{{ playbook_dir }}/deployment/downloads"
+resources_dir:  "{{ playbook_dir }}/deployment/resources"
+fetch_tmp_dir:  "{{ playbook_dir }}/deployment/fetch_tmp"
+fetch_log_dir:  "{{ playbook_dir }}/deployment/fetch_log"
+script_dir:     "{{ playbook_dir }}/deployment/scripts"
+binary_dir:     "{{ playbook_dir }}/deployment/resources/bin"
+
+# stats collection related variables
+node_exporter_port: 9100
+
+# docker
+docker_bin_dir: "/usr/bin"
+
+# random shifts for retrying failed ops like downloading
+retry_stagger: 5
+
+# whether deploying a cluster for development
+dev_mode: False

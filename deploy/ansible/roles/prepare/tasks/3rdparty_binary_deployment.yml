@@ -1,0 +1,32 @@
+---
+
+- name: Download 3rdparty packages
+  get_url:
+    url: "{{ item.url }}"
+    dest: "{{ downloads_dir }}/{{ item.name }}-{{ item.version }}.tar.gz"
+    checksum: "{{ item.checksum | default(omit) }}"
+    force: yes
+    validate_certs: no
+  register: get_url_result
+  until: "'OK' in get_url_result.msg or 'file already exists' in get_url_result.msg"
+  retries: 4
+  delay: "{{ retry_stagger | random + 3 }}"
+  with_items: "{{ third_party_packages }}"
+  when: has_outbound_network
+
+- name: Unarchive 3rdparty packages
+  shell: ls -1 {{ item.name }}-{{ item.version }}.tar.gz | xargs -n1 tar xzf
+  args:
+    chdir: "{{ downloads_dir }}"
+    warn: no
+  with_items: "{{ third_party_packages }}"
+
+- name: Copy monitoring binaries
+  shell: >
+    cp -v {{ downloads_dir }}/{{ item }}-*/{{ item }} "{{ resources_dir }}/bin/{{ item }}"
+  with_items:
+    - alertmanager
+    - prometheus
+    - node_exporter
+    - pushgateway
+    - blackbox_exporter

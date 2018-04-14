@@ -1,0 +1,34 @@
+---
+
+- name: Disk space check
+  raw: df -h . | tail -n1
+  register: disk_space_st
+  failed_when: " '100%' in disk_space_st.stdout "
+  changed_when: false
+
+- name: Get distro name from /etc/os-release
+  raw: "([ -f /etc/os-release ] && grep '^NAME=' /etc/os-release | sed s'/NAME=//' | tr -d \\\") || ([ -f /etc/redhat-release ] && cat /etc/redhat-release | cut '-d ' -f1)"
+  register: distro_st
+  failed_when: false
+  changed_when: false
+
+- name: Set distro facts
+  set_fact:
+    distro: "{{ distro_st.stdout | trim }}"
+
+- name: Check python
+  raw: python --version
+  register: py_st
+  failed_when: false
+  changed_when: false
+
+- name: Set has_python facts
+  set_fact:
+    has_python: true
+
+- name: Set has_python facts
+  set_fact:
+    has_python: false
+  when: "'command not found' in py_st.stdout"
+
+- include_tasks: distro_tasks.yml

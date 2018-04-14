@@ -1,0 +1,21 @@
+---
+
+- hosts: all
+  sudo: True
+  tasks:
+    - name: Create user
+      user: name={{ servicename }} shell=/bin/bash createhome=yes
+
+    - name: Set authorized key
+      authorized_key:
+        user: "{{ servicename }}"
+        key: "{{ lookup('file', '~/.ssh/{{ public_key_file }}') }}"
+        state: present
+
+    - name: Update sudoers file
+      lineinfile:
+        dest: /etc/sudoers
+        insertafter: EOF
+        line: '{{ servicename }} ALL=(ALL) NOPASSWD: ALL'
+        regexp: '^{{ servicename }} .*'
+        state: present

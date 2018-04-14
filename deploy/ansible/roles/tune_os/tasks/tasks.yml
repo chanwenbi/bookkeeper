@@ -1,0 +1,36 @@
+---
+
+- name: Setting present kernel params
+  sysctl: name="{{ item.name }}" value="{{ item.value }}" ignoreerrors=yes state=present
+  with_items:
+    - { name: 'net.core.somaxconn', value: 65535 }
+    - { name: 'vm.swappiness', value: 0 }
+    - { name: 'net.ipv4.tcp_syncookies', value: 0 }
+    - { name: 'fs.file-max', value: 1000000 }
+  when: tuning_kernel_parameters
+
+- name: Update /etc/security/limits.conf
+  blockinfile:
+    dest: /etc/security/limits.conf
+    insertbefore: '# End of file'
+    block: |
+      {{ deploy_user }}        soft        nofile        1000000
+      {{ deploy_user }}        hard        nofile        1000000
+      {{ deploy_user }}        soft        core          unlimited
+      {{ deploy_user }}        soft        stack         10240
+  when: tuning_kernel_parameters
+
+- name: Swap - disable swap
+  shell: "([ $(swapon -s | wc -l) -ge 1 ] && (swapoff -a && echo disable)) || echo already"
+  ignore_errors: yes
+  register: swapoff_result
+  changed_when: "swapoff_result.stdout.strip() == 'disable'"
+
+- name: Create group
+  group: name={{ deploy_user }}
+
+- name: Create account
+  user: name={{ deploy_user }} group={{ deploy_user }}
+
+- name: Create top deploy dir when under root
+  file: path="{{ deploy_dir }}" state=directory mode=0755 owner={{ deploy_user }} group={{ deploy_user }}

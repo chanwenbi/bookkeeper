@@ -1,0 +1,8 @@
+bin_dir: /usar/bin
+
+bootstrap_script_dir: /opt
+
+# pypy
+pypy_version: 5.6.0
+pypy_download_url_base: "https://bitbucket.org/pypy/pypy/downloads"
+pypy_download_url: "{{ pypy_download_url_base }}/pypy2-v{{ pypy_version }}-linux64.tar.bz2"

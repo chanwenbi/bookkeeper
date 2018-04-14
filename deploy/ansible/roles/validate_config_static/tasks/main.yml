@@ -1,0 +1,23 @@
+---
+
+- name: Check monitor servers
+  fail: msg="Only one monitor server can be specified."
+  when: "groups.get('monitoring', []) | length > 1"
+
+- name: Check bookkeeper servers 
+  fail: msg="No bookie server is specified."
+  when: "groups.get('bookkeeper', []) | length == 0"
+
+- name: Check zookeeper servers
+  fail: msg="No zookeeper server is specified. This cluster will be deployed with external zookeeper service."
+  when:
+    - "groups.get('zookeeper', []) | length == 0"
+    - deploy_without_zookeeper is defined
+    - "not deploy_without_zookeeper"
+
+- name: Check external zookeeper servers
+  fail: msg="Please set external_zookeeper_servers variable in inventory.ini when deploy_without_zookeeper."
+  when:
+    - deploy_without_zookeeper
+    - external_zookeeper_servers is defined
+    - external_zookeeper_servers == ""

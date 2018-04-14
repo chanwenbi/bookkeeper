@@ -1,0 +1,17 @@
+---
+
+# This play book is intend for one pass execution
+
+- name: Validate configuration
+  hosts: localhost
+  gather_facts: false
+  roles:
+    - validate_config_static
+
+- name: check node config
+  hosts: all
+  gather_facts: false
+  become: true
+  roles:
+    - validate_os
+    - tune_os
