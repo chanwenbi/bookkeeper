@@ -1,0 +1,13 @@
+#!/bin/bash
+set -e
+ulimit -n 1000000
+
+# WARNING: This file was auto-generated. Do not edit!
+#          All your edit might be overwritten!
+DEPLOY_DIR={{ bookkeeper_home }}
+cd "${DEPLOY_DIR}" || exit 1
+
+LANG=en_US.UTF-8 \
+exec opt/grafana/bin/grafana-server \
+        --homepath="{{ bookkeeper_home }}/grafana" \
+        --config="{{ bookkeeper_home }}/grafana/conf/grafana.ini"

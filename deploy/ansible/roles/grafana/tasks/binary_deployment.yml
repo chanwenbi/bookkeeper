@@ -1,0 +1,34 @@
+---
+
+- name: Deploy grafana binary
+  unarchive: >
+    creates="{{ bookkeeper_home }}/grafana/bin/grafana-server"
+    src={{ downloads_dir }}/grafana-{{ grafana_version }}.tar.gz dest={{ bookkeeper_home }}
+
+- name: Rename grafana dir
+  shell: >
+    creates="{{ bookkeeper_home }}/grafana/bin/grafana-server"
+    mv {{ bookkeeper_home }}/grafana-{{ grafana_version }} "{{ bookkeeper_home }}/grafana"
+
+- name: Create grafana directories (2/2)
+  file: path="{{ item }}" state=directory mode=0755
+  with_items:
+  - "{{ grafana_dashboards_dir }}"
+  - "{{ grafana_plugins_dir }}"
+
+- name: Create grafana configuration file
+  template: >
+    src=grafana.ini.j2 dest={{ bookkeeper_home }}/grafana/conf/grafana.ini mode=0644
+
+- name: Create run script
+  template:
+    src: "{{ item }}_{{ role_name }}_binary.sh.j2"
+    dest: "{{ bookkeeper_home }}/scripts/{{ item }}_{{ role_name }}.sh"
+    mode: "0755"
+    backup: yes
+  with_items:
+    - run
+  vars:
+    role_status_dir: status/{{ role_name }}
+
+- include_tasks: "{{ process_supervision }}_deployment.yml"
