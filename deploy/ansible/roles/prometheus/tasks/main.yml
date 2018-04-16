@@ -1,0 +1,36 @@
+---
+
+- name: Create prometheus directories
+  file: path={{ item }} state=directory mode=0755
+  with_items:
+  - "{{ prometheus_log_dir }}"
+  - "{{ prometheus_data_dir }}"
+  - "{{ bookkeeper_home }}/status/{{ role_name }}"
+
+- name: Create configuration file
+  template: src=prometheus.yml.j2 dest={{ bookkeeper_home }}/conf/prometheus.yml mode=0644 backup=yes
+  register: prometheus_conf_st
+  vars:
+    hosts: "{{ groups['all'] | list }}"
+
+- name: Copy alert rules file
+  copy: src={{ item }} dest="{{ bookkeeper_home }}/conf/{{ item }}" mode=0644     backup=yes
+  with_items:
+    - node.rules.yml
+    - bypass.rules.yml
+    - blackbox.rules.yml
+    - bookkeeper.rules.yml
+  register: alert_rules_st
+
+- name: Set alert rules label changes
+  replace: >
+    dest={{ bookkeeper_home }}/conf/{{ item }}
+    regexp="ENV_LABELS_ENV"
+    replace="{{ cluster_name }}"
+  with_items:
+    - node.rules.yml
+    - bypass.rules.yml
+    - blackbox.rules.yml
+    - bookkeeper.rules.yml
+
+- include_tasks: "{{ deployment_method }}_deployment.yml"

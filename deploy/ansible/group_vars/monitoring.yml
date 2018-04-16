@@ -1,0 +1,6 @@
+
+---
+
+alertmanager_port: 9093
+prometheus_port: 9090
+pushgateway_port: 9091

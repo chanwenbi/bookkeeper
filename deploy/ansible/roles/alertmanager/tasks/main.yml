@@ -1,0 +1,7 @@
+---
+
+- include_tasks: "{{ deployment_method }}_deployment.yml"
+
+- name: Create configuration file
+  copy: src="{{ playbook_dir }}/conf/alertmanager.yml" dest="{{ bookkeeper_home }}/conf/alertmanager.yml" mode=0644 backup=yes
+  register: alertmanager_conf_st

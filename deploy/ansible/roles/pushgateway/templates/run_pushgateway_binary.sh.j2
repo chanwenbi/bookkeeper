@@ -1,0 +1,15 @@
+#!/bin/bash
+set -e
+ulimit -n 1000000
+
+BK_HOME={{ bookkeeper_home }}
+cd "${BK_HOME}" || exit 1
+
+# WARNING: This file was auto-generated. Do not edit!
+#          All your edit might be overwritten!
+exec > >(tee -i -a "{{ pushgateway_log_dir }}/{{ pushgateway_log_filename }}")
+exec 2>&1
+
+exec bin/pushgateway \
+    --log.level="{{ pushgateway_log_level }}" \
+    --web.listen-address=":{{ pushgateway_port }}"
