@@ -1,0 +1,26 @@
+---
+# Common Tasks to create directories
+
+- name: Create bookkeeper directories
+  file: path={{ item }} state=directory mode=0755
+  with_items:
+    - "{{ bookkeeper_home }}/scripts"
+    - "{{ bookkeeper_home }}/conf"
+
+- name: Create status directory
+  file: path={{ item }} state=directory mode=0755
+  with_items:
+    - "{{ status_dir }}"
+  when: deployment_method == 'supervise'
+
+- name: Create bookkeeper binary directory
+  file: path={{ item }} state=directory mode=0755
+  with_items:
+    - "{{ bookkeeper_home }}/bin"
+  when: deployment_method != 'docker'
+
+- name: Create docker image directory
+  file: path={{ item }} state=directory mode=0755
+  with_items:
+    - "{{ images_dir }}"
+  when: deployment_method == 'docker'
