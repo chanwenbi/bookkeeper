@@ -1,0 +1,26 @@
+---
+
+- name: Create blackbox_exporter directories
+  file: path={{ item }} state=directory mode=0755
+  with_items:
+  - "{{ blackbox_exporter_log_dir }}"
+
+- name: Deploy blackbox_exporter binary
+  copy: src="{{ resources_dir }}/bin/blackbox_exporter" dest="{{ bookkeeper_home }}/bin" mode=0755
+
+- name: Enable blackbox_exporter binary add CAP_NET_RAW capability
+  command: setcap cap_net_raw+ep "{{ bookkeeper_home }}/bin/blackbox_exporter"
+  become: true
+
+- name: Create run script
+  template:
+    src: "{{ item }}_{{ role_name }}_binary.sh.j2"
+    dest: "{{ bookkeeper_home }}/scripts/{{ item }}_{{ role_name }}.sh"
+    mode: "0755"
+    backup: yes
+  with_items:
+    - run
+  vars:
+    role_status_dir: status/{{ role_name }}
+
+- include_tasks: "{{ process_supervision }}_deployment.yml"

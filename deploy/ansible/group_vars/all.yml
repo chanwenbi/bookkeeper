@@ -1,3 +1,7 @@
+# variables that are applicable to all hosts
+status_dir: "{{ bookkeeper_home }}/status"
+images_dir: "{{ bookkeeper_home }}/images"
+
 # variables used by local machine that runs playbook
 deployment_dir: "{{ playbook_dir }}/deployment"
 conf_dir:       "{{ playbook_dir }}/deployment/conf"
@@ -10,6 +14,7 @@ binary_dir:     "{{ playbook_dir }}/deployment/resources/bin"
 
 # stats collection related variables
 node_exporter_port: 9100
+blackbox_exporter_port: 9115
 
 # docker
 docker_bin_dir: "/usr/bin"

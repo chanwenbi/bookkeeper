@@ -7,12 +7,12 @@
   - "{{ node_exporter_log_dir }}"
 
 - name: Deploy node exporter binary
-  copy: src="{{ resources_dir }}/bin/node_exporter" dest="{{ deploy_dir }}/bin" mode=0755
+  copy: src="{{ resources_dir }}/bin/node_exporter" dest="{{ bookkeeper_home }}/bin" mode=0755
 
 - name: create run script
   template:
     src: "{{ item }}_{{ role_name }}_binary.sh.j2"
-    dest: "{{ deploy_dir }}/scripts/{{ item }}_{{ role_name }}.sh"
+    dest: "{{ bookkeeper_home }}/scripts/{{ item }}_{{ role_name }}.sh"
     mode: "0755"
     backup: yes
   with_items:

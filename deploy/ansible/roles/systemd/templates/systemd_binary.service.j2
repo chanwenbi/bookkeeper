@@ -1,0 +1,13 @@
+[Unit]
+Description={{ service_name }} service
+After=syslog.target network.target remote-fs.target nss-lookup.target
+
+[Service]
+LimitNOFILE=1000000
+User={{ bookkeeper_service_user }}
+ExecStart={{ bookkeeper_home }}/scripts/run_{{ this_role_name }}.sh
+Restart=always
+RestartSec=15s
+
+[Install]
+WantedBy=multi-user.target

@@ -14,10 +14,10 @@
     dest: /etc/security/limits.conf
     insertbefore: '# End of file'
     block: |
-      {{ deploy_user }}        soft        nofile        1000000
-      {{ deploy_user }}        hard        nofile        1000000
-      {{ deploy_user }}        soft        core          unlimited
-      {{ deploy_user }}        soft        stack         10240
+      {{ bookkeeper_service_user }}        soft        nofile        1000000
+      {{ bookkeeper_service_user }}        hard        nofile        1000000
+      {{ bookkeeper_service_user }}        soft        core          unlimited
+      {{ bookkeeper_service_user }}        soft        stack         10240
   when: tuning_kernel_parameters
 
 - name: Swap - disable swap
@@ -26,11 +26,5 @@
   register: swapoff_result
   changed_when: "swapoff_result.stdout.strip() == 'disable'"
 
-- name: Create group
-  group: name={{ deploy_user }}
-
-- name: Create account
-  user: name={{ deploy_user }} group={{ deploy_user }}
-
 - name: Create top deploy dir when under root
-  file: path="{{ deploy_dir }}" state=directory mode=0755 owner={{ deploy_user }} group={{ deploy_user }}
+  file: path="{{ bookkeeper_home }}" state=directory mode=0755 owner={{ bookkeeper_service_user }} group={{ bookkeeper_service_user }}

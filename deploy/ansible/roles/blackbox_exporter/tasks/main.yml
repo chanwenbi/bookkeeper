@@ -1,0 +1,7 @@
+---
+
+- include_tasks: "{{ deployment_method }}_deployment.yml"
+
+- name: Create config file
+  template: src=blackbox.yml.j2 dest={{ bookkeeper_home }}/conf/blackbox.yml mode=0644 backup=yes
+  register: blackbox_conf_st
