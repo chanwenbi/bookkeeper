@@ -2,11 +2,11 @@
 
 # default configuration for prometheus
 
-prometheus_data_dir: "{{ bookkeeper_home }}/prometheus2.0.0.data.metrics"
+prometheus_data_dir: "{{ bookkeeper_home }}/data/prometheus/2.0.0"
 prometheus_storage_retention: "15d"
 
 prometheus_log_level: info
-prometheus_log_dir: "{{ bookkeeper_home }}/log"
+prometheus_log_dir: "{{ bookkeeper_home }}/logs"
 prometheus_log_filename: "prometheus.log"
 
 prometheus_extra_labels:

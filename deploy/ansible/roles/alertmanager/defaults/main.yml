@@ -2,10 +2,10 @@
 
 # default configuration for alertmanager
 
-alertmanager_data_dir: "{{ bookkeeper_home }}/data.alertmanager"
+alertmanager_data_dir: "{{ bookkeeper_home }}/data/alertmanager"
 
 alertmanager_log_level: info
-alertmanager_log_dir: "{{ bookkeeper_home }}/log"
+alertmanager_log_dir: "{{ bookkeeper_home }}/logs"
 alertmanager_log_filename: "alertmanager.log"
 
 alertmanager_tag: v0.14.0

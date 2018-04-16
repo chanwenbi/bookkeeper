@@ -3,7 +3,7 @@
 # default configuration for pushgateway
 
 pushgateway_log_level: info
-pushgateway_log_dir: "{{ bookkeeper_home }}/log"
+pushgateway_log_dir: "{{ bookkeeper_home }}/logs"
 pushgateway_log_filename: "pushgateway.log"
 
 pushgateway_tag: v0.4.0

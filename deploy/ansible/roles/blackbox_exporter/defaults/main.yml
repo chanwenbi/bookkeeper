@@ -3,7 +3,7 @@
 # default configuration for blackbox_exporter
 
 blackbox_exporter_log_level: info
-blackbox_exporter_log_dir: "{{ bookkeeper_home }}/log"
+blackbox_exporter_log_dir: "{{ bookkeeper_home }}/logs"
 blackbox_exporter_log_filename: "blackbox_exporter.log"
 blackbox_exporter_dir: "{{ bookkeeper_home }}/conf"
 

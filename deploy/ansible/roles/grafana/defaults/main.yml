@@ -1,6 +1,6 @@
 ---
 
-grafana_log_dir: "{{ bookkeeper_home }}/log"
+grafana_log_dir: "{{ bookkeeper_home }}/logs"
 grafana_log_filename: "grafana.log"
 
 grafana_data_dir: "{{ bookkeeper_home }}/data/grafana"
