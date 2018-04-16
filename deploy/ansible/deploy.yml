@@ -1,0 +1,26 @@
+---
+# The Playbook of deploying Apache BookKeeper
+
+- name: Check config locally
+  hosts: localhost
+  any_errors_fatal: true
+  tags:
+    - always
+  roles:
+    - validate_config_static
+
+- name: Initializing deployment target
+  hosts: all
+  any_errors_fatal: true
+  tags:
+    - always
+  roles:
+    - validate_config_dynamic
+
+# - import_playbook: deploy_monitoring_agent.yml
+
+# - import_playbook: deploy_monitoring_server.yml
+
+# - import_playbook: deploy_grafana_server.yml
+
+- import_playbook: deploy_zookeeper.yml

@@ -1,0 +1,33 @@
+---
+
+- name: Set zookeeper myid
+  set_fact:
+    zid: "{{ groups['zookeeper'].index(inventory_hostname) }}"
+
+- name: Create zookeeper directories
+  file: path={{ item }} state=directory mode=0755 
+  with_items:
+  - "{{ zk_log_dir }}"
+  - "{{ zk_data_dir }}"
+  - "{{ zk_datalog_dir }}"
+  - "{{ zk_conf_dir }}"
+
+- name: Create zookeeper config file
+  template:
+    src=zookeeper.conf dest={{ bookkeeper_home }}/conf/zookeeper.conf mode=0644 backup=yes
+
+- name: Create zookeeper dynamic config file
+  template:
+    src=zookeeper.conf.dynamic.j2 dest={{ bookkeeper_home }}/conf/zookeeper.conf.dynamic mode=0644 backup=yes
+  vars:
+    hosts: "{{ groups['zookeeper'] | list }}"
+
+- name: Create zookeeper environment file
+  template:
+    src=zkenv.conf.j2 dest={{ bookkeeper_home }}/conf/zkenv.conf mode=0644 backup=yes
+
+- name: Create zookeeper myid file
+  template:
+    src=myid.j2 dest={{ zk_data_dir }}/myid mode=0644 backup=yes
+
+- include_tasks: "{{ deployment_method }}_deployment.yml"

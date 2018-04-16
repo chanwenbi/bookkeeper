@@ -1,0 +1,8 @@
+---
+
+# deploying zookeeper cluster
+
+- name: Deploying zookeeper
+  hosts: zookeeper
+  roles:
+    - zookeeper

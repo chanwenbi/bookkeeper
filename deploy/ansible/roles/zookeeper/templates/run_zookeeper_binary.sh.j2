@@ -8,6 +8,7 @@ BK_HOME={{ bookkeeper_home }}
 cd "${BK_HOME}" || exit 1
 
 LANG=en_US.UTF-8 \
-exec opt/grafana/bin/grafana-server \
-        --homepath="{{ bookkeeper_home }}/grafana" \
-        --config="{{ bookkeeper_home }}/grafana/conf/grafana.ini"
+
+source "${BK_HOME}/conf/zkenv.conf"
+
+${BK_HOME}/bin/bookkeeper zookeeper

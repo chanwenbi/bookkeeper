@@ -1,0 +1,8 @@
+---
+
+- name: Deploy zookeeper as systemd service
+  include_role:
+    name: systemd
+  vars:
+    this_role_name: zookeeper
+    service_name: zookeeper

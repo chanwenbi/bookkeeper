@@ -1,0 +1,7 @@
+---
+
+- name: deploying grafana
+  hosts: grafana
+  roles:
+    - grafana
+

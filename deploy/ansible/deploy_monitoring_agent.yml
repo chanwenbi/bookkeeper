@@ -1,0 +1,7 @@
+---
+
+- name: Deploying monitoring agent
+  hosts: zookeeper,bookkeeper
+  roles:
+    - { role: node_exporter, when: "groups.monitoring | default(False)" }
+    - { role: blackbox_exporter, when: "groups.monitoring | default(False)" }

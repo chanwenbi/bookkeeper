@@ -1,0 +1,12 @@
+---
+
+- name: Deploying alertmanager
+  hosts: monitoring
+  roles:
+    - alertmanager
+
+- name: Deploying monitoring server
+  hosts: monitoring
+  roles:
+    - pushgateway
+    - prometheus

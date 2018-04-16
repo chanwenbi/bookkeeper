@@ -1,0 +1,4 @@
+# override zookeeper role default variables
+zk_max_heap_memory: "1g"
+zk_min_heap_memory: "1g"
+zk_max_direct_memory: "2g"
