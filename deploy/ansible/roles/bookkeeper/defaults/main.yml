@@ -1,0 +1,20 @@
+---
+
+bk_port: 3181
+bk_http_enabled: false
+bk_http_port: 8080
+bk_stats_port: 8000
+
+bk_journal_dirs:
+  - "{{ bookkeeper_home }}/data/bookkeeper/journal"
+bk_storage_dirs:
+  - "{{ bookkeeper_home }}/data/bookkeeper/storage" 
+
+bk_log_dir: "{{ bookkeeper_home }}/logs"
+bk_log_filename: "bookkeeper.log"
+
+bk_conf_dir: "{{ bookkeeper_home }}/conf"
+
+bk_max_heap_memory: "1g"
+bk_min_heap_memory: "1g"
+bk_max_direct_memory: "2g"

@@ -1,0 +1,35 @@
+---
+
+- name: Set zookeeper servers
+  set_fact: 
+    zk_servers: "{{ groups['zookeeper'] | join(',') }}"
+  when: deploy_without_zookeeper | default(false) | bool == false and (external_zookeeper_servers is not defined or external_zookeeper_servers == "")
+
+- name: Set external zookeeper servers
+  set_fact:
+    zk_servers: "{{ external_zookeeper_servers }}"
+  when: deploy_without_zookeeper | default(false) | bool == true  and external_zookeeper_servers is defined and external_zookeeper_servers != ""
+
+- name: Create bookkeeper directories
+  file: path={{ item }} state=directory mode=0755 
+  with_items:
+  - "{{ bk_log_dir }}"
+  - "{{ bk_conf_dir }}"
+
+- name: Create bookkeeper journal directories
+  file: path={{ item }} state=directory mode=0755
+  with_items: "{{ bk_journal_dirs }}"
+
+- name: Create bookkeeper ledger directories
+  file: path={{ item }} state=directory mode=0755
+  with_items: "{{ bk_storage_dirs }}"
+
+- name: Create bookkeeper config file
+  template:
+    src=bookkeeper.conf.j2 dest={{ bookkeeper_home }}/conf/bookkeeper.conf mode=0644 backup=yes
+
+- name: Create bookkeeper environment file
+  template:
+    src=bookieenv.conf.j2 dest={{ bookkeeper_home }}/conf/bookieenv.conf mode=0644 backup=yes
+
+- include_tasks: "{{ deployment_method }}_deployment.yml"

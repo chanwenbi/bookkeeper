@@ -59,11 +59,4 @@
   with_items: "{{ bookkeeper_packages }}"
   when: has_outbound_network
 
-- name: Unarchive bookkeeper package
-  shell: ls -1 {{ item.name }}-{{ item.version }}.tar.gz | xargs -n1 tar xzf
-  args:
-    chdir: "{{ downloads_dir }}"
-    warn: no
-  with_items: "{{ bookkeeper_packages }}"
-
 - include_tasks: "3rdparty_{{ deployment_method }}_deployment.yml"

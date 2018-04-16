@@ -1,0 +1,18 @@
+---
+
+- name: Copy bookkeeper package from local to remote hosts
+  copy: src="{{ downloads_dir }}/bookkeeper-{{ bookkeeper_version }}.tar.gz" dest="{{ bookkeeper_home }}/releases" mode=0755
+
+- name: Untar bookkeeper package
+  shell: ls -1 {{ bookkeeper_home }}/releases/bookkeeper-{{ bookkeeper_version }}.tar.gz | xargs -n1 tar xzf
+  args:
+    chdir: "{{ bookkeeper_home }}/releases"
+    warn: no
+
+- name: Copy bookkeeper packages on remote hosts
+  shell: >
+    cp -r {{ bookkeeper_home }}/releases/bookkeeper-server-{{ bookkeeper_version }}/{{ item }}/* {{ bookkeeper_home }}/{{ item }}/
+  with_items:
+    - "bin"
+    - "conf"
+    - "lib"

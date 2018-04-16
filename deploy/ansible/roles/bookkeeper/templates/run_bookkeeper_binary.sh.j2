@@ -1,0 +1,14 @@
+#!/bin/bash
+set -e
+ulimit -n 1000000
+
+# WARNING: This file was auto-generated. Do not edit!
+#          All your edit might be overwritten!
+BK_HOME={{ bookkeeper_home }}
+cd "${BK_HOME}" || exit 1
+
+LANG=en_US.UTF-8 \
+
+source "${BK_HOME}/conf/bookieenv.conf"
+
+${BK_HOME}/bin/bookkeeper bookie

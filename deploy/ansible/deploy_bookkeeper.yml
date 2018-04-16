@@ -1,0 +1,8 @@
+---
+
+# deploying bookkeeper cluster
+
+- name: Deploying bookkeeper
+  hosts: bookkeeper
+  roles:
+    - bookkeeper

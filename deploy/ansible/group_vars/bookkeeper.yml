@@ -1,0 +1,15 @@
+# override bookkeeper role default variables
+
+# memory settings
+
+bk_max_heap_memory: "1g"
+bk_min_heap_memory: "1g"
+bk_max_direct_memory: "2g"
+
+# directory settings
+
+bk_journal_dirs:
+  - "{{ bookkeeper_home }}/data/bookkeeper/journal"
+bk_storage_dirs:
+  - "{{ bookkeeper_home }}/data/bookkeeper/storage-0" 
+  - "{{ bookkeeper_home }}/data/bookkeeper/storage-1" 

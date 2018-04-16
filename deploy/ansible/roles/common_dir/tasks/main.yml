@@ -6,6 +6,8 @@
   with_items:
     - "{{ bookkeeper_home }}/scripts"
     - "{{ bookkeeper_home }}/conf"
+    - "{{ bookkeeper_home }}/releases"
+    - "{{ bookkeeper_home }}/lib"
 
 - name: Create status directory
   file: path={{ item }} state=directory mode=0755
