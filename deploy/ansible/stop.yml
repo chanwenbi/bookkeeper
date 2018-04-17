@@ -1,6 +1,6 @@
 ---
 
-- name: Check config locally
+- name: check config locally
   hosts: localhost
   any_errors_fatal: true
   tags:
@@ -16,8 +16,8 @@
   roles:
     - validate_config_dynamic
 
-# - import_playbook: start_monitoring_agent.yml
+# - import_playbook: stop_monitoring_agent.yml
 
-# - import_playbook: start_monitoring_server.yml
+# - import_playbook: stop_monitoring_server.yml
 
-- import_playbook: start_zookeeper.yml
+- import_playbook: stop_zookeeper.yml

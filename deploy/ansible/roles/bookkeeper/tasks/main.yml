@@ -2,7 +2,7 @@
 
 - name: Set zookeeper servers
   set_fact: 
-    zk_servers: "{{ groups['zookeeper'] | join(',') }}"
+    zk_servers: "{{ groups['zookeeper'] | map('extract', hostvars, 'private_ip') | list | join(',') }}"
   when: deploy_without_zookeeper | default(false) | bool == false and (external_zookeeper_servers is not defined or external_zookeeper_servers == "")
 
 - name: Set external zookeeper servers

@@ -1,0 +1,20 @@
+---
+
+# stop zookeeper cluster
+
+- hosts: zookeeper
+  tags:
+    - zookeeper
+  tasks:
+    - name: Stop zookeeper by systemd
+      systemd: name=zookeeper.service state=stopped
+      become: true
+      when: process_supervision == 'systemd'
+
+    - name: Wait for zookeeper down
+      shell: echo ruok | nc localhost 2181 
+      register: task_result
+      until: task_result.rc == 1
+      retries: 30
+      delay: 2
+      ignore_errors: yes

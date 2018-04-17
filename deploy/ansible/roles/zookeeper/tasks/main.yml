@@ -17,8 +17,6 @@
 - name: Create zookeeper dynamic config file
   template:
     src=zookeeper.conf.dynamic.j2 dest={{ zk_conf_dir }}/zookeeper.conf.dynamic mode=0644 backup=yes
-  vars:
-    hosts: "{{ groups['zookeeper'] | list }}"
 
 - name: Create zookeeper environment file
   template:
