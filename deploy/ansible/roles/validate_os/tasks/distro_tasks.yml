@@ -13,3 +13,32 @@
   when:
     - "'CentOS' in distro"
     - "not has_python"
+
+- name: Debian/Ubuntu - install RPM packages
+  yum:
+    pkg: "{{ item }}"
+    state: "latest"
+    update_cache: "yes"
+  with_items:
+    - wget
+    - openjdk-8-jdk
+    - sysstat
+    - dstat
+    - nc
+    - vim
+  when:
+    - "'Ubuntu' in distro or 'Debian' in distro"
+
+- name: Redhat/CentOS - install RPM packages
+  yum:
+    pkg: "{{ item }}"
+    state: "latest"
+  with_items:
+    - wget
+    - java-1.8.0-openjdk
+    - sysstat
+    - dstat
+    - nc
+    - vim
+  when:
+    - "'CentOS' in distro"

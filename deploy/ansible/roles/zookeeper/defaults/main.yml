@@ -7,15 +7,15 @@ zk_admin_port: 9990
 
 zk_standalone_enabled: false
 
-zk_dynamic_cfg_file: "{{ bookkeeper_home }}/conf/zookeeper.conf.dynamic"
+zk_home_dir: "{{ bookkeeper_home }}/current"
+zk_conf_dir: "{{ bookkeeper_home }}/current/conf"
+zk_dynamic_cfg_file: "{{ bookkeeper_home }}/current/conf/zookeeper.conf.dynamic"
 
 zk_data_dir: "{{ bookkeeper_home }}/data/zookeeper"
 zk_datalog_dir: "{{ bookkeeper_home }}/data/zookeeper/txlog" 
 
 zk_log_dir: "{{ bookkeeper_home }}/logs"
 zk_log_filename: "zookeeper.log"
-
-zk_conf_dir: "{{ bookkeeper_home }}/conf"
 
 zk_max_heap_memory: "1g"
 zk_min_heap_memory: "1g"

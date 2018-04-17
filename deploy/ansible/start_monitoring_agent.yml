@@ -1,0 +1,37 @@
+---
+
+- hosts: zookeeper,bookkeeper
+  tags:
+    - node_exporter
+  tasks:
+    - name: Start node_exporter by systemd
+      become: true
+      systemd: name=node_exporter-{{ node_exporter_port }}.service state=started enabled=no
+      when: process_supervision == 'systemd'
+
+    - name: Wait for node_exporter up
+      uri:
+        url: "http://localhost:{{ node_exporter_port }}/metrics"
+        status_code: 200
+      register: wait_result
+      until: wait_result.status == 200
+      retries: 60
+      delay: 1
+
+- hosts: zookeeper,bookkeeper
+  tags:
+    - blackbox_exporter
+  tasks:
+    - name: Start blackbox_exporter by systemd
+      become: true
+      systemd: name=blackbox_exporter-{{ blackbox_exporter_port }}.service state=started enabled=no
+      when: process_supervision == 'systemd'
+
+    - name: Wait for blackbox_exporter up
+      uri:
+        url: "http://localhost:{{ blackbox_exporter_port }}"
+        status_code: 200
+      register: wait_result
+      until: wait_result.status == 200
+      retries: 60
+      delay: 1

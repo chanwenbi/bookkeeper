@@ -1,0 +1,50 @@
+---
+
+- hosts: monitoring
+  tags:
+    - alertmanager
+  tasks:
+    - name: Start alertmanager by systemd
+      systemd: name=alertmanager-{{ alertmanager_port }}.service state=started
+      become: true
+      when: process_supervision == 'systemd'
+
+    - name: Wait for alertmanager up
+      uri:
+        url: "http://localhost:{{ alertmanager_port }}/metrics"
+        status_code: 200
+      register: wait_result
+      until: wait_result.status == 200
+      retries: 60
+      delay: 1
+
+- hosts: monitoring
+  tags:
+    - pushgateway
+    - prometheus
+  tasks:
+    - name: Start monitoring modules by systemd
+      systemd: name={{ item }} state=started enabled=no
+      when: process_supervision == 'systemd'
+      become: true
+      with_items:
+        - pushgateway-{{ pushgateway_port }}.service
+        - prometheus-{{ prometheus_port }}.service
+    
+    - name: Wait for pushgateway up
+      uri:
+        url: "http://localhost:{{ pushgateway_port }}/metrics"
+        status_code: 200
+      register: wait_result
+      until: wait_result.status == 200
+      retries: 60
+      delay: 1
+
+    - name: Wait for prometheus up
+      uri:
+        url: "http://localhost:{{ prometheus_port }}/metrics"
+        status_code: 200
+      register: wait_result
+      until: wait_result.status == 200
+      retries: 60
+      delay: 1

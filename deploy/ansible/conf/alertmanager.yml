@@ -55,7 +55,7 @@ receivers:
 #    title:   '{{ .CommonLabels.alertname }}'
 #    text:    'in {{ .CommonLabels.env}}:   {{ .GroupLabels.alertname }}  {{ .CommonAnnotations.description }}      http://172.0.0.1:9093/alerts'
 
-- name: 'db-alert-email'
+- name: 'bk-alert-email'
   email_configs:
   - send_resolved: true
     to: 'xxx@xxx.com'

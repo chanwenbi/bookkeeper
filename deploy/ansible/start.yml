@@ -1,0 +1,23 @@
+---
+
+- name: Check config locally
+  hosts: localhost
+  any_errors_fatal: true
+  tags:
+    - always
+  roles:
+    - validate_config_static
+
+- name: Initializing deployment target
+  hosts: all
+  any_errors_fatal: true
+  tags:
+    - always
+  roles:
+    - validate_config_dynamic
+
+# - import_playbook: start_monitoring_agent.yml
+
+# - import_playbook: start_monitoring_server.yml
+
+- import_playbook: start_zookeeper.yml

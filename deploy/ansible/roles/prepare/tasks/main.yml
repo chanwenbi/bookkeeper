@@ -19,15 +19,27 @@
 
 - name: Create packages.yml
   template:
-    src=bookkeeper_packages.yml.j2
-    dest={{ conf_dir }}/bookkeeper_packages.yml
+    src={{ item }}_packages.yml.j2
+    dest={{ conf_dir }}/{{ item }}_packages.yml
+  with_items:
+    - bookkeeper
+    - bookkeeper_dev
 
 - name: Create specific deployment method packages.yml
   template:
     src=3rdparty_{{ deployment_method }}_packages.yml.j2
     dest={{ conf_dir }}/3rdparty_{{ deployment_method }}_packages.yml
 
-- include_vars: file={{ conf_dir }}/bookkeeper_packages.yml 
+- include_vars:
+    file={{ conf_dir }}/bookkeeper_packages.yml 
+  when: dev_mode | default(false) | bool == false
+
+- include_vars:
+    file={{ conf_dir }}/bookkeeper_dev_packages.yml 
+  when: dev_mode | default(false) | bool == true
+
+- debug:
+    msg: "bookkeeper packages - {{ bookkeeper_packages | join(',') }}"
 
 - include_vars: file={{ conf_dir }}/3rdparty_{{ deployment_method }}_packages.yml
 

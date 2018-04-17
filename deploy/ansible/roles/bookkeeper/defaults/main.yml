@@ -13,7 +13,8 @@ bk_storage_dirs:
 bk_log_dir: "{{ bookkeeper_home }}/logs"
 bk_log_filename: "bookkeeper.log"
 
-bk_conf_dir: "{{ bookkeeper_home }}/conf"
+bk_home_dir: "{{ bookkeeper_home }}/current"
+bk_conf_dir: "{{ bookkeeper_home }}/current/conf"
 
 bk_max_heap_memory: "1g"
 bk_min_heap_memory: "1g"

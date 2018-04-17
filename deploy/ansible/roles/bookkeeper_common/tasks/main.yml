@@ -9,10 +9,8 @@
     chdir: "{{ bookkeeper_home }}/releases"
     warn: no
 
-- name: Copy bookkeeper packages on remote hosts
-  shell: >
-    cp -r {{ bookkeeper_home }}/releases/bookkeeper-server-{{ bookkeeper_version }}/{{ item }}/* {{ bookkeeper_home }}/{{ item }}/
-  with_items:
-    - "bin"
-    - "conf"
-    - "lib"
+- name: Link bookkeeper current release
+  file:
+    src: "{{ bookkeeper_home }}/releases/bookkeeper-server-{{ bookkeeper_version }}"
+    dest: "{{ bookkeeper_home }}/current"
+    state: link
