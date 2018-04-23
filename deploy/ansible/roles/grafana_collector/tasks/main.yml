@@ -1,0 +1,7 @@
+---
+
+- include_tasks: binary_deployment.yml
+
+- name: Create configuration file
+  copy: src="{{ playbook_dir }}/conf/grafana_collector.toml" dest="{{ bookkeeper_home }}/conf/grafana_collector.toml" mode=0644 backup=yes
+  register: grafana_collector_conf_st
