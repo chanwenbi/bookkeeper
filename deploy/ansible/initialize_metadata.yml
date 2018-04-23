@@ -1,0 +1,12 @@
+- hosts: bookkeeper[0]
+  tags:
+    - bookkeeper
+  tasks:
+    - name: Intialize bookkeeper cluster
+      command: /opt/bookkeeper/current/bin/bookkeeper shell initnewcluster
+      register: init_result
+      ignore_errors: yes 
+
+    - fail: 
+        msg: "The bookkeeper metadata is not initialized yet"
+      when: init_result.rc != 0 and not (init_result.stdout | search('/ledgers already exists'))
