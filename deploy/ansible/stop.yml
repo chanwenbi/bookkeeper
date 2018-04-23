@@ -16,10 +16,12 @@
   roles:
     - validate_config_dynamic
 
-# - import_playbook: stop_monitoring_agent.yml
+- import_playbook: stop_monitoring_agent.yml
 
-# - import_playbook: stop_monitoring_server.yml
+- import_playbook: stop_monitoring_server.yml
 
 # - import_playbook: stop_zookeeper.yml
 
-- import_playbook: stop_bookkeeper.yml
+# - import_playbook: stop_bookkeeper.yml
+
+- import_playbook: stop_grafana_server.yml

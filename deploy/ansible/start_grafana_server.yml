@@ -1,0 +1,66 @@
+---
+
+# start grafana server
+
+- hosts: grafana
+  tags:
+    - grafana
+  roles:
+    - { role: grafana, grafana_exec_vars_only: true }
+  tasks:
+    - name: Start grafana by systemd
+      systemd: name=grafana-{{ grafana_port }}.service state=started enabled=no
+      become: true
+      when: process_supervision == 'systemd'
+
+    - name: Wait for grafana up
+      uri:
+        url: "http://localhost:{{ grafana_port }}/login"
+        status_code: 200
+      register: wait_result
+      until: wait_result.status == 200
+      retries: 60
+      delay: 1
+      ignore_errors: no
+
+    - set_fact:
+        grafana_host: "{{ ansible_host }}"
+
+    - include_tasks: create_grafana_api_keys.yml
+
+    - name: Import grafana data source
+      shell: >
+        chdir={{ grafana_data_dir }}
+        warn=no
+        curl -q -X POST -d @data_source.json --header 'Content-Type: application/json'
+        "http://{{ grafana_admin_user }}:{{ grafana_admin_password }}@127.0.0.1:{{ grafana_port }}/api/datasources"
+
+    - name: Import grafana dashboards (1/2) - Prepare config
+      delegate_to: localhost
+      template: src=grafana.dest.json.j2 dest={{ playbook_dir }}/scripts/dests.json
+      vars:
+        - ansible_become: false
+        - ansible_connection: local
+        - grafana_dest_config:
+            name: "{{ cluster_name | title }}"
+            url: "http://{{ grafana_host }}:{{ grafana_port }}/"
+            user: "{{ grafana_admin_user }}"
+            password: "{{ grafana_admin_password }}"
+            apikey: "{{ lookup('file', grafana_api_keys_dir + '/grafana_apikey.key') }}"
+            datasource: "{{ cluster_name }}"
+            titles:
+              node: "{{ cluster_name | title }}-node-exporter"
+              zookeeper: "{{ cluster_name | title }}-zookeeper"
+              bookkeeper: "{{ cluster_name | title }}-bookkeeper"
+              overview: "{{ cluster_name | title }}-Overview"
+              disk_performance: "{{ cluster_name | title }}-disk-performance"
+              blackbox_exporter: "{{ cluster_name | title }}-blackbox-exporter"
+
+    - name: Import grafana dashboards (2/2) - Run import script
+      delegate_to: localhost
+      shell: >-
+        chdir={{ playbook_dir }}/scripts
+        ./grafana-config-copy.py
+      vars:
+        - ansible_become: false
+        - ansible_connection: local

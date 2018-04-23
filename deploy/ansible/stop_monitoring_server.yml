@@ -1,0 +1,50 @@
+---
+
+- hosts: monitoring
+  tags:
+    - alertmanager
+  tasks:
+    - name: Stop alertmanager by systemd
+      systemd: name=alertmanager-{{ alertmanager_port }}.service state=stopped
+      become: true
+      when: process_supervision == 'systemd'
+
+    - name: Wait for alertmanager down
+      uri:
+        url: "http://localhost:{{ alertmanager_port }}/metrics"
+        status_code: -1
+      register: wait_result
+      until: wait_result.status == -1
+      retries: 60
+      delay: 1
+
+- hosts: monitoring
+  tags:
+    - pushgateway
+    - prometheus
+  tasks:
+    - name: Stop monitoring modules by systemd
+      systemd: name={{ item }} state=stopped
+      when: process_supervision == 'systemd'
+      become: true
+      with_items:
+        - pushgateway-{{ pushgateway_port }}.service
+        - prometheus-{{ prometheus_port }}.service
+    
+    - name: Wait for pushgateway down
+      uri:
+        url: "http://localhost:{{ pushgateway_port }}/metrics"
+        status_code: -1
+      register: wait_result
+      until: wait_result.status == -1
+      retries: 60
+      delay: 1
+
+    - name: Wait for prometheus down
+      uri:
+        url: "http://localhost:{{ prometheus_port }}/metrics"
+        status_code: -1
+      register: wait_result
+      until: wait_result.status == -1
+      retries: 60
+      delay: 1

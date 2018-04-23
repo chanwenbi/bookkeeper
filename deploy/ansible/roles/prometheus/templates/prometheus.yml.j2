@@ -9,7 +9,7 @@ global:
     {{ item.label }}: "{{ item.value }}"
 {% endfor %}
 
-{% set alertmanager_host = hostvars[groups.monitoring[0]].ansible_host | default(hostvars[groups.monitoring[0]].inventory_hostname)
+{% set alertmanager_host = hostvars[groups.monitoring[0]].private_ip | default(hostvars[groups.monitoring[0]].inventory_hostname)
     if groups.get('monitoring', []) else '' -%}
 {% set alertmanager_port = hostvars[groups.monitoring[0]].alertmanager_port if alertmanager_host else '' -%}
 
@@ -33,7 +33,7 @@ alerting:
 #      - 'alertmanager_host:9093'
 {% endif %}
 
-{% set pushgateway_host = hostvars[groups.monitoring[0]].ansible_host | default(hostvars[groups.monitoring[0]].inventory_hostname)
+{% set pushgateway_host = hostvars[groups.monitoring[0]].private_ip | default(hostvars[groups.monitoring[0]].inventory_hostname)
     if groups.get('monitoring', []) else '' -%}
 {% set pushgateway_port = hostvars[groups.monitoring[0]].pushgateway_port if pushgateway_host else '' -%}
 
@@ -51,7 +51,7 @@ scrape_configs:
     - targets:
 {% set target_hosts = [] -%}
 {% for host in hosts -%}
-{% set ip = hostvars[host].ansible_host | default(hostvars[host].inventory_hostname) or host -%}
+{% set ip = hostvars[host].private_ip | default(hostvars[host].inventory_hostname) or host -%}
 {% set node_port = hostvars[host]['node_exporter_port'] -%}
 {% if ip not in target_hosts %}
       - '{{ ip }}:{{ node_port }}'
@@ -61,7 +61,7 @@ scrape_configs:
 
 {% set target_hosts = [] -%}
 {% for host in hosts -%}
-{% set ip = hostvars[host].ansible_host | default(hostvars[host].inventory_hostname) or host -%}
+{% set ip = hostvars[host].private_ip | default(hostvars[host].inventory_hostname) or host -%}
 {% if ip not in target_hosts %}
 {% set _ = target_hosts.append(ip) -%}
 {% endif -%}

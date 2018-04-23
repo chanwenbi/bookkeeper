@@ -1,0 +1,32 @@
+---
+
+- hosts: zookeeper,bookkeeper
+  tags:
+    - node_exporter
+    - blackbox_exporter
+  tasks:
+    - name: Stop node_exporter/blackbox_exporter by systemd
+      systemd: name={{ item }} state=stopped
+      become: true
+      when: process_supervision == 'systemd'
+      with_items:
+        - node_exporter-{{ node_exporter_port }}.service
+        - blackbox_exporter-{{ blackbox_exporter_port }}.service
+
+    - name: Wait for node_exporter down
+      uri:
+        url: "http://localhost:{{ node_exporter_port }}/metrics"
+        status_code: -1
+      register: wait_result
+      until: wait_result.status == -1
+      retries: 60
+      delay: 1
+
+    - name: Wait for blackbox_exporter down
+      uri:
+        url: "http://localhost:{{ blackbox_exporter_port }}"
+        status_code: -1
+      register: wait_result
+      until: wait_result.status == -1
+      retries: 60
+      delay: 1  

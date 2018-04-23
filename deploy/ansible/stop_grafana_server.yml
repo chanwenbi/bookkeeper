@@ -1,0 +1,22 @@
+---
+
+# stop grafana server
+
+- hosts: grafana
+  tags:
+    - grafana
+  tasks:
+    - name: Stop grafana by systemd
+      systemd: name=grafana-{{ grafana_port }}.service state=stopped
+      become: true
+      when: process_supervision == 'systemd'
+
+    - name: Wait for grafana down
+      uri:
+        url: "http://localhost:{{ grafana_port }}/login"
+        status_code: -1
+      register: wait_result
+      until: wait_result.status == -1
+      retries: 60
+      delay: 1
+      ignore_errors: no
