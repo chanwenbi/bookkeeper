@@ -1,6 +1,7 @@
 # override zookeeper role default variables
 
 zk_port: 2181
+zk_admin_port: 9990
 
 zk_max_heap_memory: "1g"
 zk_min_heap_memory: "1g"

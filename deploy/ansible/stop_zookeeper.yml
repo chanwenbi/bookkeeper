@@ -12,9 +12,11 @@
       when: process_supervision == 'systemd'
 
     - name: Wait for zookeeper down
-      shell: echo ruok | nc localhost 2181 
-      register: task_result
-      until: task_result.rc == 1
-      retries: 30
-      delay: 2
+      uri:
+        url: "http://localhost:{{ zk_admin_port }}/commands/ruok"
+        status_code: -1
+      register: wait_result
+      until: wait_result.status == -1
+      retries: 60
+      delay: 1
       ignore_errors: yes
