@@ -17,13 +17,13 @@
   roles:
     - validate_config_dynamic
 
-- import_playbook: deploy_monitoring_agent.yml
-
-- import_playbook: deploy_monitoring_server.yml
-
-- import_playbook: deploy_grafana_server.yml
-
-- import_playbook: deploy_zookeeper.yml
-  when: deploy_without_zookeeper | default(false) | bool == false
+#- import_playbook: deploy_monitoring_agent.yml
+#
+#- import_playbook: deploy_monitoring_server.yml
+#
+#- import_playbook: deploy_grafana_server.yml
+#
+#- import_playbook: deploy_zookeeper.yml
+#  when: deploy_without_zookeeper | default(false) | bool == false
 
 - import_playbook: deploy_bookkeeper.yml

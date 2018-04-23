@@ -22,4 +22,6 @@
 
 # - import_playbook: start_zookeeper.yml
 
-- import_playbook: initialize_metadata.yml
+# - import_playbook: initialize_metadata.yml
+
+- import_playbook: start_bookkeeper.yml

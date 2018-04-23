@@ -1,7 +1,7 @@
 ---
 
 bk_port: 3181
-bk_http_enabled: false
+bk_http_enabled: true
 bk_http_port: 8080
 bk_stats_port: 8000
 

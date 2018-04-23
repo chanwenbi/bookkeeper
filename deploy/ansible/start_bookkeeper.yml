@@ -1,0 +1,22 @@
+---
+
+# start bookkeeper cluster
+
+- hosts: bookkeeper
+  tags:
+    - bookkeeper
+  tasks:
+    - name: Start bookkeeper by systemd
+      systemd: name=bookkeeper.service state=started
+      become: true
+      when: process_supervision == 'systemd'
+
+    - name: Wait for bookkeeper up
+      uri:
+        url: "http://localhost:{{ bk_http_port }}/heartbeat"
+        status_code: 200
+      register: wait_result
+      until: wait_result.status == 200
+      retries: 60
+      delay: 1
+      ignore_errors: no

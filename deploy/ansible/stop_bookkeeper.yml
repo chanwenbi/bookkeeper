@@ -1,0 +1,22 @@
+---
+
+# stop bookkeeper cluster
+
+- hosts: bookkeeper
+  tags:
+    - bookkeeper
+  tasks:
+    - name: Stop bookkeeper by systemd
+      systemd: name=bookkeeper.service state=stopped
+      become: true
+      when: process_supervision == 'systemd'
+
+    - name: Wait for bookkeeper down
+      uri:
+        url: "http://localhost:{{ bk_http_port }}/heartbeat"
+        status_code: -1
+      register: wait_result
+      until: wait_result.status == -1
+      retries: 60
+      delay: 1
+      ignore_errors: yes

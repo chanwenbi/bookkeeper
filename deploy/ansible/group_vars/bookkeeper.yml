@@ -1,5 +1,9 @@
 # override bookkeeper role default variables
 
+bk_port: 3181
+bk_http_port: 8080
+bk_stats_port: 8000
+
 # memory settings
 
 bk_max_heap_memory: "1g"
